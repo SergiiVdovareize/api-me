@@ -12,6 +12,6 @@
         "dest": "dist/main.js"
       }
     ],
-    "buildCommand": "next build",
-    "framework": "nextjs"
+    "buildCommand": "nest build",
+    "framework": "nestjs"
   }
