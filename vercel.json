@@ -11,7 +11,5 @@
         "src": "/(.*)",
         "dest": "dist/main.js"
       }
-    ],
-    "buildCommand": "nest build",
-    "framework": "nestjs"
+    ]
   }
