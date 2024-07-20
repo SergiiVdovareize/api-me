@@ -6,6 +6,12 @@ import { CreateRequestDto } from './dto/create-request.dto';
 export class RequestsService {
   constructor(private prisma: PrismaService) {}
 
+  getDateMonthAgo(): Date {
+    var today = new Date();
+    var priorDate = new Date(new Date().setDate(today.getDate() - 30));
+    return priorDate;
+  }
+
   registerPlainApiCall() {
     return this.registerApiCall(0)
   }
@@ -32,11 +38,44 @@ export class RequestsService {
     return this.prisma.request.create({ data: createRequestDto });
   }
 
-  findAll() {
-    return this.prisma.request.findMany({
-      orderBy: [
-        { id: 'desc', }
-      ]
+  // findAll() {
+  //   return this.prisma.request.findMany({
+  //     orderBy: [
+  //       { id: 'desc', }
+  //     ]
+  //   });
+  // }
+
+  countAll(): Promise<number> {
+    return this.prisma.request.count();
+  }
+
+  countType(apiType: number): Promise<number> {
+    return this.prisma.request.count({
+      where: {
+        apiType
+      }
+    });
+  }
+  
+  countAllThisMonth(): Promise<number> {
+    return this.prisma.request.count({
+      where: {
+        createdAt: {
+          gte: this.getDateMonthAgo()
+        }
+      }
+    });
+  }
+
+  countTypeThisMonth(apiType: number): Promise<number> {
+    return this.prisma.request.count({
+      where: {
+        apiType,
+        createdAt: {
+          gte: this.getDateMonthAgo()
+        }
+      }
     });
   }
 }
