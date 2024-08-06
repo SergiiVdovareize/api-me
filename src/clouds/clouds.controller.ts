@@ -65,7 +65,7 @@ export class CloudsController {
       return {
         success: false,
         status: 3,
-        message: 'could bot read result'
+        message: 'could not read result'
       }
     }
 
