@@ -2,30 +2,44 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 
+const API_TYPE = {
+  PLAIN: 0,
+  AMAZON: 1,
+  GOOGLE: 2,
+  AZURE: 3,
+}
+
+const CLOUD_MAP = {
+  PLAIN: API_TYPE.PLAIN,
+  FIBONACCI: API_TYPE.AMAZON,
+  PRIME: API_TYPE.GOOGLE,
+  ARMSTRONG: API_TYPE.AZURE,
+}
+
 @Injectable()
 export class RequestsService {
   constructor(private prisma: PrismaService) {}
 
   getDateMonthAgo(): Date {
     var today = new Date();
-    var priorDate = new Date(new Date().setDate(today.getDate() - 30));
+    var priorDate = new Date(new Date().setDate(today.getDate() - 31));
     return priorDate;
   }
 
   registerPlainApiCall() {
-    return this.registerApiCall(0)
+    return this.registerApiCall(CLOUD_MAP.PLAIN)
   }
   
   registerFibonacciApiCall() {
-    return this.registerApiCall(1)
+    return this.registerApiCall(CLOUD_MAP.FIBONACCI)
   }
 
   registerPrimeApiCall() {
-    return this.registerApiCall(2)
+    return this.registerApiCall(CLOUD_MAP.PRIME)
   }
 
   registerArmstrongApiCall() {
-    return this.registerApiCall(3)
+    return this.registerApiCall(CLOUD_MAP.ARMSTRONG)
   }
 
   registerApiCall(apiType: number) {
@@ -66,6 +80,18 @@ export class RequestsService {
         }
       }
     });
+  }
+
+  countFibonacciThisMonth(): Promise<number> {
+    return this.countTypeThisMonth(CLOUD_MAP.FIBONACCI);
+  }
+
+  countPrimeThisMonth(): Promise<number> {
+    return this.countTypeThisMonth(CLOUD_MAP.PRIME);
+  }
+
+  countArmstrongThisMonth(): Promise<number> {
+    return this.countTypeThisMonth(CLOUD_MAP.ARMSTRONG);
   }
 
   countTypeThisMonth(apiType: number): Promise<number> {

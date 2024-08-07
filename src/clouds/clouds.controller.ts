@@ -2,28 +2,60 @@ import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { CloudsService } from './clouds.service';
 import { RequestsService } from 'src/requests/requests.service';
 
+const MONTH_LIMIT = {
+  AMAZON: 900,
+  GOOGLE: 900,
+  AZURE: 900,
+};
+
+const LIMIT_MAP = {
+  FIBONACCI: MONTH_LIMIT.AMAZON,
+  PRIME: MONTH_LIMIT.GOOGLE,
+  ARMSTRONG: MONTH_LIMIT.AZURE,
+}
+
+const limitedResponse = {
+  success: false,
+  message: 'no more free requests this month, try tomorrow'
+}
+
 @Controller('clouds')
 export class CloudsController {
   constructor(
     private readonly cloudsService: CloudsService,
-    private readonly requestService: RequestsService,
+    private readonly requestsService: RequestsService,
   ) {}
 
   @Get('/fibonacci/:index')
   async fibonacci(@Param('index', ParseIntPipe) index: number) {
-    await this.requestService.registerFibonacciApiCall();
+    const count = await this.requestsService.countFibonacciThisMonth();
+    if (count >= LIMIT_MAP.ARMSTRONG) {
+      return limitedResponse
+    }
+
+    await this.requestsService.registerFibonacciApiCall();
     return this.cloudsService.getFibonacciNumber(index);
   }
 
   @Get('/prime/:index')
   async prime(@Param('index', ParseIntPipe) index: number) {
-    await this.requestService.registerPrimeApiCall();
+    const count = await this.requestsService.countPrimeThisMonth();
+    if (count >= LIMIT_MAP.ARMSTRONG) {
+      return limitedResponse
+    }
+
+    await this.requestsService.registerPrimeApiCall();
     return this.cloudsService.getPrimeNumber(index);
   }
 
   @Get('/armstrong/:index')
   async armstrong(@Param('index', ParseIntPipe) index: number) {
-    await this.requestService.registerArmstrongApiCall();
+    const count = await this.requestsService.countArmstrongThisMonth();
+    if (count >= LIMIT_MAP.ARMSTRONG) {
+      return limitedResponse
+    }
+    
+    await this.requestsService.registerArmstrongApiCall();
     return this.cloudsService.getArmstrongNumber(index);
   }
 
