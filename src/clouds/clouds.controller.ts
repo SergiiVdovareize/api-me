@@ -12,12 +12,12 @@ const LIMIT_MAP = {
   FIBONACCI: MONTH_LIMIT.AMAZON,
   PRIME: MONTH_LIMIT.GOOGLE,
   ARMSTRONG: MONTH_LIMIT.AZURE,
-}
+};
 
 const limitedResponse = {
   success: false,
-  message: 'no more free requests this month, try tomorrow'
-}
+  message: 'no more free requests this month, try tomorrow',
+};
 
 @Controller('clouds')
 export class CloudsController {
@@ -30,7 +30,7 @@ export class CloudsController {
   async fibonacci(@Param('index', ParseIntPipe) index: number) {
     const count = await this.requestsService.countFibonacciThisMonth();
     if (count >= LIMIT_MAP.ARMSTRONG) {
-      return limitedResponse
+      return limitedResponse;
     }
 
     await this.requestsService.registerFibonacciApiCall();
@@ -41,7 +41,7 @@ export class CloudsController {
   async prime(@Param('index', ParseIntPipe) index: number) {
     const count = await this.requestsService.countPrimeThisMonth();
     if (count >= LIMIT_MAP.ARMSTRONG) {
-      return limitedResponse
+      return limitedResponse;
     }
 
     await this.requestsService.registerPrimeApiCall();
@@ -52,53 +52,58 @@ export class CloudsController {
   async armstrong(@Param('index', ParseIntPipe) index: number) {
     const count = await this.requestsService.countArmstrongThisMonth();
     if (count >= LIMIT_MAP.ARMSTRONG) {
-      return limitedResponse
+      return limitedResponse;
     }
-    
+
     await this.requestsService.registerArmstrongApiCall();
     return this.cloudsService.getArmstrongNumber(index);
   }
 
   @Get('/result/:id')
   async result(@Param('id') id: string) {
-    const maxWaitTime = 60*60*1000; // 60 minutes
+    const maxWaitTime = 60 * 60 * 1000; // 60 minutes
     const invalidIdResponse = {
-        success: false,
-        status: 1,
-        message: 'result id is not valid'
-    }
-    const reg = /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
+      success: false,
+      status: 1,
+      message: 'result id is not valid',
+    };
+    const reg =
+      /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
     const groups = id.match(reg);
 
     if (!groups || groups.length !== 6) {
-      return invalidIdResponse
+      return invalidIdResponse;
     }
 
-    const timestamp = parseInt(`${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`, 10)
+    const timestamp = parseInt(
+      `${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`,
+      10,
+    );
     if (isNaN(timestamp)) {
-      return invalidIdResponse
+      return invalidIdResponse;
     }
 
     const maxTimestamp = Date.now();
-    if (timestamp < (maxTimestamp - maxWaitTime) || timestamp > maxTimestamp) {
-      return invalidIdResponse
+    if (timestamp < maxTimestamp - maxWaitTime || timestamp > maxTimestamp) {
+      return invalidIdResponse;
     }
 
-    const resultFileUrl = await this.cloudsService.findResultFileUrlWithRetry(id)
+    const resultFileUrl =
+      await this.cloudsService.findResultFileUrlWithRetry(id);
     if (!resultFileUrl) {
       return {
         success: false,
-        status: 2
-      }
+        status: 2,
+      };
     }
 
-    const result = await this.cloudsService.readResult(resultFileUrl)
+    const result = await this.cloudsService.readResult(resultFileUrl);
     if (!result) {
       return {
         success: false,
         status: 3,
-        message: 'could not read result'
-      }
+        message: 'could not read result',
+      };
     }
 
     return result;

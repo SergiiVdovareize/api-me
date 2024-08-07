@@ -1,6 +1,4 @@
-import {
-  IsNumber,
-} from 'class-validator';
+import { IsNumber } from 'class-validator';
 
 export class CreateRequestDto {
   @IsNumber()

@@ -16,8 +16,6 @@ import { CloudsController } from './clouds/clouds.controller';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(LoggerMiddleware)
-      .forRoutes(CloudsController);
+    consumer.apply(LoggerMiddleware).forRoutes(CloudsController);
   }
 }

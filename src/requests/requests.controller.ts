@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 // import { CreateArticleDto } from './dto/create-article.dto';
 

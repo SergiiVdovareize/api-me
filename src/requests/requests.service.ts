@@ -7,45 +7,45 @@ const API_TYPE = {
   AMAZON: 1,
   GOOGLE: 2,
   AZURE: 3,
-}
+};
 
 const CLOUD_MAP = {
   PLAIN: API_TYPE.PLAIN,
   FIBONACCI: API_TYPE.AMAZON,
   PRIME: API_TYPE.GOOGLE,
   ARMSTRONG: API_TYPE.AZURE,
-}
+};
 
 @Injectable()
 export class RequestsService {
   constructor(private prisma: PrismaService) {}
 
   getDateMonthAgo(): Date {
-    var today = new Date();
-    var priorDate = new Date(new Date().setDate(today.getDate() - 31));
+    const today = new Date();
+    const priorDate = new Date(new Date().setDate(today.getDate() - 31));
     return priorDate;
   }
 
   registerPlainApiCall() {
-    return this.registerApiCall(CLOUD_MAP.PLAIN)
+    return this.registerApiCall(CLOUD_MAP.PLAIN);
   }
-  
+
   registerFibonacciApiCall() {
-    return this.registerApiCall(CLOUD_MAP.FIBONACCI)
+    return this.registerApiCall(CLOUD_MAP.FIBONACCI);
   }
 
   registerPrimeApiCall() {
-    return this.registerApiCall(CLOUD_MAP.PRIME)
+    return this.registerApiCall(CLOUD_MAP.PRIME);
   }
 
   registerArmstrongApiCall() {
-    return this.registerApiCall(CLOUD_MAP.ARMSTRONG)
+    return this.registerApiCall(CLOUD_MAP.ARMSTRONG);
   }
 
   registerApiCall(apiType: number) {
     const createRequestDto = new CreateRequestDto();
     createRequestDto.apiType = apiType;
-    return this.create(createRequestDto)
+    return this.create(createRequestDto);
   }
 
   create(createRequestDto: CreateRequestDto) {
@@ -67,18 +67,18 @@ export class RequestsService {
   countType(apiType: number): Promise<number> {
     return this.prisma.request.count({
       where: {
-        apiType
-      }
+        apiType,
+      },
     });
   }
-  
+
   countAllThisMonth(): Promise<number> {
     return this.prisma.request.count({
       where: {
         createdAt: {
-          gte: this.getDateMonthAgo()
-        }
-      }
+          gte: this.getDateMonthAgo(),
+        },
+      },
     });
   }
 
@@ -99,9 +99,9 @@ export class RequestsService {
       where: {
         apiType,
         createdAt: {
-          gte: this.getDateMonthAgo()
-        }
-      }
+          gte: this.getDateMonthAgo(),
+        },
+      },
     });
   }
 }
