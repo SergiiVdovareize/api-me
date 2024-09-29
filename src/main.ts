@@ -8,10 +8,7 @@ async function bootstrap() {
     origin:
       env.HOST === 'local'
         ? 'http://localhost:3003'
-        : [
-          'https://meme-stealer.vdovareize.me',
-          'https://reactive.vdovareize.me',
-        ]
+        : 'https://meme-stealer.vdovareize.me'
   });
   await app.listen(3000);
 }
