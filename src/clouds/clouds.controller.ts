@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
 import { CloudsService } from './clouds.service';
 import { RequestsService } from 'src/requests/requests.service';
+import { AsyncService } from 'src/async/async.service';
 
 const MONTH_LIMIT = {
   AMAZON: 900,
@@ -24,6 +25,7 @@ export class CloudsController {
   constructor(
     private readonly cloudsService: CloudsService,
     private readonly requestsService: RequestsService,
+    private readonly asyncService: AsyncService,
   ) {}
 
   @Get('/fibonacci/:index')
@@ -89,7 +91,7 @@ export class CloudsController {
     }
 
     const resultFileUrl =
-      await this.cloudsService.findResultFileUrlWithRetry(id);
+      await this.asyncService.findResultFileUrlWithRetry(id);
     if (!resultFileUrl) {
       return {
         success: false,
@@ -97,7 +99,7 @@ export class CloudsController {
       };
     }
 
-    const result = await this.cloudsService.readResult(resultFileUrl);
+    const result = await this.asyncService.readResult(resultFileUrl);
     if (!result) {
       return {
         success: false,

@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { CloudsController } from './clouds.controller';
-import { CloudsService } from './clouds.service';
+import { MemesController } from './memes.controller';
 import { RequestsService } from 'src/requests/requests.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
+import { MemesService } from './memes.service';
 import { AsyncService } from 'src/async/async.service';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [CloudsController],
-  providers: [CloudsService, RequestsService, AsyncService],
+  controllers: [MemesController],
+  providers: [MemesService, RequestsService, AsyncService],
 })
-export class CloudsModule {}
+export class MemesModule {}

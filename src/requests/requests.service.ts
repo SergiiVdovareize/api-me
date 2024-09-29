@@ -7,6 +7,9 @@ const API_TYPE = {
   AMAZON: 1,
   GOOGLE: 2,
   AZURE: 3,
+  MEME_INST: 10,
+  MEME_TWI: 11,
+  MEME_YOU: 12,
 };
 
 const CLOUD_MAP = {
@@ -40,6 +43,10 @@ export class RequestsService {
 
   registerArmstrongApiCall() {
     return this.registerApiCall(CLOUD_MAP.ARMSTRONG);
+  }
+
+  registerInstagramMemeApiCall() {
+    return this.registerApiCall(API_TYPE.MEME_INST);
   }
 
   registerApiCall(apiType: number) {

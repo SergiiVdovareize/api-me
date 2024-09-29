@@ -8,12 +8,15 @@ import { CloudsModule } from './clouds/clouds.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { CloudsController } from './clouds/clouds.controller';
+import { MemesModule } from './memes/memes.module';
+import { AsyncModule } from './async/async.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(), PrismaModule, RequestsModule, CloudsModule],
+  imports: [ConfigModule.forRoot(), PrismaModule, RequestsModule, CloudsModule, MemesModule, AsyncModule],
   controllers: [AppController],
   providers: [AppService, RequestsService],
 })
+
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes(CloudsController);
