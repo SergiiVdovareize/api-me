@@ -27,7 +27,10 @@ export class MemesService {
             const userResponse = await browser.requestSingle(pageRequest);
             if (userResponse.statusCode === 200) {
                 try {
-                    return JSON.parse(userResponse.content.data.renders[0].data)
+                    return {
+                        success: true,
+                        data: JSON.parse(userResponse.content.data.renders[0].data).url,
+                    }
                 } catch (error) {
                     return null;
                 }

@@ -7,7 +7,6 @@ const SYNC_TIMEOUT = 1000;
 @Injectable()
 export class AsyncService {
   async prepareResult(execute: Function) {
-    console.log('async service calls')
     const result: { type: 'sync' | 'async'; data: string | object } = {
       type: null,
       data: null,

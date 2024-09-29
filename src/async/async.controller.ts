@@ -27,6 +27,7 @@ export class AsyncController {
       `${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`,
       10,
     );
+
     if (isNaN(timestamp)) {
       return invalidIdResponse;
     }
@@ -44,8 +45,10 @@ export class AsyncController {
         status: 2,
       };
     }
+    console.log('resultFileUrl', resultFileUrl)
 
     const result = await this.asyncService.readResult(resultFileUrl);
+    console.log('result', result)
     if (!result) {
       return {
         success: false,
