@@ -9,8 +9,8 @@ async function bootstrap() {
       env.HOST === 'local'
         ? 'http://localhost:3003'
         : [
-          'https://reactive.vdovareize.me',
           'https://meme-stealer.vdovareize.me',
+          'https://reactive.vdovareize.me',
         ]
   });
   await app.listen(3000);
