@@ -11,8 +11,8 @@ export class MemesController {
 
   @Get(':url')
   async steal(@Param('url') url: string): Promise<{}> {
-    await this.requestsService.registerInstagramMemeApiCall()
-    const result = await this.memesService.steelFromPubler(url)
+    await this.requestsService.registerInstagramMemeApiCall();
+    const result = await this.memesService.steelFromPubler(url);
 
     return result;
   }

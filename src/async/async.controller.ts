@@ -3,9 +3,7 @@ import { AsyncService } from './async.service';
 
 @Controller('async')
 export class AsyncController {
-  constructor(
-    private readonly asyncService: AsyncService,
-  ) {}
+  constructor(private readonly asyncService: AsyncService) {}
 
   @Get('/result/:id')
   async result(@Param('id') id: string) {
@@ -45,10 +43,8 @@ export class AsyncController {
         status: 2,
       };
     }
-    console.log('resultFileUrl', resultFileUrl)
 
     const result = await this.asyncService.readResult(resultFileUrl);
-    console.log('result', result)
     if (!result) {
       return {
         success: false,

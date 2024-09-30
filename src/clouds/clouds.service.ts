@@ -6,9 +6,7 @@ const SYNC_TIMEOUT = 1000;
 
 @Injectable()
 export class CloudsService {
-  constructor(
-    private readonly asyncService: AsyncService,
-  ) {}
+  constructor(private readonly asyncService: AsyncService) {}
 
   async getFibonacciNumber(index: number) {
     const url = `${env.FIBONACCI_URL}?index=${index}`;
@@ -29,7 +27,7 @@ export class CloudsService {
     const execute = async () => {
       const data = await fetch(url);
       return await data.json();
-    }
+    };
 
     return this.asyncService.prepareResult(execute);
   }

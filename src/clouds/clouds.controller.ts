@@ -61,6 +61,7 @@ export class CloudsController {
     return this.cloudsService.getArmstrongNumber(index);
   }
 
+  // TODO: DEPRECATED, remove this method soon
   @Get('/result/:id')
   async result(@Param('id') id: string) {
     const maxWaitTime = 60 * 60 * 1000; // 60 minutes

@@ -15,5 +15,5 @@ export function getScraperScript(url: string) {
         await page.render.content({type: 'plainText'});
         await page.done();
     });
-  `
+  `;
 }
