@@ -36,6 +36,7 @@ export class MemesService {
         } catch (error) {
           console.log('stealing error');
           console.log(error);
+          console.log(userResponse);
           return {
             success: false,
             data: 'could not steal the meme v1',
