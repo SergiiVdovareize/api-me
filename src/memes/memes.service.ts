@@ -34,12 +34,16 @@ export class MemesService {
             data: resultUrl,
           };
         } catch (error) {
+          console.log('stealing error');
+          console.log(error);
           return {
             success: false,
             data: 'could not steal the meme v1',
           };
         }
       } else {
+        console.log('could not get result');
+        console.log(userResponse);
         return {
           success: false,
           data: 'could not steal the meme v2',
