@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && npm run sentry:sourcemaps",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "predeploy": "nest build",
     "deploy": "vercel --prod",
-    "postinstall": "prisma generate && npx prisma migrate deploy"
+    "postinstall": "prisma generate && npx prisma migrate deploy",
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org home-sr9 --project api-me ./dist && sentry-cli sourcemaps upload --org home-sr9 --project api-me ./dist"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.10",
@@ -30,6 +31,7 @@
     "@nestjs/platform-express": "^10.3.10",
     "@nestjs/typeorm": "^10.0.2",
     "@prisma/client": "^5.18.0",
+    "@sentry/cli": "^2.36.4",
     "@sentry/nestjs": "^8.32.0",
     "@sentry/profiling-node": "^8.32.0",
     "@vercel/blob": "^0.23.4",
