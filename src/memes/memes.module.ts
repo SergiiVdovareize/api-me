@@ -4,10 +4,11 @@ import { RequestsService } from 'src/requests/requests.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { MemesService } from './memes.service';
 import { AsyncService } from 'src/async/async.service';
+import { PosthogService } from 'src/posthog/posthog.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [MemesController],
-  providers: [MemesService, RequestsService, AsyncService],
+  providers: [MemesService, RequestsService, AsyncService, PosthogService],
 })
 export class MemesModule {}

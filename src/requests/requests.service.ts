@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { PosthogService } from 'src/posthog/posthog.service';
 
 const API_TYPE = {
   PLAIN: 0,
@@ -21,7 +22,10 @@ const CLOUD_MAP = {
 
 @Injectable()
 export class RequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private posthogService: PosthogService,
+  ) {}
 
   getDateMonthAgo(): Date {
     const today = new Date();
@@ -50,6 +54,10 @@ export class RequestsService {
   }
 
   registerApiCall(apiType: number) {
+    this.posthogService.trackEvent('ApiCall', {
+      apiType
+    })
+
     const createRequestDto = new CreateRequestDto();
     createRequestDto.apiType = apiType;
     return this.create(createRequestDto);
