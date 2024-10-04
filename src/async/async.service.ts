@@ -6,7 +6,7 @@ const SYNC_TIMEOUT = 1000;
 
 @Injectable()
 export class AsyncService {
-  async prepareResult(execute: Function) {
+  async prepareResult(execute: Function, track?: Function) {
     const result: { type: 'sync' | 'async'; data: string | object } = {
       type: null,
       data: null,
@@ -33,6 +33,8 @@ export class AsyncService {
           result.data = data;
           resolve(result);
         }
+        
+        track?.()
       });
     });
   }

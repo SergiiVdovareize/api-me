@@ -1,12 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { env } from 'process';
 import { AsyncService } from 'src/async/async.service';
+import { RequestsService } from 'src/requests/requests.service';
 
 const SYNC_TIMEOUT = 1000;
 
 @Injectable()
 export class CloudsService {
-  constructor(private readonly asyncService: AsyncService) {}
+  constructor(
+    private readonly asyncService: AsyncService,
+    private readonly requestsService: RequestsService
+  ) {}
+
+  // private trackCalculations(type: number, startTime: number, result: { success: boolean, data: string}) {
+  //   const data = {
+  //     executionTime: Date.now() - startTime,
+  //     success: !!result.success,
+  //   }
+  //   this.requestsService.registerApiCall(type, data);
+  // }
 
   async getFibonacciNumber(index: number) {
     const url = `${env.FIBONACCI_URL}?index=${index}`;
@@ -23,12 +35,15 @@ export class CloudsService {
     return this.getNumber(url);
   }
 
-  async getNumber(url: string) {
-    const execute = async () => {
-      const data = await fetch(url);
-      return await data.json();
-    };
+  private async execute(url: string) {
+    // const startTime = Date.now();
+    const data = await fetch(url);
+    const result = await data.json()
+    // this.trackCalculations(startTime, result)
+    return result;
+  };
 
-    return this.asyncService.prepareResult(execute);
+  private async getNumber(url: string) {
+    return this.asyncService.prepareResult(this.execute.bind(this, url));
   }
 }

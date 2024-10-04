@@ -11,9 +11,16 @@ export class MemesController {
 
   @Get(':url')
   async steal(@Param('url') url: string): Promise<{}> {
-    await this.requestsService.registerInstagramMemeApiCall();
-    console.log('source url', url);
+    // const startTime = Date.now()
     const result = await this.memesService.steelFromPubler(url);
+    // const data = {
+    //   executionTime: Date.now() - startTime,
+    //   succ: !!result.success,
+    //   tool: 'publer'
+    // }
+    // console.log('data', data)
+    // console.log('result', result)
+    // await this.requestsService.registerMemeApiCall(url, data);
 
     return result;
   }

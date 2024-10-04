@@ -13,6 +13,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { CloudsController } from './clouds/clouds.controller';
 import { MemesModule } from './memes/memes.module';
 import { AsyncModule } from './async/async.module';
+import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
 
 @Module({
@@ -34,6 +35,7 @@ import { PosthogService } from './posthog/posthog.service';
     AppService,
     RequestsService,
     PosthogService,
+    AnalyticsService
   ],
 })
 export class AppModule implements NestModule {
