@@ -9,6 +9,12 @@ import { AnalyticsService } from 'src/analytics/analytics.service';
 @Module({
   imports: [PrismaModule],
   controllers: [AsyncController],
-  providers: [AsyncService, RequestsService, AsyncService, AnalyticsService, PosthogService],
+  providers: [
+    AsyncService,
+    RequestsService,
+    AsyncService,
+    AnalyticsService,
+    PosthogService,
+  ],
 })
 export class AsyncModule {}

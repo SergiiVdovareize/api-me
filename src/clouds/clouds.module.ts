@@ -10,6 +10,12 @@ import { PosthogService } from 'src/posthog/posthog.service';
 @Module({
   imports: [PrismaModule],
   controllers: [CloudsController],
-  providers: [CloudsService, RequestsService, AsyncService, AnalyticsService, PosthogService],
+  providers: [
+    CloudsService,
+    RequestsService,
+    AsyncService,
+    AnalyticsService,
+    PosthogService,
+  ],
 })
 export class CloudsModule {}

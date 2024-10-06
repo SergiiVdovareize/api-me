@@ -35,7 +35,7 @@ import { PosthogService } from './posthog/posthog.service';
     AppService,
     RequestsService,
     PosthogService,
-    AnalyticsService
+    AnalyticsService,
   ],
 })
 export class AppModule implements NestModule {

@@ -25,19 +25,13 @@ const CLOUD_MAP = {
 };
 
 const MEME_MAP = {
-  [API_TYPE.MEME_YOU]: [
-    'youtube.com',
-    'youtu.be'
-  ],
-  [API_TYPE.MEME_TWI]: [
-    'x.com',
-    'twitter.com'
-  ],
+  [API_TYPE.MEME_YOU]: ['youtube.com', 'youtu.be'],
+  [API_TYPE.MEME_TWI]: ['x.com', 'twitter.com'],
   [API_TYPE.MEME_INST]: ['instagram.com'],
   [API_TYPE.MEME_FACE]: ['facebook.com'],
   [API_TYPE.MEME_TIK]: ['tiktok.com'],
   [API_TYPE.MEME_LIN]: ['linkedin.com'],
-}
+};
 
 @Injectable()
 export class RequestsService {
@@ -69,18 +63,19 @@ export class RequestsService {
   }
 
   registerMemeApiCall(url: string, extraData?: {}) {
-    const domainKey = Object.keys(MEME_MAP).find(key => (
-      MEME_MAP[key].some((domain: string) => url.includes(domain))
-    )) || API_TYPE.MEME_UNK
-    
+    const domainKey =
+      Object.keys(MEME_MAP).find((key) =>
+        MEME_MAP[key].some((domain: string) => url.includes(domain)),
+      ) || API_TYPE.MEME_UNK;
+
     return this.registerApiCall(Number(domainKey), extraData);
   }
 
   registerApiCall(apiType: number, extraData?: {}) {
     this.analyticsService.trackEvent('ApiCall', {
       apiType,
-      ...extraData
-    })
+      ...extraData,
+    });
 
     const createRequestDto = new CreateRequestDto();
     createRequestDto.apiType = apiType;

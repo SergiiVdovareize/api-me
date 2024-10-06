@@ -33,8 +33,8 @@ export class AsyncService {
           result.data = data;
           resolve(result);
         }
-        
-        track?.()
+
+        track?.();
       });
     });
   }

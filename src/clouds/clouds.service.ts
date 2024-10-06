@@ -9,7 +9,7 @@ const SYNC_TIMEOUT = 1000;
 export class CloudsService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService
+    private readonly requestsService: RequestsService,
   ) {}
 
   // private trackCalculations(type: number, startTime: number, result: { success: boolean, data: string}) {
@@ -38,10 +38,10 @@ export class CloudsService {
   private async execute(url: string) {
     // const startTime = Date.now();
     const data = await fetch(url);
-    const result = await data.json()
+    const result = await data.json();
     // this.trackCalculations(startTime, result)
     return result;
-  };
+  }
 
   private async getNumber(url: string) {
     return this.asyncService.prepareResult(this.execute.bind(this, url));

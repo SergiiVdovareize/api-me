@@ -18,19 +18,29 @@ const SNAP_URL = 'https://snap-insta.app';
 export class MemesService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService
+    private readonly requestsService: RequestsService,
   ) {}
 
-  private trackStealing(url: string, startTime: Number, tool: string, result: { success: boolean, data: string}) {
+  private trackStealing(
+    url: string,
+    startTime: Number,
+    tool: string,
+    result: { success: boolean; data: string },
+  ) {
     const data = {
       executionTime: Date.now() - Number(startTime),
       success: !!result.success,
-      tool
-    }
+      tool,
+    };
     this.requestsService.registerMemeApiCall(url, data);
   }
 
-  private async execute(tool: string, toolUrl: string, memeUrl: string, script: Function) {
+  private async execute(
+    tool: string,
+    toolUrl: string,
+    memeUrl: string,
+    script: Function,
+  ) {
     const phantomJsCloud = require('phantomjscloud');
     let apiKey = env.PHANTOMJS_CLOUD_API_KEY;
     let browser = new phantomJsCloud.BrowserApi(apiKey);
@@ -44,26 +54,30 @@ export class MemesService {
     };
 
     if (photo) {
-      req.renderType = 'jpeg'
+      req.renderType = 'jpeg';
     }
 
-    const startTime = Date.now()
+    const startTime = Date.now();
     let pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
     const userResponse = await browser.requestSingle(pageRequest);
 
     if (photo) {
-      const fileName = userResponse.content.name
-      writeFile(fileName, userResponse.content.data,
+      const fileName = userResponse.content.name;
+      writeFile(
+        fileName,
+        userResponse.content.data,
         {
-            encoding: userResponse.content.encoding,
-        }, (err) => {
-            console.log("captured page written to " + fileName);
-        });
+          encoding: userResponse.content.encoding,
+        },
+        (err) => {
+          console.log('captured page written to ' + fileName);
+        },
+      );
 
       return {};
     }
 
-    let result: {success: boolean, data: string};
+    let result: { success: boolean; data: string };
 
     if (userResponse.statusCode === 200) {
       try {
@@ -93,27 +107,35 @@ export class MemesService {
       };
     }
 
-    this.trackStealing(memeUrl, startTime, tool, result)
+    this.trackStealing(memeUrl, startTime, tool, result);
     return result;
   }
 
   async steelFromPubler(url: string): Promise<any> {
-    const script = getPublerScript.bind(this, url)
-    return await this.asyncService.prepareResult(this.execute.bind(this, 'publer', PUBLER_URL, url, script));
+    const script = getPublerScript.bind(this, url);
+    return await this.asyncService.prepareResult(
+      this.execute.bind(this, 'publer', PUBLER_URL, url, script),
+    );
   }
 
   async steelFromGetInDevice(url: string): Promise<any> {
-    const toolUrl = `${GETINDEVICE_URL}/#url=${encodeURIComponent(url)}`
-    return await this.asyncService.prepareResult(this.execute.bind(this, 'getindevice', toolUrl, url, getIndeviceScript));
+    const toolUrl = `${GETINDEVICE_URL}/#url=${encodeURIComponent(url)}`;
+    return await this.asyncService.prepareResult(
+      this.execute.bind(this, 'getindevice', toolUrl, url, getIndeviceScript),
+    );
   }
 
   async steelFromSquidlr(url: string): Promise<any> {
-    const toolUrl = `${SQUIDLR_URL}/download?url=${encodeURIComponent(url)}`
-    return await this.asyncService.prepareResult(this.execute.bind(this, 'squidlr', toolUrl, url, getSquidlrScript));
+    const toolUrl = `${SQUIDLR_URL}/download?url=${encodeURIComponent(url)}`;
+    return await this.asyncService.prepareResult(
+      this.execute.bind(this, 'squidlr', toolUrl, url, getSquidlrScript),
+    );
   }
 
   async steelFromSnap(url: string): Promise<any> {
-    const script = getSnapScript.bind(this, url)
-    return await this.asyncService.prepareResult(this.execute.bind(this, 'snap', SNAP_URL, url, script));
+    const script = getSnapScript.bind(this, url);
+    return await this.asyncService.prepareResult(
+      this.execute.bind(this, 'snap', SNAP_URL, url, script),
+    );
   }
 }

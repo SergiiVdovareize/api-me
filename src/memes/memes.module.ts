@@ -10,6 +10,12 @@ import { PosthogService } from 'src/posthog/posthog.service';
 @Module({
   imports: [PrismaModule],
   controllers: [MemesController],
-  providers: [MemesService, RequestsService, AsyncService, AnalyticsService, PosthogService],
+  providers: [
+    MemesService,
+    RequestsService,
+    AsyncService,
+    AnalyticsService,
+    PosthogService,
+  ],
 })
 export class MemesModule {}
