@@ -11,16 +11,10 @@ export class MemesController {
 
   @Get(':url')
   async steal(@Param('url') url: string): Promise<{}> {
-    // const startTime = Date.now()
     const result = await this.memesService.steelFromPubler(url);
-    // const data = {
-    //   executionTime: Date.now() - startTime,
-    //   succ: !!result.success,
-    //   tool: 'publer'
-    // }
-    // console.log('data', data)
-    // console.log('result', result)
-    // await this.requestsService.registerMemeApiCall(url, data);
+    // const result = await this.memesService.steelFromSquidlr(url);
+    // const result = await this.memesService.steelFromGetInDevice(url)
+    // const result = await this.memesService.steelFromSnap(url)
 
     return result;
   }

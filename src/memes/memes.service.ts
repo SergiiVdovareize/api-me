@@ -2,10 +2,17 @@ import { Injectable } from '@nestjs/common';
 import phantomJsCloud from 'phantomjscloud';
 import { env } from 'process';
 import { AsyncService } from 'src/async/async.service';
-import { getScraperScript } from 'src/common/phantomScripts/publer';
+import { getPublerScript } from 'src/common/phantomScripts/publer';
+import { getIndeviceScript } from 'src/common/phantomScripts/getindevice';
+import { getSquidlrScript } from 'src/common/phantomScripts/squidlr';
+import { getSnapScript } from 'src/common/phantomScripts/snap';
 import { RequestsService } from 'src/requests/requests.service';
+import { writeFile } from 'fs';
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
+const GETINDEVICE_URL = 'https://getindevice.com';
+const SQUIDLR_URL = 'https://www.squidlr.com';
+const SNAP_URL = 'https://snap-insta.app';
 
 @Injectable()
 export class MemesService {
@@ -23,21 +30,38 @@ export class MemesService {
     this.requestsService.registerMemeApiCall(url, data);
   }
 
-  private async execute(url: string) {
+  private async execute(tool: string, toolUrl: string, memeUrl: string, script: Function) {
     const phantomJsCloud = require('phantomjscloud');
     let apiKey = env.PHANTOMJS_CLOUD_API_KEY;
     let browser = new phantomJsCloud.BrowserApi(apiKey);
 
+    const photo = false;
+
     const req = {
-      url: PUBLER_URL,
+      url: toolUrl,
       renderType: 'automation',
-      // renderType:"jpeg",
-      overseerScript: getScraperScript(url),
+      overseerScript: script(),
     };
+
+    if (photo) {
+      req.renderType = 'jpeg'
+    }
 
     const startTime = Date.now()
     let pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
     const userResponse = await browser.requestSingle(pageRequest);
+
+    if (photo) {
+      const fileName = userResponse.content.name
+      writeFile(fileName, userResponse.content.data,
+        {
+            encoding: userResponse.content.encoding,
+        }, (err) => {
+            console.log("captured page written to " + fileName);
+        });
+
+      return {};
+    }
 
     let result: {success: boolean, data: string};
 
@@ -54,7 +78,7 @@ export class MemesService {
       } catch (error) {
         console.log('stealing error');
         console.error(error);
-        console.log(userResponse.content.data.errors);
+        console.log(userResponse);
         result = {
           success: false,
           data: 'could not steal the meme v1',
@@ -69,11 +93,27 @@ export class MemesService {
       };
     }
 
-    this.trackStealing(url, startTime, 'publer', result)
+    this.trackStealing(memeUrl, startTime, tool, result)
     return result;
   }
 
   async steelFromPubler(url: string): Promise<any> {
-    return await this.asyncService.prepareResult(this.execute.bind(this, url));
+    const script = getPublerScript.bind(this, url)
+    return await this.asyncService.prepareResult(this.execute.bind(this, 'publer', PUBLER_URL, url, script));
+  }
+
+  async steelFromGetInDevice(url: string): Promise<any> {
+    const toolUrl = `${GETINDEVICE_URL}/#url=${encodeURIComponent(url)}`
+    return await this.asyncService.prepareResult(this.execute.bind(this, 'getindevice', toolUrl, url, getIndeviceScript));
+  }
+
+  async steelFromSquidlr(url: string): Promise<any> {
+    const toolUrl = `${SQUIDLR_URL}/download?url=${encodeURIComponent(url)}`
+    return await this.asyncService.prepareResult(this.execute.bind(this, 'squidlr', toolUrl, url, getSquidlrScript));
+  }
+
+  async steelFromSnap(url: string): Promise<any> {
+    const script = getSnapScript.bind(this, url)
+    return await this.asyncService.prepareResult(this.execute.bind(this, 'snap', SNAP_URL, url, script));
   }
 }

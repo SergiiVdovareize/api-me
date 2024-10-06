@@ -1,13 +1,13 @@
-export function getScraperScript(url: string) {
+export function getPublerScript(url: string) {
   return `
     const url = '${url}'
     await page.waitForSelector('input[name=url]');
     await page.focus('input[name=url]');
     await page.keyboard.type(url)
-    await page.waitForDelay(100);
+    await page.waitForDelay(200);
     await page.keyboard.press('Enter')
     await page.waitForSelector('div.media-container video');
-    await page.waitForDelay(200);
+    await page.waitForDelay(300);
     return await page.evaluate(()=>{
         return {url: document.querySelector('div.media-container video').src};
     }).then(async (data) => {
