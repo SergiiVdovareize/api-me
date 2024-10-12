@@ -46,7 +46,6 @@ export class MemesService {
     let browser = new phantomJsCloud.BrowserApi(apiKey);
 
     const photo = false;
-
     const req = {
       url: toolUrl,
       renderType: 'automation',
