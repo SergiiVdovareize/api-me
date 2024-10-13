@@ -8,6 +8,7 @@ import { getSquidlrScript } from 'src/common/phantomScripts/squidlr';
 import { getSnapScript } from 'src/common/phantomScripts/snap';
 import { RequestsService } from 'src/requests/requests.service';
 import { writeFile } from 'fs';
+import { ParseResult } from 'src/common/types/ParseResult';
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
@@ -25,7 +26,7 @@ export class MemesService {
     url: string,
     startTime: Number,
     tool: string,
-    result: { success: boolean; data: string },
+    result: ParseResult,
   ) {
     const data = {
       executionTime: Date.now() - Number(startTime),
@@ -53,61 +54,55 @@ export class MemesService {
     };
 
     if (photo) {
-      req.renderType = 'jpeg';
+      return this.makePhoto(browser, req);
     }
 
     const startTime = Date.now();
-    let pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
+    const pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
     const userResponse = await browser.requestSingle(pageRequest);
-
-    if (photo) {
-      const fileName = userResponse.content.name;
-      writeFile(
-        fileName,
-        userResponse.content.data,
-        {
-          encoding: userResponse.content.encoding,
-        },
-        (err) => {
-          console.log('captured page written to ' + fileName);
-        },
-      );
-
-      return {};
-    }
-
-    let result: { success: boolean; data: string };
+    let result: ParseResult;
 
     if (userResponse.statusCode === 200) {
       try {
-        const resultUrl = JSON.parse(
-          userResponse.content.data.renders[0].data,
-        ).url;
-        console.log('result url', resultUrl);
-        result = {
-          success: true,
-          data: resultUrl,
-        };
+        result = JSON.parse(userResponse.content.data.renders[0].data);
       } catch (error) {
         console.log('stealing error');
         console.error(error);
         console.log(userResponse);
         result = {
           success: false,
-          data: 'could not steal the meme v1',
+          error: 'could not steal the meme: ' + error,
         };
       }
     } else {
-      console.log('could not get result');
-      // console.log(userResponse);
       result = {
         success: false,
-        data: 'could not steal the meme v2',
+        error: 'could not steal the meme v2',
       };
     }
 
     this.trackStealing(memeUrl, startTime, tool, result);
     return result;
+  }
+
+  private async makePhoto(browser, req) {
+    req.renderType = 'jpeg';
+    let pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
+    const userResponse = await browser.requestSingle(pageRequest);
+
+    const fileName = userResponse.content.name;
+    writeFile(
+      fileName,
+      userResponse.content.data,
+      {
+        encoding: userResponse.content.encoding,
+      },
+      (err) => {
+        console.log('captured page written to ' + fileName);
+      },
+    );
+
+    return {};
   }
 
   async steelFromPubler(url: string): Promise<any> {
