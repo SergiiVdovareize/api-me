@@ -30,7 +30,7 @@ export class MemesService {
   ) {
     const data = {
       executionTime: Date.now() - Number(startTime),
-      success: !!result.success,
+      success: !!result?.success,
       tool,
     };
     this.requestsService.registerMemeApiCall(url, data);
@@ -47,6 +47,8 @@ export class MemesService {
     let browser = new phantomJsCloud.BrowserApi(apiKey);
 
     const photo = false;
+    const logFile = false;
+
     const req = {
       url: toolUrl,
       renderType: 'automation',
@@ -64,11 +66,28 @@ export class MemesService {
 
     if (userResponse.statusCode === 200) {
       try {
+        if (logFile) {
+          writeFile(
+            'response.json',
+            userResponse.content.data.renders[0].data,
+            {
+              encoding: userResponse.content.encoding,
+            },
+            (err) => {
+              if (err) {
+                console.log('error', err);
+              }
+              console.log('captured page written');
+            },
+          );
+        }
+
         result = JSON.parse(userResponse.content.data.renders[0].data);
       } catch (error) {
-        console.log('stealing error');
-        console.error(error);
-        console.log(userResponse);
+        // console.log('** errors', userResponse.content.data.errors)
+        // console.log('stealing error');
+        // console.error(error);
+        // console.log(userResponse);
         result = {
           success: false,
           error: 'could not steal the meme: ' + error,
@@ -98,6 +117,7 @@ export class MemesService {
         encoding: userResponse.content.encoding,
       },
       (err) => {
+        console.log('error', err);
         console.log('captured page written to ' + fileName);
       },
     );
@@ -107,6 +127,7 @@ export class MemesService {
 
   async steelFromPubler(url: string): Promise<any> {
     const script = getPublerScript.bind(this, url);
+    // console.log('script', script());
     return await this.asyncService.prepareResult(
       this.execute.bind(this, 'publer', PUBLER_URL, url, script),
     );

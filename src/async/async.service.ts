@@ -93,7 +93,7 @@ export class AsyncService {
     try {
       const data = await fetch(url);
       const json = await data.json();
-      this.removeResultFile(url);
+      // this.removeResultFile(url);
       return json;
     } catch (error) {
       return null;
