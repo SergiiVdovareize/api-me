@@ -15,6 +15,7 @@ export function getPublerScript(url: string) {
   const mainFlow = () => {
     return new Promise(async (resolve) => {
       await page.waitForSelector('input[name=url]');
+      await page.waitForDelay(500);
       await page.focus('input[name=url]');
       await page.keyboard.type('${url}')
       await page.waitForDelay(200);
@@ -49,7 +50,6 @@ export function getPublerScript(url: string) {
   const fallbackFlow = () => {
     return new Promise(async (resolve) => {
       setTimeout(async () => {
-        await page.waitForSelector('input[name=url]');
         const pageResult = await page.evaluate(() => {
           const content = document.querySelector('#downloader').innerHTML
           const result = {
