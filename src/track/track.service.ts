@@ -12,7 +12,7 @@ export class TrackService {
     return `This action returns all track`;
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, plain: boolean) {
     const response = await fetch("https://send.monobank.ua/api/handler", {
       method: "POST",
       headers: {
@@ -38,7 +38,7 @@ export class TrackService {
         message: "check the jar id",
       }
     }
-    return {
+    return plain ? json.jarAmount : {
       success: true,
       balance: json.jarAmount,
     }
