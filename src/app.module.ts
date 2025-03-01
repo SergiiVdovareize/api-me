@@ -15,6 +15,7 @@ import { MemesModule } from './memes/memes.module';
 import { AsyncModule } from './async/async.module';
 import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
+import { TrackModule } from './track/track.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PosthogService } from './posthog/posthog.service';
     CloudsModule,
     MemesModule,
     AsyncModule,
+    TrackModule,
   ],
   controllers: [AppController],
   providers: [

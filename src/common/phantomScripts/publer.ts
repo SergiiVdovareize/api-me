@@ -14,7 +14,8 @@ export function getPublerScript(url: string) {
   return `
   const mainFlow = () => {
     return new Promise(async (resolve) => {
-      await page.waitForSelector('input[name=url]');
+      await page.waitForSelector('.cky-consent-container .cky-btn-reject');
+      await page.click('.cky-consent-container .cky-btn-reject');
       await page.waitForDelay(500);
       await page.focus('input[name=url]');
       await page.keyboard.type('${url}')
@@ -57,7 +58,6 @@ export function getPublerScript(url: string) {
             url: '${url}',
             html: document.querySelector('#downloader').innerHTML
           }
-          document.body.outerText = JSON.stringify(result)
         })
 
         resolve(pageResult);
