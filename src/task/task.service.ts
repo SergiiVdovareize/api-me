@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppService } from 'src/app.service';
 
 @Injectable()
@@ -9,9 +9,9 @@ export class TasksService {
     private readonly appService: AppService,
   ) {}
 
-  @Cron('0 */1 * * * *')
+  @Cron(CronExpression.EVERY_MINUTE)
   handleCron() {
-    // this.appService.getHello(1);
+    this.appService.getHello(1);
     console.log('CRON CALLED');
   }
 }

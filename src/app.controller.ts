@@ -12,7 +12,6 @@ export class AppController {
   @Get()
   async getHello(): Promise<string> {
     this.analyticsService.trackEvent('HelloApi');
-    console.log('Hello controller');
     return this.appService.getHello();
   }
 
