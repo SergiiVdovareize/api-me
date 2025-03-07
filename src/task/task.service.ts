@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { AppService } from 'src/app.service';
 
 @Injectable()
 export class TasksService {
-  private readonly logger = new Logger(TasksService.name);
+//   private readonly logger = new Logger(TasksService.name);
   constructor(
     private readonly appService: AppService,
   ) {}
@@ -12,6 +12,6 @@ export class TasksService {
   @Cron('0 */1 * * * *')
   handleCron() {
     // this.appService.getHello(1);
-    this.logger.log('CRON CALLED');
+    console.log('CRON CALLED');
   }
 }
