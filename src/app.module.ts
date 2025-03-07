@@ -41,7 +41,7 @@ import { TasksService } from './task/task.service';
     RequestsService,
     PosthogService,
     AnalyticsService,
-    TasksService,
+    // TasksService,
   ],
 })
 export class AppModule implements NestModule {
