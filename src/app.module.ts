@@ -16,11 +16,14 @@ import { AsyncModule } from './async/async.module';
 import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
 import { TrackModule } from './track/track.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TasksService } from './task/task.service';
 
 @Module({
   imports: [
     // SentryModule.forRoot(),
     ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
     PrismaModule,
     RequestsModule,
     CloudsModule,
@@ -38,6 +41,7 @@ import { TrackModule } from './track/track.module';
     RequestsService,
     PosthogService,
     AnalyticsService,
+    TasksService,
   ],
 })
 export class AppModule implements NestModule {
