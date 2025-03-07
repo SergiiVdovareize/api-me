@@ -10,4 +10,8 @@ export class TrackController {
     return await this.trackService.findOne(id, ["true", "1"].includes(plain));
   }
 
+  @Get('watch/:id')
+  async watchMono(@Param('id') id: string, @Query('plain') plain: string) {
+    return await this.trackService.findOne(id, ["true", "1"].includes(plain));
+  }
 }

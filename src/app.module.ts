@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { SentryModule } from '@sentry/nestjs/setup';
-import { APP_FILTER } from '@nestjs/core';
-import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+// import { SentryModule } from '@sentry/nestjs/setup';
+// import { APP_FILTER } from '@nestjs/core';
+// import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,7 +19,7 @@ import { TrackModule } from './track/track.module';
 
 @Module({
   imports: [
-    SentryModule.forRoot(),
+    // SentryModule.forRoot(),
     ConfigModule.forRoot(),
     PrismaModule,
     RequestsModule,
@@ -30,10 +30,10 @@ import { TrackModule } from './track/track.module';
   ],
   controllers: [AppController],
   providers: [
-    {
-      provide: APP_FILTER,
-      useClass: SentryGlobalFilter,
-    },
+    // {
+    //   provide: APP_FILTER,
+    //   useClass: SentryGlobalFilter,
+    // },
     AppService,
     RequestsService,
     PosthogService,
