@@ -9,9 +9,9 @@ export class TasksService {
     private readonly appService: AppService,
   ) {}
 
-  @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron('0 */1 * * * *')
   handleCron() {
-    this.appService.getHello(1);
-    this.logger.debug('CRON CALLED');
+    // this.appService.getHello(1);
+    this.logger.log('CRON CALLED');
   }
 }
