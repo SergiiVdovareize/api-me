@@ -7,7 +7,10 @@ export class AnalyticsService {
   constructor(private posthogService: PosthogService) {}
 
   trackEvent(event: string, properties: Record<string, any> = {}, forceEnv: boolean = false) {
-    console.log('env', env.HOST);
+    if(env.HOST !== 'prod' && !forceEnv) {
+      return;
+    }
+    
     this.posthogService.trackEvent(event, properties);
   }
 }
