@@ -4,7 +4,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 // import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
+import { PrismaModule } from './models/prisma/prisma.module';
 import { RequestsModule } from './requests/requests.module';
 import { RequestsService } from './requests/requests.service';
 import { CloudsModule } from './clouds/clouds.module';

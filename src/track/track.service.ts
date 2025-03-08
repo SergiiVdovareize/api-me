@@ -1,18 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { CreateTrackDto } from './dto/create-track.dto';
-import { UpdateTrackDto } from './dto/update-track.dto';
-
+import { CreateAccountDto } from 'src/models/dto/account.dto';
+import { AccountType } from 'src/models/enums/account-type.enum';
+import { PrismaService } from 'src/prisma.service';
 @Injectable()
 export class TrackService {
-  create(createTrackDto: CreateTrackDto) {
-    return 'This action adds a new track';
-  }
+  constructor(
+    private prisma: PrismaService,
+  ) {}
 
   findAll() {
     return `This action returns all track`;
   }
 
-  async findOne(id: string, plain: boolean) {
+  async checkMono(id: string, plain: boolean) {
     const response = await fetch("https://send.monobank.ua/api/handler", {
       method: "POST",
       headers: {
@@ -44,11 +44,17 @@ export class TrackService {
     }
   }
 
-  update(id: number, updateTrackDto: UpdateTrackDto) {
-    return `This action updates a #${id} track`;
-  }
+  async watch(type: AccountType, id: string) {
+    const newAccount: CreateAccountDto = {
+      trackId: id,
+      type,
+    };
 
-  remove(id: number) {
-    return `This action removes a #${id} track`;
+    let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
+    if (!trackingAccount) {
+      trackingAccount = await this.prisma.account.create({data: newAccount})
+    }
+
+    return trackingAccount
   }
 }
