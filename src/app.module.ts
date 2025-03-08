@@ -17,7 +17,6 @@ import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
 import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TasksService } from './task/task.service';
 
 @Module({
   imports: [
@@ -41,7 +40,6 @@ import { TasksService } from './task/task.service';
     RequestsService,
     PosthogService,
     AnalyticsService,
-    // TasksService,
   ],
 })
 export class AppModule implements NestModule {

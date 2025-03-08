@@ -1,9 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { TrackService } from './track.service';
+import { AnalyticsService } from 'src/analytics/analytics.service';
 
 @Controller('track')
 export class TrackController {
-  constructor(private readonly trackService: TrackService) {}
+  constructor(
+    private readonly trackService: TrackService,
+    private readonly analyticsService: AnalyticsService
+  ) {}
 
   @Get('')
   async track() {
@@ -28,6 +32,7 @@ export class TrackController {
 
   @Get('mono/:id')
   async findOne(@Param('id') id: string, @Query('plain') plain: string) {
+    this.analyticsService.trackEvent('BalanceTrack', {type: 'mono', id, plain});
     return await this.trackService.findOne(id, ["true", "1"].includes(plain));
   }
 
