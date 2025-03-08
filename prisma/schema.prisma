@@ -19,3 +19,30 @@ model Request {
   apiType   Int
   createdAt DateTime @default(now())
 }
+
+model Account {
+  id          String           @id @default(uuid()) // Unique account ID
+  createdAt   DateTime         @default(now()) // Timestamp of account creation
+  isActive    Boolean          @default(true) // Whether the account is active
+  trackId     String           @unique // Unique tracking identifier
+  type        AccountType      // Enum for account type (mono, privat)
+  description String?          // Optional account description
+
+  // One-to-many relationship with AccountIncoming
+  AccountIncomings AccountIncoming[]
+}
+
+enum AccountType {
+  MONO
+  PRIVAT
+}
+
+model AccountIncoming {
+  id         String   @id @default(uuid()) // Unique transaction ID
+  balance    Decimal  // Account balance at the time of tracking
+  trackedAt  DateTime @default(now()) // When the balance was recorded
+
+  // Foreign key to Account
+  accountId  String
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
