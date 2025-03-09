@@ -14,12 +14,12 @@ export class TrackController {
   async track() {
     await this.trackService.syncAccounts();
     // console.log('track 0')
-    setTimeout(async () => {
-      await this.trackService.syncAccounts();
-    }, 20000);
-    setTimeout(async () => {
-      await this.trackService.syncAccounts();
-    }, 40000);
+    // setTimeout(async () => {
+    //   await this.trackService.syncAccounts();
+    // }, 20000);
+    // setTimeout(async () => {
+    //   await this.trackService.syncAccounts();
+    // }, 40000);
     return {success: true}
   }
 
