@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateAccountDto } from 'src/models/dto/account.dto';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
+import { JarResponse, JarStatus } from './types';
 @Injectable()
 export class TrackService {
   constructor(
@@ -12,7 +13,7 @@ export class TrackService {
     return `This action returns all track`;
   }
 
-  async checkMono(id: string, plain: boolean = false) {
+  async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
     const response = await fetch("https://send.monobank.ua/api/handler", {
       method: "POST",
       headers: {
@@ -29,7 +30,7 @@ export class TrackService {
     if (!response.ok) {
       return {
         success: false,
-        message: response.status,
+        message: response.status.toString(),
       }
     }
     if (json.errCode) {
@@ -43,6 +44,10 @@ export class TrackService {
       balance: json.jarAmount,
       status: json.jarStatus,
     }
+  }
+
+  isJarActiveStatus(json: JarResponse) {
+    return json.status && json.status === JarStatus.ACTIVE
   }
 
   async watch(type: AccountType, id: string) {
@@ -63,21 +68,38 @@ export class TrackService {
     return await this.prisma.account.findMany({where: {isActive: true}})
   }
 
+  async getActiveAccountIncomings() {
+    return await this.prisma.account.findMany({
+      where: { isActive: true },
+      include: {
+        accountIncomings: {
+          take: 1, // Get only the most recent record
+          orderBy: { trackedAt: 'desc' }, // Sort by the latest trackedAt date
+        },
+      },
+    });
+  }
+  
   async syncAccounts() {
-    const accounts = await this.getActiveAccounts();
+    const accounts = await this.getActiveAccountIncomings()
 
+    console.log('found active accounts:', accounts.length)
     return Promise.all(accounts.map(async (account) => {
       switch (account.type) {
         case AccountType.MONO:
-          this.checkMono(account.trackId).then(res => {
-            if (res.success) {
-              this.prisma.accountIncoming.create({
-                data: {
-                  accountId: account.id,
-                  balance: res.balance,
-                  trackedAt: new Date(),
-                }
-              }).then((inc) => {console.log('inc', inc)})
+          this.checkMono(account.trackId).then((response: JarResponse) => {
+            if (this.isJarActiveStatus(response)) {
+              if (response.balance !== account.accountIncomings?.[0]?.balance) {
+                this.prisma.accountIncoming.create({
+                  data: {
+                    accountId: account.id,
+                    balance: response.balance,
+                    trackedAt: new Date(),
+                  }
+                }).then((inc) => {console.log('incoming added', inc.balance)})
+              } else {
+                console.log('balance did not change')
+              }
             }
           })
           return {};

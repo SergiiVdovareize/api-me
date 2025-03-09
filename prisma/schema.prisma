@@ -29,7 +29,7 @@ model Account {
   description String?          // Optional account description
 
   // One-to-many relationship with AccountIncoming
-  AccountIncomings AccountIncoming[]
+  accountIncomings AccountIncoming[]
 }
 
 enum AccountType {
@@ -39,7 +39,7 @@ enum AccountType {
 
 model AccountIncoming {
   id         Int      @id @default(autoincrement()) // Unique transaction ID
-  balance    Decimal  // Account balance at the time of tracking
+  balance    Int  // Account balance at the time of tracking
   trackedAt  DateTime @default(now()) // When the balance was recorded
 
   // Foreign key to Account
