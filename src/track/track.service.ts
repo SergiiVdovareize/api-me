@@ -83,7 +83,7 @@ export class TrackService {
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
 
-    console.log('found active accounts:', accounts.length)
+    // console.log('found active accounts:', accounts.length)
     const result = await Promise.all(accounts.map(async (account) => {
       console.log(account.trackId)
       switch (account.type) {
@@ -98,9 +98,9 @@ export class TrackService {
                   trackedAt: new Date(),
                 }
               });
-              console.log('incoming added', incoming.balance);
+              console.log('added: ', incoming.balance);
             } else {
-              console.log('balance did not change');
+              // console.log('balance did not change');
             }
           }
           break;
@@ -118,7 +118,5 @@ export class TrackService {
           break;
       }
     }));
-
-    console.log('processed accounts: ', result.length);
   }
 }

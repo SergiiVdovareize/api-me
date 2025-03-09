@@ -12,33 +12,19 @@ export class TrackController {
 
   @Get('')
   async track() {
-    console.log('sync start')
     await this.trackService.syncAccounts();
-    console.log('sync end')
     // console.log('track 0')
-    setTimeout(() => {
-      // console.log('track 10')
-    }, 10000);
-    setTimeout(() => {
-      // console.log('track 20')
+    setTimeout(async () => {
+      await this.trackService.syncAccounts();
     }, 20000);
-    setTimeout(() => {
-      // console.log('track 30')
-    }, 30000);
-    setTimeout(() => {
-      // console.log('track 40')
+    setTimeout(async () => {
+      await this.trackService.syncAccounts();
     }, 40000);
-    setTimeout(() => {
-      // console.log('track 50')
-    }, 50000);
     return {success: true}
   }
 
   @Get('check/:type/:id')
   async check(@Param('type') type: AccountType, @Param('id') id: string, @Query('plain') plain: string) {
-    const accounts = await this.trackService.getActiveAccounts();
-    console.log('accounts', accounts.length)
-
     if (!Object.values(AccountType).includes(type as AccountType)) {
       return {
         success: false,
