@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { TrackService } from './track.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AccountType } from 'src/models/enums/account-type.enum';
+import { env } from 'process';
 
 @Controller('track')
 export class TrackController {
@@ -11,23 +12,24 @@ export class TrackController {
   ) {}
 
   @Get('')
-  async track() {
+  async track(@Query('loop') loop: boolean = false) {
+    console.log('track', loop)
     await this.trackService.syncAccounts();
-    // console.log('track 0')
-    setTimeout(async () => {
-      fetch('https://api.vdovareize.me/track/20');
-    }, 20000);
-    // setTimeout(async () => {
-    //   await this.trackService.syncAccounts();
-    // }, 40000);
-    return {success: true}
-  }
+    if (!loop) {
+      const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
+      const loopUrl = `${loopHost}/track`;
+      console.log('loopUrl', loopUrl)
+      setTimeout(async () => {
+        console.log('fetch 20')
+        fetch(`${loopUrl}?loop=true`);
+      }, 20000);
 
-  @Get('/20')
-  async track20() {
-    console.log('track 20')
-    await this.trackService.syncAccounts();
-    return {success: true};
+      setTimeout(async () => {
+        console.log('fetch 40')
+        fetch(`${loopUrl}?loop=true`);
+      }, 40000);
+    }
+    return {success: true}
   }
 
   @Get('check/:type/:id')
