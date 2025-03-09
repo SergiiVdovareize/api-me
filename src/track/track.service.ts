@@ -82,13 +82,13 @@ export class TrackService {
   
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
-    // const accounts = await this.getActiveAccounts()
 
     console.log('found active accounts:', accounts.length)
     const result = await Promise.all(accounts.map(async (account) => {
+      console.log(account.trackId)
       switch (account.type) {
         case AccountType.MONO:
-          const response: JarResponse = await this.checkMono(account.trackId);
+          const response = await this.checkMono(account.trackId);
           if (this.isJarActiveStatus(response)) {
             if (response.balance !== account.accountIncomings?.[0]?.balance) {
               const incoming = await this.prisma.accountIncoming.create({
@@ -97,26 +97,28 @@ export class TrackService {
                   balance: response.balance,
                   trackedAt: new Date(),
                 }
-              })
+              });
               console.log('incoming added', incoming.balance);
             } else {
-              console.log('balance did not change')
+              console.log('balance did not change');
             }
           }
-
-          return {};
+          break;
         case AccountType.PRIVAT:
-          return {
+          console.log({
             success: false,
             message: `Type is not yet supported: ${account.type}`
-          }
+          });
+          break;
         default:
-          return {
+          console.log({
             success: false,
-            message: `Invalid type: ${account.type}` 
-          }
+            message: `Invalid type: ${account.type}`
+          });
+          break;
       }
-    }))
-    console.log('processed accounts:', result.length)
+    }));
+
+    console.log('processed accounts: ', result.length);
   }
 }
