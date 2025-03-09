@@ -87,21 +87,22 @@ export class TrackService {
     return Promise.all(accounts.map(async (account) => {
       switch (account.type) {
         case AccountType.MONO:
-          this.checkMono(account.trackId).then((response: JarResponse) => {
-            if (this.isJarActiveStatus(response)) {
-              if (response.balance !== account.accountIncomings?.[0]?.balance) {
-                this.prisma.accountIncoming.create({
-                  data: {
-                    accountId: account.id,
-                    balance: response.balance,
-                    trackedAt: new Date(),
-                  }
-                }).then((inc) => {console.log('incoming added', inc.balance)})
-              } else {
-                console.log('balance did not change')
-              }
+          const response: JarResponse = await this.checkMono(account.trackId);
+          if (this.isJarActiveStatus(response)) {
+            if (response.balance !== account.accountIncomings?.[0]?.balance) {
+              const incoming = await this.prisma.accountIncoming.create({
+                data: {
+                  accountId: account.id,
+                  balance: response.balance,
+                  trackedAt: new Date(),
+                }
+              })
+              console.log('incoming added', incoming.balance);
+            } else {
+              console.log('balance did not change')
             }
-          })
+          }
+
           return {};
         case AccountType.PRIVAT:
           return {
