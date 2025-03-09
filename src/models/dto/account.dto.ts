@@ -13,7 +13,7 @@ export interface UpdateAccountDto {
 }
 
 export interface AccountDto {
-  id: string;
+  id: number;
   createdAt: Date;
   isActive: boolean;
   trackId: string;

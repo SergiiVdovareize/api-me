@@ -38,9 +38,11 @@ export class TrackService {
         message: "check the jar id",
       }
     }
+    console.log('json', json)
     return plain ? json.jarAmount : {
       success: true,
       balance: json.jarAmount,
+      status: json.jarStatus,
     }
   }
 
@@ -70,6 +72,15 @@ export class TrackService {
         case AccountType.MONO:
           this.checkMono(account.trackId).then(res => {
             console.log('res', res)
+            if (res.success) {
+              this.prisma.accountIncoming.create({
+                data: {
+                  accountId: account.id,
+                  balance: res.balance,
+                  trackedAt: new Date(),
+                }
+              }).then((inc) => {console.log('inc', inc)})
+            }
           })
           return {};
         case AccountType.PRIVAT:

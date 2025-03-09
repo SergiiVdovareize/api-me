@@ -21,7 +21,7 @@ model Request {
 }
 
 model Account {
-  id          String           @id @default(uuid()) // Unique account ID
+  id          Int              @id @default(autoincrement()) // Unique transaction ID
   createdAt   DateTime         @default(now()) // Timestamp of account creation
   isActive    Boolean          @default(true) // Whether the account is active
   trackId     String           @unique // Unique tracking identifier
@@ -38,11 +38,11 @@ enum AccountType {
 }
 
 model AccountIncoming {
-  id         String   @id @default(uuid()) // Unique transaction ID
+  id         Int      @id @default(autoincrement()) // Unique transaction ID
   balance    Decimal  // Account balance at the time of tracking
   trackedAt  DateTime @default(now()) // When the balance was recorded
 
   // Foreign key to Account
-  accountId  String
+  accountId  Int
   account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
