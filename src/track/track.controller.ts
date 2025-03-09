@@ -25,6 +25,7 @@ export class TrackController {
 
   @Get('/20')
   async track20() {
+    console.log('track 20')
     await this.trackService.syncAccounts();
     return {success: true};
   }
