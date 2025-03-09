@@ -81,8 +81,8 @@ export class TrackService {
   }
   
   async syncAccounts() {
-    const accounts = await this.getActiveAccountIncomings()
-    // const accounts = await this.getActiveAccounts()
+    // const accounts = await this.getActiveAccountIncomings()
+    const accounts = await this.getActiveAccounts()
 
     console.log('found active accounts:', accounts.length)
     const result = await Promise.all(accounts.map(async (account) => {
@@ -90,7 +90,7 @@ export class TrackService {
         case AccountType.MONO:
           const response: JarResponse = await this.checkMono(account.trackId);
           if (this.isJarActiveStatus(response)) {
-            if (response.balance !== account.accountIncomings?.[0]?.balance) {
+            // if (response.balance !== account.accountIncomings?.[0]?.balance) {
               const incoming = await this.prisma.accountIncoming.create({
                 data: {
                   accountId: account.id,
@@ -99,9 +99,9 @@ export class TrackService {
                 }
               })
               console.log('incoming added', incoming.balance);
-            } else {
-              console.log('balance did not change')
-            }
+            // } else {
+              // console.log('balance did not change')
+            // }
           }
 
           return {};
