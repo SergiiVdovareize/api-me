@@ -13,21 +13,21 @@ export class TrackController {
   @Get('')
   async track() {
     this.trackService.syncAccounts();
-    console.log('track 0')
+    // console.log('track 0')
     setTimeout(() => {
-      console.log('track 10')
+      // console.log('track 10')
     }, 10000);
     setTimeout(() => {
-      console.log('track 20')
+      // console.log('track 20')
     }, 20000);
     setTimeout(() => {
-      console.log('track 30')
+      // console.log('track 30')
     }, 30000);
     setTimeout(() => {
-      console.log('track 40')
+      // console.log('track 40')
     }, 40000);
     setTimeout(() => {
-      console.log('track 50')
+      // console.log('track 50')
     }, 50000);
     return {success: true}
   }
