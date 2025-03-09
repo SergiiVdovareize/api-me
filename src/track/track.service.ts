@@ -84,8 +84,7 @@ export class TrackService {
     const accounts = await this.getActiveAccountIncomings()
 
     // console.log('found active accounts:', accounts.length)
-    const result = await Promise.all(accounts.map(async (account) => {
-      console.log(account.trackId)
+    await Promise.all(accounts.map(async (account) => {
       switch (account.type) {
         case AccountType.MONO:
           const response = await this.checkMono(account.trackId);
