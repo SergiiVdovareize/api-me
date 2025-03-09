@@ -12,6 +12,7 @@ export class TrackController {
 
   @Get('')
   async track() {
+    this.trackService.syncAccounts();
     console.log('track 0')
     setTimeout(() => {
       console.log('track 10')

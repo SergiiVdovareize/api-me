@@ -12,7 +12,7 @@ export class TrackService {
     return `This action returns all track`;
   }
 
-  async checkMono(id: string, plain: boolean) {
+  async checkMono(id: string, plain: boolean = false) {
     const response = await fetch("https://send.monobank.ua/api/handler", {
       method: "POST",
       headers: {
@@ -56,5 +56,33 @@ export class TrackService {
     }
 
     return trackingAccount
+  }
+
+  async getActiveAccounts() {
+    return await this.prisma.account.findMany({where: {isActive: true}})
+  }
+
+  async syncAccounts() {
+    const accounts = await this.getActiveAccounts();
+
+    return Promise.all(accounts.map(async (account) => {
+      switch (account.type) {
+        case AccountType.MONO:
+          this.checkMono(account.trackId).then(res => {
+            console.log('res', res)
+          })
+          return {};
+        case AccountType.PRIVAT:
+          return {
+            success: false,
+            message: `Type is not yet supported: ${account.type}`
+          }
+        default:
+          return {
+            success: false,
+            message: `Invalid type: ${account.type}` 
+          }
+      }
+    }))
   }
 }
