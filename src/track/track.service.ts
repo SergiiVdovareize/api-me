@@ -82,9 +82,10 @@ export class TrackService {
   
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
+    // const accounts = await this.getActiveAccounts()
 
     console.log('found active accounts:', accounts.length)
-    return Promise.all(accounts.map(async (account) => {
+    const result = await Promise.all(accounts.map(async (account) => {
       switch (account.type) {
         case AccountType.MONO:
           const response: JarResponse = await this.checkMono(account.trackId);
@@ -116,5 +117,6 @@ export class TrackService {
           }
       }
     }))
+    console.log('processed accounts:', result.length)
   }
 }
