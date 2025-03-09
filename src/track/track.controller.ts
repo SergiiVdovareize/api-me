@@ -12,7 +12,7 @@ export class TrackController {
 
   @Get('')
   async track() {
-    this.trackService.syncAccounts();
+    // this.trackService.syncAccounts();
     // console.log('track 0')
     setTimeout(() => {
       // console.log('track 10')
@@ -34,7 +34,9 @@ export class TrackController {
 
   @Get('check/:type/:id')
   async check(@Param('type') type: AccountType, @Param('id') id: string, @Query('plain') plain: string) {
-    this.analyticsService.trackEvent('BalanceTrack', { type, id, plain });
+    const accounts = await this.trackService.getActiveAccounts();
+    console.log('accounts', accounts.length)
+    
     if (!Object.values(AccountType).includes(type as AccountType)) {
       return {
         success: false,
