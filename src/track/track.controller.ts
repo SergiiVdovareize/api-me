@@ -21,13 +21,13 @@ export class TrackController {
       console.log('loopUrl', loopUrl)
       setTimeout(async () => {
         console.log('fetch 20')
-        fetch(`${loopUrl}?loop=true`).then(res => res.json()).then(console.log);
+        await fetch(`${loopUrl}?loop=true`);
       }, 20000);
 
-      // setTimeout(async () => {
-      //   console.log('fetch 40')
-      //   await fetch(`${loopUrl}?loop=true`);
-      // }, 40000);
+      setTimeout(async () => {
+        console.log('fetch 40')
+        await fetch(`${loopUrl}?loop=true`);
+      }, 40000);
     }
     return {success: true}
   }
