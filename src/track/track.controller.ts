@@ -14,13 +14,19 @@ export class TrackController {
   async track() {
     await this.trackService.syncAccounts();
     // console.log('track 0')
-    // setTimeout(async () => {
-    //   await this.trackService.syncAccounts();
-    // }, 20000);
+    setTimeout(async () => {
+      fetch('https://api.vdovareize.me/track/20');
+    }, 20000);
     // setTimeout(async () => {
     //   await this.trackService.syncAccounts();
     // }, 40000);
     return {success: true}
+  }
+
+  @Get('/20')
+  async track20() {
+    await this.trackService.syncAccounts();
+    return {success: true};
   }
 
   @Get('check/:type/:id')
