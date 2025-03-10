@@ -73,8 +73,8 @@ export class TrackService {
       where: { isActive: true },
       include: {
         accountIncomings: {
-          take: 1, // Get only the most recent record
-          orderBy: { trackedAt: 'desc' }, // Sort by the latest trackedAt date
+          take: 1,
+          orderBy: { trackedAt: 'desc' },
         },
       },
     });
