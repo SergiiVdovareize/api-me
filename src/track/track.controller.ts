@@ -16,20 +16,22 @@ export class TrackController {
     // console.log('track', loop)
     await this.trackService.syncAccounts();
     // if (!["true", "1"].includes(loop)) {
-    //   const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
-    //   const loopUrl = `${loopHost}/track`;
-    //   console.log('loopUrl', loopUrl)
-    //   setTimeout(async () => {
-    //     console.log('fetch 20')
-    //     await fetch(`${loopUrl}?loop=true`);
-    //   }, 20000);
+      const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
+      const loopUrl = `${loopHost}/track/2`;
 
-    //   setTimeout(async () => {
-    //     console.log('fetch 40')
-    //     await fetch(`${loopUrl}?loop=true`);
-    //   }, 40000);
+      setTimeout(async () => {
+        console.log('fetch 30')
+        const resp = await (await fetch(loopUrl)).json();
+        console.log(resp)
+      }, 30000);
     // }
     return {success: true}
+  }
+
+  @Get('/2')
+  async track2() {
+    await this.trackService.syncAccounts();
+    return {success: true, message: 'from track2'}
   }
 
   @Get('check/:type/:id')
