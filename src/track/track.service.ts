@@ -96,7 +96,7 @@ export class TrackService {
                   trackedAt: new Date(),
                 }
               });
-              console.log('added: ', incoming.balance);
+              console.log(`updated balance: ${account.trackId} - ${incoming.balance}`);
             }
           }
           break;
