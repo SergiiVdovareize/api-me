@@ -102,6 +102,11 @@ export class TrackService {
         case AccountType.MONO:
           const response = await this.checkMono(account.trackId);
           if (this.isJarActiveStatus(response)) {
+            if (!response.balance) {
+              console.log(`no balance: ${account.id} - ${response.balance}`);
+              return
+            }
+            
             if (response.balance !== account.accountIncomings?.[0]?.balance) {
               const incoming = await this.prisma.accountIncoming.create({
                 data: {

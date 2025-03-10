@@ -14,14 +14,15 @@ export class TrackController {
   @Get('')
   async track(@Query('loop') loop: string = 'false') {
     // console.log('track', loop)
+    const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
+    const loopUrl = `${loopHost}/track/2`;
     setTimeout(async () => {
       console.log('fetch 300')
       fetch(loopUrl)
     }, 30000);
     await this.trackService.syncAccounts();
     // if (!["true", "1"].includes(loop)) {
-      const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
-      const loopUrl = `${loopHost}/track/2`;
+      
 
       
     // }
