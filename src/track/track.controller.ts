@@ -20,18 +20,31 @@ export class TrackController {
     return `${hours}:${minutes}:${seconds}`;
   }
 
+  async delay() {
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        resolve()
+      }, 30000);
+    })
+  }
+
   @Get('')
   async track(@Query('loop') loop: string = 'false') {
     // console.log('track', loop)
     const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
     const loopUrl = `${loopHost}/track/2`;
-    setTimeout(async () => {
-      console.log('fetch 300', this.getTime())
-      fetch(loopUrl)
-    }, 30000);
+    // setTimeout(async () => {
+    //   console.log('fetch 300', this.getTime())
+    //   fetch(loopUrl)
+    // }, 30000);
 
     console.log('before sync', this.getTime())
     await this.trackService.syncAccounts();
+    console.log('before delay', this.getTime())
+    await this.delay();
+    console.log('fetch 300', this.getTime())
+    fetch(loopUrl)
+
     // if (!["true", "1"].includes(loop)) {
       
 
