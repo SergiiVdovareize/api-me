@@ -89,8 +89,6 @@ export class TrackService {
   
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
-    console.log(`found accounts: ${accounts.length}`);
-
     await Promise.all(accounts.map(async (account) => {
       if (this.isAccountOld(account)) {
         console.log(`inactivating old account: ${account.trackId}`);
@@ -106,7 +104,7 @@ export class TrackService {
               console.log(`no balance: ${account.id} - ${response.balance}`);
               return
             }
-            
+
             if (response.balance !== account.accountIncomings?.[0]?.balance) {
               const incoming = await this.prisma.accountIncoming.create({
                 data: {
