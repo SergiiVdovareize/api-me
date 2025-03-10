@@ -89,6 +89,7 @@ export class TrackService {
   
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
+    console.log(`found accounts: ${accounts.length}`);
 
     await Promise.all(accounts.map(async (account) => {
       if (this.isAccountOld(account)) {
