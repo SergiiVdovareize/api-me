@@ -11,15 +11,26 @@ export class TrackController {
     private readonly analyticsService: AnalyticsService
   ) {}
 
+  getTime () {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, "0");
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const seconds = now.getSeconds().toString().padStart(2, "0");
+    
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
   @Get('')
   async track(@Query('loop') loop: string = 'false') {
     // console.log('track', loop)
     const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
     const loopUrl = `${loopHost}/track/2`;
     setTimeout(async () => {
-      console.log('fetch 300')
+      console.log('fetch 300', this.getTime())
       fetch(loopUrl)
     }, 30000);
+
+    console.log('before sync', this.getTime())
     await this.trackService.syncAccounts();
     // if (!["true", "1"].includes(loop)) {
       
@@ -31,9 +42,9 @@ export class TrackController {
 
   @Get('/2')
   async track2() {
-    console.log('track2 start')
+    console.log('track2 start', this.getTime())
     await this.trackService.syncAccounts();
-    console.log('track2 end')
+    console.log('track2 end', this.getTime())
     return {success: true, message: 'from track2'}
   }
 
