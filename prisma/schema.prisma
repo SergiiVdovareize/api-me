@@ -26,7 +26,8 @@ model Account {
   isActive    Boolean          @default(true) // Whether the account is active
   trackId     String           @unique // Unique tracking identifier
   type        AccountType      // Enum for account type (mono, privat)
-  description String?          // Optional account description
+  title       String?
+  description String?
 
   // One-to-many relationship with AccountIncoming
   accountIncomings AccountIncoming[]

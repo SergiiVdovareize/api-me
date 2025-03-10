@@ -8,5 +8,6 @@ export type JarResponse = {
     message?: string;
     balance?: number;
     status?: JarStatus;
+    title?: string;
 };
   

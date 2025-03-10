@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAccountDto } from 'src/models/dto/account.dto';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
+
+const tenDaysAgo = new Date();
+tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
 @Injectable()
 export class TrackService {
   constructor(
@@ -41,6 +44,7 @@ export class TrackService {
     }
     return plain ? json.jarAmount : {
       success: true,
+      title: json.name,
       balance: json.jarAmount,
       status: json.jarStatus,
     }
@@ -51,17 +55,20 @@ export class TrackService {
   }
 
   async watch(type: AccountType, id: string) {
-    const newAccount: CreateAccountDto = {
-      trackId: id,
-      type,
-    };
-
     let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
-    if (!trackingAccount) {
-      trackingAccount = await this.prisma.account.create({data: newAccount})
+    if (trackingAccount) {
+      return trackingAccount
     }
 
-    return trackingAccount
+    const jar = await this.checkMono(id)
+    if (!jar.success) {
+      return jar
+    }
+    
+    trackingAccount = await this.prisma.account.create({data: {
+      trackId: id,
+      type,
+    }})
   }
 
   async getActiveAccounts() {
@@ -84,6 +91,12 @@ export class TrackService {
     const accounts = await this.getActiveAccountIncomings()
 
     await Promise.all(accounts.map(async (account) => {
+      if (this.isAccountOld(account)) {
+        console.log(`inactivating old account: ${account.trackId}`);
+        await this.inactivateAccount(account.id);
+        return;
+      }
+
       switch (account.type) {
         case AccountType.MONO:
           const response = await this.checkMono(account.trackId);
@@ -96,7 +109,7 @@ export class TrackService {
                   trackedAt: new Date(),
                 }
               });
-              console.log(`updated balance: ${account.trackId} - ${incoming.balance}`);
+              console.log(`updated balance: ${response.title} - ${incoming.balance}`);
             }
           }
           break;
@@ -115,4 +128,16 @@ export class TrackService {
       }
     }));
   }
+
+  isAccountOld(account) {
+    return account?.createdAt < tenDaysAgo;
+  }
+
+  async inactivateAccount(id: number) {
+    this.prisma.account.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
+
 }
