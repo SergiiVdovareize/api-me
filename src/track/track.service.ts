@@ -83,7 +83,6 @@ export class TrackService {
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
 
-    // console.log('found active accounts:', accounts.length)
     await Promise.all(accounts.map(async (account) => {
       switch (account.type) {
         case AccountType.MONO:
@@ -98,8 +97,6 @@ export class TrackService {
                 }
               });
               console.log('added: ', incoming.balance);
-            } else {
-              // console.log('balance did not change');
             }
           }
           break;
