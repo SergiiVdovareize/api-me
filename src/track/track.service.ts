@@ -3,8 +3,8 @@ import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 
-const threeDaysAgo = new Date();
-threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+const fiveDaysAgo = new Date();
+fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
 @Injectable()
 export class TrackService {
@@ -192,11 +192,11 @@ export class TrackService {
   }
 
   isAccountOld(account) {
-    return account?.createdAt < threeDaysAgo;
+    return account?.createdAt < fiveDaysAgo;
   }
 
   async inactivateAccount(id: number) {
-    this.prisma.account.update({
+    await this.prisma.account.update({
       where: { id },
       data: { isActive: false },
     });
