@@ -3,8 +3,8 @@ import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 
-const tenDaysAgo = new Date();
-tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+const threeDaysAgo = new Date();
+threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
 @Injectable()
 export class TrackService {
@@ -14,6 +14,64 @@ export class TrackService {
 
   findAll() {
     return `This action returns all track`;
+  }
+
+  async checkPrivat(id: string, plain: boolean = false) {
+      const url = new URL("https://next.privat24.ua/api/p24/init");
+      const timestamp = Date.now().toString()
+      url.searchParams.append("lang", "ua");
+      url.searchParams.append("_", timestamp);
+    
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}), // Add your request payload if needed
+      })
+    
+      const json = await resp.json()
+      const xref = json.data.xref
+      console.log(xref)
+
+      const url2 = `https://next.privat24.ua/api/p24/pub/basket/get?xref=${xref}`
+      const resp2 = await fetch(url2)
+      const json2 = await resp2.json()
+      console.log('json2', json2)
+
+      // const url2_1 = 'https://next.privat24.ua/api/p24/pub/ziplink'
+      // const resp2_1 = await fetch(url2_1, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     _: timestamp,
+      //     xref,
+      //     action: 'get',
+      //     type: 'sharing',
+      //     hash: 'g289x',
+      //   }),
+      // })
+
+      // const json2_1 = await resp2_1.json()
+      // console.log('json2_1', json2_1)
+
+      // const url3 = 'https://next.privat24.ua/api/p24/pub/envelopes/pubinfo'
+      // const resp3 = await fetch(url3, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     _: timestamp,
+      //     xref
+      //   }),
+      // })
+
+      // const json3 = await resp3.json()
+      // console.log('json3', json3)
+
   }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
@@ -134,7 +192,7 @@ export class TrackService {
   }
 
   isAccountOld(account) {
-    return account?.createdAt < tenDaysAgo;
+    return account?.createdAt < threeDaysAgo;
   }
 
   async inactivateAccount(id: number) {

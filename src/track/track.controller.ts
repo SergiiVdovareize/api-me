@@ -74,6 +74,7 @@ export class TrackController {
       case AccountType.MONO:
         return await this.trackService.checkMono(id, ["true", "1"].includes(plain));
       case AccountType.PRIVAT:
+        // await this.trackService.checkPrivat(id);
         return {
           success: false,
           message: `Type is not yet supported: ${type}`
