@@ -176,7 +176,6 @@ export class TrackService {
             }
 
             if (response.balance !== account.accountIncomings?.[0]?.balance) {
-              console.log(response)
               const incoming = await this.prisma.accountIncoming.create({
                 data: {
                   accountId: account.id,
