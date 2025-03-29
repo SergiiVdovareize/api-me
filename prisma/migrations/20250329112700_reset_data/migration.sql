@@ -1,0 +1,3 @@
+TRUNCATE TABLE "Account" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "AccountIncoming" RESTART IDENTITY CASCADE;
+-- Add more tables here as needed
