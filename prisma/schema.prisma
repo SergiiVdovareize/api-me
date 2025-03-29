@@ -1,20 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "postgresql"
+  url = env("POSTGRES_PRISMA_URL") // uses connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
 }
 
 model Request {
-  id        Int      @id @default(autoincrement())
+  id        Int  @id @default(autoincrement())
   apiType   Int
   createdAt DateTime @default(now())
+}
+
+model Account {
+  id          Int              @id @default(autoincrement()) // Unique transaction ID
+  createdAt   DateTime         @default(now()) // Timestamp of account creation
+  isActive    Boolean          @default(true) // Whether the account is active
+  trackId     String           @unique // Unique tracking identifier
+  type        AccountType      // Enum for account type (mono, privat)
+  title       String?
+  description String?
+
+  // One-to-many relationship with AccountIncoming
+  accountIncomings AccountIncoming[]
 }
 
 enum AccountType {
   mono
   privat
+}
+
+model AccountIncoming {
+  id         Int      @id @default(autoincrement()) // Unique transaction ID
+  balance    Int   // Account balance at the time of tracking
+  trackedAt  DateTime @default(now()) // When the balance was recorded
+
+  // Foreign key to Account
+  accountId  Int
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
