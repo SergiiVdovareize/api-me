@@ -175,18 +175,16 @@ export class TrackService {
               return
             }
 
-            if (BigInt(response.balance) !== account.accountIncomings?.[0]?.balance) {
+            if (response.balance !== account.accountIncomings?.[0]?.balance) {
               console.log(response)
               const incoming = await this.prisma.accountIncoming.create({
                 data: {
                   accountId: account.id,
-                  balance: BigInt(response.balance),
+                  balance: response.balance,
                   trackedAt: new Date(),
                 }
               });
-              const prevBalance = account.accountIncomings?.[0]?.balance || BigInt(0);
-              const diff = Number(incoming.balance - prevBalance) / 100;
-              console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil(diff)})`);
+              console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
             }
           }
           break;
