@@ -15,8 +15,12 @@ async function bootstrap() {
         return;
       }
 
-      const allowedOrigin = /https:\/\/.*\.vdovareize\.me$/;
-      if (!origin || allowedOrigin.test(origin)) {
+      const allowedOrigins = [
+        /https:\/\/.*\.vdovareize\.me$/,
+        /https:\/\/vdovareize\.me$/
+      ];
+      
+      if (!origin || allowedOrigins.some(pattern => pattern.test(origin))) {
         callback(null, true); // Allow the request if origin matches
       } else {
         callback(new Error('Not allowed by CORS')); // Reject the request if origin doesn't match
