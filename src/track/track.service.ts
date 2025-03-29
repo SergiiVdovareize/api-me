@@ -115,7 +115,14 @@ export class TrackService {
   async watch(type: AccountType, id: string) {
     let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
     if (trackingAccount) {
-      return trackingAccount
+      const incoming = await this.prisma.accountIncoming.findMany({
+        where: { accountId: trackingAccount.id },
+        orderBy: { trackedAt: 'desc' }
+      })
+      return {
+        account: trackingAccount,
+        incoming
+      }
     }
 
     const jar = await this.checkMono(id)
@@ -127,6 +134,11 @@ export class TrackService {
       trackId: id,
       type,
     }})
+
+    return {
+      account: trackingAccount,
+      incoming: []
+    }
   }
 
   async getActiveAccounts() {
@@ -163,16 +175,18 @@ export class TrackService {
               return
             }
 
-            if (response.balance !== account.accountIncomings?.[0]?.balance) {
+            if (BigInt(response.balance) !== account.accountIncomings?.[0]?.balance) {
+              console.log(response)
               const incoming = await this.prisma.accountIncoming.create({
                 data: {
                   accountId: account.id,
-                  balance: response.balance,
+                  balance: BigInt(response.balance),
                   trackedAt: new Date(),
                 }
               });
-              console.log(`updated balance: ${response.title} - ${incoming.balance}
-                (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
+              const prevBalance = account.accountIncomings?.[0]?.balance || BigInt(0);
+              const diff = Number(incoming.balance - prevBalance) / 100;
+              console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil(diff)})`);
             }
           }
           break;
