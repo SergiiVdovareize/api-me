@@ -175,16 +175,16 @@ export class TrackService {
               return
             }
 
-            // if (response.balance !== account.accountIncomings?.[0]?.balance) {
-            //   const incoming = await this.prisma.accountIncoming.create({
-            //     data: {
-            //       accountId: account.id,
-            //       balance: response.balance,
-            //       trackedAt: new Date(),
-            //     }
-            //   });
-            //   console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
-            // }
+            if (response.balance !== account.accountIncomings?.[0]?.balance) {
+              const incoming = await this.prisma.accountIncoming.create({
+                data: {
+                  accountId: account.id,
+                  balance: response.balance,
+                  trackedAt: new Date(),
+                }
+              });
+              console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
+            }
           }
           break;
         case AccountType.PRIVAT:
