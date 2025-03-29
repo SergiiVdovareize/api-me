@@ -17,6 +17,7 @@ datasource db {
 model Request {
   id        Int  @id @default(autoincrement())
   apiType   Int
+  temp      Int
   createdAt DateTime @default(now())
 }
 
