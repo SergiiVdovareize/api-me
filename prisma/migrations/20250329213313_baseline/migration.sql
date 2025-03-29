@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "AccountType" AS ENUM ('mono', 'privat');
+
 -- CreateTable
 CREATE TABLE "Account" (
     "id" SERIAL NOT NULL,
