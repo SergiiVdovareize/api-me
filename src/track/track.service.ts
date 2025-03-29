@@ -171,7 +171,8 @@ export class TrackService {
                   trackedAt: new Date(),
                 }
               });
-              console.log(`updated balance: ${response.title} - ${incoming.balance}`);
+              console.log(`updated balance: ${response.title} - ${incoming.balance}
+                (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
             }
           }
           break;
