@@ -117,7 +117,8 @@ export class TrackService {
     if (trackingAccount) {
       const incoming = await this.prisma.accountIncoming.findMany({
         where: { accountId: trackingAccount.id },
-        orderBy: { trackedAt: 'desc' }
+        orderBy: { trackedAt: 'desc' },
+        take: 30
       })
       return {
         account: trackingAccount,
