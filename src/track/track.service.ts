@@ -105,6 +105,7 @@ export class TrackService {
       title: json.name,
       balance: json.jarAmount,
       status: json.jarStatus,
+      ownerName: json.ownerName,
     }
   }
 
@@ -113,6 +114,11 @@ export class TrackService {
   }
 
   async watch(type: AccountType, id: string) {
+    const jar = await this.checkMono(id)
+    if (!jar.success) {
+      return jar
+    }
+
     let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
     if (trackingAccount) {
       const incoming = await this.prisma.accountIncoming.findMany({
@@ -122,15 +128,11 @@ export class TrackService {
       })
       return {
         account: trackingAccount,
+        jar,
         incoming
       }
     }
 
-    const jar = await this.checkMono(id)
-    if (!jar.success) {
-      return jar
-    }
-    
     trackingAccount = await this.prisma.account.create({data: {
       trackId: id,
       type,
@@ -138,6 +140,7 @@ export class TrackService {
 
     return {
       account: trackingAccount,
+      jar,
       incoming: []
     }
   }

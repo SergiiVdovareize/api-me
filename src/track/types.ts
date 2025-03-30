@@ -9,5 +9,6 @@ export type JarResponse = {
     balance?: number;
     status?: JarStatus;
     title?: string;
+    ownerName?: string;
 };
   
