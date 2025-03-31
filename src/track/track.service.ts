@@ -180,14 +180,19 @@ export class TrackService {
             }
 
             if (response.balance !== account.accountIncomings?.[0]?.balance) {
-              const incoming = await this.prisma.accountIncoming.create({
-                data: {
-                  accountId: account.id,
-                  balance: response.balance,
-                  trackedAt: new Date(),
-                }
-              });
-              console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
+              try {
+                const incoming = await this.prisma.accountIncoming.create({
+                  data: {
+                    accountId: account.id,
+                    balance: response.balance,
+                    trackedAt: new Date(),
+                  }
+                });
+                console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
+              } catch (error) {
+                console.log(`could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`)
+                console.log(error.message)
+              }
             }
           }
           break;
