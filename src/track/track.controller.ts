@@ -30,15 +30,14 @@ export class TrackController {
 
   @Get('')
   async track(@Query('loop') loop: number = 0) {
-    console.log('track loop', loop)
+    console.log('track start loop', loop)
     await this.trackService.syncAccounts();
+    console.log('track finish loop', loop)
     return {success: true}
   }
 
   @Get('/2')
   async track2() {
-    console.log('track2 start', this.getTime())
-    
     new Promise(async (resolve, reject) => {
       const timeout = setTimeout(async () => {
         console.log('track2 timeout', this.getTime())
@@ -53,10 +52,8 @@ export class TrackController {
           clearTimeout(timeout);
           reject(error);
         }
-      }, 10000);
+      }, 30000);
     });
-    console.log('track2 finish', this.getTime())
-    // console.log(json)
     return {success: true};
   }
 
