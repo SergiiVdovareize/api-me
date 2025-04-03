@@ -29,36 +29,35 @@ export class TrackController {
   }
 
   @Get('')
-  async track(@Query('loop') loop: string = 'false') {
-    // console.log('track', loop)
-    // const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
-    // const loopUrl = `${loopHost}/track/2`;
-    // setTimeout(async () => {
-    //   console.log('fetch 300', this.getTime())
-    //   fetch(loopUrl)
-    // }, 30000);
-
-    // console.log('before sync', this.getTime())
+  async track(@Query('loop') loop: number = 0) {
+    console.log('track loop', loop)
     await this.trackService.syncAccounts();
-    // console.log('before delay', this.getTime())
-    // await this.delay();
-    // console.log('fetch 300', this.getTime())
-    // fetch(loopUrl)
-
-    // if (!["true", "1"].includes(loop)) {
-      
-
-      
-    // }
     return {success: true}
   }
 
   @Get('/2')
   async track2() {
     console.log('track2 start', this.getTime())
-    await this.trackService.syncAccounts();
-    console.log('track2 end', this.getTime())
-    return {success: true, message: 'from track2'}
+    
+    new Promise(async (resolve, reject) => {
+      const timeout = setTimeout(async () => {
+        console.log('track2 timeout', this.getTime())
+        try {
+          const loopHost = env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
+          const data = await fetch(loopHost + '/track?loop=1');
+          const json = await data.json();
+          clearTimeout(timeout);
+          console.log('track2 result', json)
+          resolve(json);
+        } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+        }
+      }, 10000);
+    });
+    console.log('track2 finish', this.getTime())
+    // console.log(json)
+    return {success: true};
   }
 
   @Get('check/:type/:id')
