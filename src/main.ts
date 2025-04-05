@@ -1,4 +1,4 @@
-// import './instrument';
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { env } from 'process';
