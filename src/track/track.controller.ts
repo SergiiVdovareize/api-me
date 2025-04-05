@@ -30,9 +30,9 @@ export class TrackController {
 
   @Get('')
   async track(@Query('loop') loop: number = 0) {
-    console.log('track start loop', loop)
+    // console.log('track start loop', loop)
     await this.trackService.syncAccounts();
-    console.log('track finish loop', loop)
+    // console.log('track finish loop', loop)
     return {success: true}
   }
 
