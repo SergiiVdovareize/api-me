@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
+import { AnalyticsService } from 'src/analytics/analytics.service';
 
 const fiveDaysAgo = new Date();
 fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
@@ -10,6 +11,7 @@ fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 export class TrackService {
   constructor(
     private prisma: PrismaService,
+    private readonly analyticsService: AnalyticsService
   ) {}
 
   findAll() {
@@ -167,6 +169,7 @@ export class TrackService {
       if (this.isAccountOld(account)) {
         console.log(`inactivating old account: ${account.trackId}`);
         await this.inactivateAccount(account.id);
+        this.analyticsService.trackEvent('TrackingAccountDeactivated', {account});
         return;
       }
 

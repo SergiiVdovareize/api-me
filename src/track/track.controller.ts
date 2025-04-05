@@ -31,6 +31,7 @@ export class TrackController {
   @Get('')
   async track(@Query('loop') loop: number = 0) {
     // console.log('track start loop', loop)
+    this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
     await this.trackService.syncAccounts();
     // console.log('track finish loop', loop)
     return {success: true}
@@ -66,6 +67,8 @@ export class TrackController {
       }
     }
 
+    this.analyticsService.trackEvent('TrackCheck', {type, id, plain});
+
     switch (type) {
       case AccountType.MONO:
         return await this.trackService.checkMono(id, ["true", "1"].includes(plain));
@@ -86,6 +89,7 @@ export class TrackController {
 
   @Get('watch/:type/:id')
   async watch(@Param('type') type: AccountType, @Param('id') id: string) {
+    this.analyticsService.trackEvent('TrackWatch', {type, id});
     const account = await this.trackService.watch(type, id);
     return {
       success: true,
