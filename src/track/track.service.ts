@@ -4,9 +4,6 @@ import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 
-const fiveDaysAgo = new Date();
-fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-
 @Injectable()
 export class TrackService {
   constructor(
@@ -16,6 +13,26 @@ export class TrackService {
 
   findAll() {
     return `This action returns all track`;
+  }
+
+  wasTwoWeeksAgo(date: Date) {
+    if (!date) {
+      return false;
+    }
+
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    return date < twoWeeksAgo
+  }
+
+  wasOneMonthAgo(date: Date) {
+    if (!date) {
+      return false;
+    }
+
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+    return date < oneMonthAgo
   }
 
   async checkPrivat(id: string, plain: boolean = false) {
@@ -162,17 +179,33 @@ export class TrackService {
       },
     });
   }
+
+  async refreshAccounts() {
+    const accounts = await this.getActiveAccountIncomings()
+    if (accounts.length == 0) {
+      console.log('no active accounts were found')
+      return;
+    }
+    let deactivatedAccounts = 0;
+    await Promise.all(accounts.map(async (account) => {
+      if (this.isAccountOld(account)) {
+        console.log(`deactivating old account: ${account.trackId}`);
+        await this.deactivateAccount(account.id);
+        this.analyticsService.trackEvent('TrackingAccountDeactivated', {account});
+        deactivatedAccounts++;
+        return;
+      }
+    }));
+    if (deactivatedAccounts > 0) {
+      console.log('deactivated accounts:', deactivatedAccounts)
+    } else {
+      console.log('non of accounts was deactivated')
+    }
+  }
   
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings()
     await Promise.all(accounts.map(async (account) => {
-      if (this.isAccountOld(account)) {
-        console.log(`inactivating old account: ${account.trackId}`);
-        await this.inactivateAccount(account.id);
-        this.analyticsService.trackEvent('TrackingAccountDeactivated', {account});
-        return;
-      }
-
       switch (account.type) {
         case AccountType.MONO:
           const response = await this.checkMono(account.trackId);
@@ -217,10 +250,19 @@ export class TrackService {
   }
 
   isAccountOld(account) {
-    return account?.createdAt < fiveDaysAgo;
+    console.log(account)
+    if (!account?.accountIncomings?.[0] && this.wasTwoWeeksAgo(account?.createdAt)) {
+      return true
+    }
+
+    if (this.wasTwoWeeksAgo(account?.accountIncomings?.[0].createdAt)) {
+      return true;
+    }
+
+    return this.wasOneMonthAgo(account?.createdAt);
   }
 
-  async inactivateAccount(id: number) {
+  async deactivateAccount(id: number) {
     await this.prisma.account.update({
       where: { id },
       data: { isActive: false },

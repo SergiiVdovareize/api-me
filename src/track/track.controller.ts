@@ -58,6 +58,13 @@ export class TrackController {
     return {success: true};
   }
 
+  @Get('refresh')
+  async refresh() {
+    this.analyticsService.trackEvent('Refresh');
+    await this.trackService.refreshAccounts();
+    return {success: true}
+  }
+
   @Get('check/:type/:id')
   async check(@Param('type') type: AccountType, @Param('id') id: string, @Query('plain') plain: string) {
     if (!Object.values(AccountType).includes(type as AccountType)) {
