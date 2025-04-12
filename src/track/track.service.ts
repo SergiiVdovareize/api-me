@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nestjs';
 import { Injectable } from '@nestjs/common';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
@@ -226,9 +227,10 @@ export class TrackService {
                 });
                 console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
               } catch (error) {
-                console.log(`could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`)
-                // throw new Error(error);
-                console.log(error.message)
+                const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`
+                Sentry.captureMessage(errorMsg, error)
+                console.log(errorMsg)
+                // console.log(error.message)
               }
             }
           }
