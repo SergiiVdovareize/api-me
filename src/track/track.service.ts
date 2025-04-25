@@ -133,7 +133,7 @@ export class TrackService {
     return json.status && json.status === JarStatus.ACTIVE
   }
 
-  async watch(type: AccountType, id: string) {
+  async watch(type: AccountType, id: string, force: boolean = false) {
     const jar = await this.checkMono(id)
     if (!jar.success) {
       return jar
@@ -141,6 +141,10 @@ export class TrackService {
 
     let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
     if (trackingAccount) {
+      if (!trackingAccount.isActive && force) {
+        console.log(`reactivating old account: ${trackingAccount.trackId}`);
+        await this.activateAccount(trackingAccount.id)
+      }
       const incoming = await this.prisma.accountIncoming.findMany({
         where: { accountId: trackingAccount.id },
         orderBy: { trackedAt: 'desc' },
@@ -262,6 +266,13 @@ export class TrackService {
     }
 
     return this.wasOneMonthAgo(account?.createdAt);
+  }
+
+  async activateAccount(id: number) {
+    await this.prisma.account.update({
+      where: { id },
+      data: { isActive: true },
+    });
   }
 
   async deactivateAccount(id: number) {

@@ -31,7 +31,7 @@ export class TrackController {
   @Get('')
   async track(@Query('loop') loop: number = 0) {
     // console.log('track start loop', loop)
-    this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
+    // this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
     await this.trackService.syncAccounts();
     // console.log('track finish loop', loop)
     return {success: true}
@@ -90,14 +90,16 @@ export class TrackController {
 
   @Get('mono/:id')
   async findOne(@Param('id') id: string, @Query('plain') plain: string) {
-    this.analyticsService.trackEvent('BalanceTrack', {type: 'mono', id, plain});
-    return await this.trackService.checkMono(id, ["true", "1"].includes(plain));
+    const isPlain = ["true", "1"].includes(plain)
+    this.analyticsService.trackEvent('BalanceTrack', {type: 'mono', id, plain: isPlain});
+    return await this.trackService.checkMono(id, isPlain);
   }
 
   @Get('watch/:type/:id')
-  async watch(@Param('type') type: AccountType, @Param('id') id: string) {
-    this.analyticsService.trackEvent('TrackWatch', {type, id});
-    const account = await this.trackService.watch(type, id);
+  async watch(@Param('type') type: AccountType, @Param('id') id: string, @Query('force') force: string) {
+    const isForce = ["true", "1"].includes(force)
+    this.analyticsService.trackEvent('TrackWatch', {type, id, force: isForce});
+    const account = await this.trackService.watch(type, id, isForce);
     return {
       success: true,
       watch: account,
