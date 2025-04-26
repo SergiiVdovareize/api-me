@@ -6,12 +6,12 @@ const SYNC_TIMEOUT = 1000;
 
 @Injectable()
 export class AsyncService {
-  async prepareResult(execute: Function, track?: Function) {
+  async prepareResult(execute: () => void, track?: () => void) {
     const result: { type: 'sync' | 'async'; data: string | object } = {
       type: null,
       data: null,
     };
-    return new Promise((resolve: Function) => {
+    return new Promise(resolve => {
       const fileName = this.generateFilename();
 
       const resolveTimeoutId = setTimeout(() => {
@@ -66,13 +66,10 @@ export class AsyncService {
     return fileList.blobs.length === 1 ? fileList.blobs[0].url : null;
   }
 
-  async findResultFileUrlWithRetry(
-    id: string,
-    attempt: number = 0,
-  ): Promise<string | null> {
+  async findResultFileUrlWithRetry(id: string, attempt: number = 0): Promise<string | null> {
     const maxTries = 7;
     const retryDelay = 500;
-    return new Promise(async (resolve) => {
+    return new Promise(async resolve => {
       const url = await this.findResultFileUrl(id);
       // console.log('attempt - ', attempt, id, url)
       if (url) {
@@ -96,6 +93,7 @@ export class AsyncService {
       // this.removeResultFile(url);
       return json;
     } catch (error) {
+      console.error('Error reading result file:', error);
       return null;
     }
   }

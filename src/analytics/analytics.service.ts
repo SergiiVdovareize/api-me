@@ -8,11 +8,11 @@ export class AnalyticsService {
 
   trackEvent(event: string, properties: Record<string, any> = {}, forceEnv: boolean = false) {
     if (env.HOST !== 'prod' && !forceEnv) {
-      console.log('event filtered', env.HOST)
+      console.log('event filtered', env.HOST);
       return;
     }
 
-    console.log('event tracked', event)
+    console.log('event tracked', event);
     this.posthogService.trackEvent(event, properties);
   }
 }

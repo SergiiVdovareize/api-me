@@ -3,11 +3,7 @@ export function getPublerScript(url: string) {
   const parsingErrorSelector = '.alert-container .alert__content__text';
   const invalidUrlSelector = 'form.form span.error';
 
-  const selectors = [
-    parsedVideoSelector,
-    parsingErrorSelector,
-    invalidUrlSelector,
-  ];
+  const selectors = [parsedVideoSelector, parsingErrorSelector, invalidUrlSelector];
 
   const delay = 10000;
 

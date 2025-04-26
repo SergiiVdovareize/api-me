@@ -3,13 +3,11 @@ import { env } from 'process';
 import { AsyncService } from 'src/async/async.service';
 import { RequestsService } from 'src/requests/requests.service';
 
-const SYNC_TIMEOUT = 1000;
-
 @Injectable()
 export class CloudsService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService,
+    private readonly requestsService: RequestsService
   ) {}
 
   // private trackCalculations(type: number, startTime: number, result: { success: boolean, data: string}) {

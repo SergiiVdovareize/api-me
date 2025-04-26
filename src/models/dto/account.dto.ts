@@ -1,4 +1,4 @@
-import { AccountType } from "../enums/account-type.enum";
+import { AccountType } from '../enums/account-type.enum';
 
 export interface CreateAccountDto {
   trackId: string;
@@ -24,4 +24,3 @@ export interface AccountDto {
 export interface DeactivateAccountDto {
   isActive: false;
 }
-  

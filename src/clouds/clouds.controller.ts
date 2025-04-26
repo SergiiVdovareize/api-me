@@ -25,7 +25,7 @@ export class CloudsController {
   constructor(
     private readonly cloudsService: CloudsService,
     private readonly requestsService: RequestsService,
-    private readonly asyncService: AsyncService,
+    private readonly asyncService: AsyncService
   ) {}
 
   @Get('/fibonacci/:index')
@@ -70,18 +70,14 @@ export class CloudsController {
       status: 1,
       message: 'result id is not valid',
     };
-    const reg =
-      /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
+    const reg = /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
     const groups = id.match(reg);
 
     if (!groups || groups.length !== 6) {
       return invalidIdResponse;
     }
 
-    const timestamp = parseInt(
-      `${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`,
-      10,
-    );
+    const timestamp = parseInt(`${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`, 10);
     if (isNaN(timestamp)) {
       return invalidIdResponse;
     }
@@ -91,8 +87,7 @@ export class CloudsController {
       return invalidIdResponse;
     }
 
-    const resultFileUrl =
-      await this.asyncService.findResultFileUrlWithRetry(id);
+    const resultFileUrl = await this.asyncService.findResultFileUrlWithRetry(id);
     if (!resultFileUrl) {
       return {
         success: false,

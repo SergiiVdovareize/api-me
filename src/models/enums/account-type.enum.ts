@@ -1,4 +1,4 @@
 export enum AccountType {
-    MONO = 'mono',
-    PRIVAT = 'privat'
+  MONO = 'mono',
+  PRIVAT = 'privat',
 }

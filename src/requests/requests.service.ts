@@ -37,7 +37,7 @@ const MEME_MAP = {
 export class RequestsService {
   constructor(
     private prisma: PrismaService,
-    private analyticsService: AnalyticsService,
+    private analyticsService: AnalyticsService
   ) {}
 
   getDateMonthAgo(): Date {
@@ -62,16 +62,16 @@ export class RequestsService {
     return this.registerApiCall(CLOUD_MAP.ARMSTRONG);
   }
 
-  registerMemeApiCall(url: string, extraData?: {}) {
+  registerMemeApiCall(url: string, extraData?: object) {
     const domainKey =
-      Object.keys(MEME_MAP).find((key) =>
-        MEME_MAP[key].some((domain: string) => url.includes(domain)),
+      Object.keys(MEME_MAP).find(key =>
+        MEME_MAP[key].some((domain: string) => url.includes(domain))
       ) || API_TYPE.MEME_UNK;
 
     return this.registerApiCall(Number(domainKey), extraData);
   }
 
-  registerApiCall(apiType: number, extraData?: {}) {
+  registerApiCall(apiType: number, extraData?: object) {
     this.analyticsService.trackEvent('ApiCall', {
       apiType,
       ...extraData,

@@ -13,18 +13,14 @@ export class AsyncController {
       status: 1,
       message: 'result id is not valid',
     };
-    const reg =
-      /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
+    const reg = /\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/;
     const groups = id.match(reg);
 
     if (!groups || groups.length !== 6) {
       return invalidIdResponse;
     }
 
-    const timestamp = parseInt(
-      `${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`,
-      10,
-    );
+    const timestamp = parseInt(`${groups[3]}${groups[4]}${groups[5]}${groups[2]}${groups[1]}`, 10);
 
     if (isNaN(timestamp)) {
       return invalidIdResponse;
@@ -35,8 +31,7 @@ export class AsyncController {
       return invalidIdResponse;
     }
 
-    const resultFileUrl =
-      await this.asyncService.findResultFileUrlWithRetry(id);
+    const resultFileUrl = await this.asyncService.findResultFileUrlWithRetry(id);
     if (!resultFileUrl) {
       return {
         success: false,

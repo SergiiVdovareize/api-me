@@ -19,15 +19,10 @@ const SNAP_URL = 'https://snap-insta.app';
 export class MemesService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService,
+    private readonly requestsService: RequestsService
   ) {}
 
-  private trackStealing(
-    url: string,
-    startTime: Number,
-    tool: string,
-    result: ParseResult,
-  ) {
+  private trackStealing(url: string, startTime: number, tool: string, result: ParseResult) {
     const data = {
       executionTime: Date.now() - Number(startTime),
       success: !!result?.success,
@@ -36,15 +31,11 @@ export class MemesService {
     this.requestsService.registerMemeApiCall(url, data);
   }
 
-  private async execute(
-    tool: string,
-    toolUrl: string,
-    memeUrl: string,
-    script: Function,
-  ) {
-    const phantomJsCloud = require('phantomjscloud');
-    let apiKey = env.PHANTOMJS_CLOUD_API_KEY;
-    let browser = new phantomJsCloud.BrowserApi(apiKey);
+  private async execute(tool: string, toolUrl: string, memeUrl: string, script: () => void) {
+    // const phantomJsCloud = require('phantomjscloud');
+    // const phantomJsCloud =
+    const apiKey = env.PHANTOMJS_CLOUD_API_KEY;
+    const browser = new phantomJsCloud.BrowserApi(apiKey);
 
     const photo = false;
     const logFile = false;
@@ -73,12 +64,12 @@ export class MemesService {
             {
               encoding: userResponse.content.encoding,
             },
-            (err) => {
+            err => {
               if (err) {
                 console.log('error', err);
               }
               console.log('captured page written');
-            },
+            }
           );
         }
 
@@ -106,7 +97,7 @@ export class MemesService {
 
   private async makePhoto(browser, req) {
     req.renderType = 'jpeg';
-    let pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
+    const pageRequest: phantomJsCloud.ioDatatypes.IPageRequest = req;
     const userResponse = await browser.requestSingle(pageRequest);
 
     const fileName = userResponse.content.name;
@@ -116,10 +107,10 @@ export class MemesService {
       {
         encoding: userResponse.content.encoding,
       },
-      (err) => {
+      err => {
         console.log('error', err);
         console.log('captured page written to ' + fileName);
-      },
+      }
     );
 
     return {};
@@ -129,28 +120,28 @@ export class MemesService {
     const script = getPublerScript.bind(this, url);
     // console.log('script', script());
     return await this.asyncService.prepareResult(
-      this.execute.bind(this, 'publer', PUBLER_URL, url, script),
+      this.execute.bind(this, 'publer', PUBLER_URL, url, script)
     );
   }
 
   async steelFromGetInDevice(url: string): Promise<any> {
     const toolUrl = `${GETINDEVICE_URL}/#url=${encodeURIComponent(url)}`;
     return await this.asyncService.prepareResult(
-      this.execute.bind(this, 'getindevice', toolUrl, url, getIndeviceScript),
+      this.execute.bind(this, 'getindevice', toolUrl, url, getIndeviceScript)
     );
   }
 
   async steelFromSquidlr(url: string): Promise<any> {
     const toolUrl = `${SQUIDLR_URL}/download?url=${encodeURIComponent(url)}`;
     return await this.asyncService.prepareResult(
-      this.execute.bind(this, 'squidlr', toolUrl, url, getSquidlrScript),
+      this.execute.bind(this, 'squidlr', toolUrl, url, getSquidlrScript)
     );
   }
 
   async steelFromSnap(url: string): Promise<any> {
     const script = getSnapScript.bind(this, url);
     return await this.asyncService.prepareResult(
-      this.execute.bind(this, 'snap', SNAP_URL, url, script),
+      this.execute.bind(this, 'snap', SNAP_URL, url, script)
     );
   }
 }

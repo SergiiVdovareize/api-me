@@ -7,12 +7,10 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "prisma generate && nest build && npm run sentry:sourcemaps",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -21,7 +19,12 @@
     "predeploy": "nest build",
     "deploy": "vercel --prod",
     "postinstall": "prisma generate && npx prisma migrate deploy",
-    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org home-sr9 --project api-me ./dist && sentry-cli sourcemaps upload --org home-sr9 --project api-me ./dist"
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org home-sr9 --project api-me ./dist && sentry-cli sourcemaps upload --org home-sr9 --project api-me ./dist",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "validate": "npm run lint && npm run format:check"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.13",
@@ -54,10 +57,10 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.14.0",
     "@types/supertest": "^6.0.3",
-    "@typescript-eslint/eslint-plugin": "^8.29.0",
-    "@typescript-eslint/parser": "^8.29.0",
-    "eslint": "^9.24.0",
-    "eslint-config-prettier": "^10.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "@typescript-eslint/parser": "^8.31.0",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-prettier": "^5.2.6",
     "jest": "^29.7.0",
     "prettier": "^3.5.3",
@@ -85,5 +88,31 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest",
+      "plugin:react/recommended",
+      "plugin:react-hooks/recommended",
+      "plugin:jsx-a11y/recommended",
+      "prettier"
+    ],
+    "plugins": [
+      "react",
+      "react-hooks",
+      "jsx-a11y"
+    ],
+    "rules": {
+      "react/react-in-jsx-scope": "off",
+      "react/prop-types": "off",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn"
+    },
+    "settings": {
+      "react": {
+        "version": "detect"
+      }
+    }
   }
 }

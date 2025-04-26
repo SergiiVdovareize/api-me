@@ -23,7 +23,7 @@ export class TrackService {
 
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    return date < twoWeeksAgo
+    return date < twoWeeksAgo;
   }
 
   wasOneMonthAgo(date: Date) {
@@ -33,144 +33,147 @@ export class TrackService {
 
     const oneMonthAgo = new Date();
     oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-    return date < oneMonthAgo
+    return date < oneMonthAgo;
   }
 
-  async checkPrivat(id: string, plain: boolean = false) {
-      const url = new URL("https://next.privat24.ua/api/p24/init");
-      const timestamp = Date.now().toString()
-      url.searchParams.append("lang", "ua");
-      url.searchParams.append("_", timestamp);
-    
-      const resp = await fetch(url.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}), // Add your request payload if needed
-      })
-    
-      const json = await resp.json()
-      const xref = json.data.xref
-      console.log(xref)
+  // async checkPrivat(id: string, plain: boolean = false) {
+  //   const url = new URL('https://next.privat24.ua/api/p24/init');
+  //   const timestamp = Date.now().toString();
+  //   url.searchParams.append('lang', 'ua');
+  //   url.searchParams.append('_', timestamp);
 
-      const url2 = `https://next.privat24.ua/api/p24/pub/basket/get?xref=${xref}`
-      const resp2 = await fetch(url2)
-      const json2 = await resp2.json()
-      console.log('json2', json2)
+  //   const resp = await fetch(url.toString(), {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({}), // Add your request payload if needed
+  //   });
 
-      // const url2_1 = 'https://next.privat24.ua/api/p24/pub/ziplink'
-      // const resp2_1 = await fetch(url2_1, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({
-      //     _: timestamp,
-      //     xref,
-      //     action: 'get',
-      //     type: 'sharing',
-      //     hash: 'g289x',
-      //   }),
-      // })
+  //   const json = await resp.json();
+  //   const xref = json.data.xref;
+  //   console.log(xref);
 
-      // const json2_1 = await resp2_1.json()
-      // console.log('json2_1', json2_1)
+  //   const url2 = `https://next.privat24.ua/api/p24/pub/basket/get?xref=${xref}`;
+  //   const resp2 = await fetch(url2);
+  //   const json2 = await resp2.json();
+  //   console.log('json2', json2);
 
-      // const url3 = 'https://next.privat24.ua/api/p24/pub/envelopes/pubinfo'
-      // const resp3 = await fetch(url3, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({
-      //     _: timestamp,
-      //     xref
-      //   }),
-      // })
+  //   // const url2_1 = 'https://next.privat24.ua/api/p24/pub/ziplink'
+  //   // const resp2_1 = await fetch(url2_1, {
+  //   //   method: "POST",
+  //   //   headers: {
+  //   //     "Content-Type": "application/json",
+  //   //   },
+  //   //   body: JSON.stringify({
+  //   //     _: timestamp,
+  //   //     xref,
+  //   //     action: 'get',
+  //   //     type: 'sharing',
+  //   //     hash: 'g289x',
+  //   //   }),
+  //   // })
 
-      // const json3 = await resp3.json()
-      // console.log('json3', json3)
+  //   // const json2_1 = await resp2_1.json()
+  //   // console.log('json2_1', json2_1)
 
-  }
+  //   // const url3 = 'https://next.privat24.ua/api/p24/pub/envelopes/pubinfo'
+  //   // const resp3 = await fetch(url3, {
+  //   //   method: "POST",
+  //   //   headers: {
+  //   //     "Content-Type": "application/json",
+  //   //   },
+  //   //   body: JSON.stringify({
+  //   //     _: timestamp,
+  //   //     xref
+  //   //   }),
+  //   // })
+
+  //   // const json3 = await resp3.json()
+  //   // console.log('json3', json3)
+  // }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
-    const response = await fetch("https://send.monobank.ua/api/handler", {
-      method: "POST",
+    const response = await fetch('https://send.monobank.ua/api/handler', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        c: "hello",
+        c: 'hello',
         clientId: id,
         Pc: crypto.randomUUID(),
-      })
-    })
-    
+      }),
+    });
+
     const json = await response.json();
     if (!response.ok) {
       return {
         success: false,
         message: response.status.toString(),
-      }
+      };
     }
     if (json.errCode) {
       return {
         success: false,
-        message: "check the jar id",
-      }
+        message: 'check the jar id',
+      };
     }
-    return plain ? json.jarAmount : {
-      success: true,
-      title: json.name,
-      balance: json.jarAmount,
-      status: json.jarStatus,
-      ownerName: json.ownerName,
-    }
+    return plain
+      ? json.jarAmount
+      : {
+          success: true,
+          title: json.name,
+          balance: json.jarAmount,
+          status: json.jarStatus,
+          ownerName: json.ownerName,
+        };
   }
 
   isJarActiveStatus(json: JarResponse) {
-    return json.status && json.status === JarStatus.ACTIVE
+    return json.status && json.status === JarStatus.ACTIVE;
   }
 
   async watch(type: AccountType, id: string, force: boolean = false) {
-    const jar = await this.checkMono(id)
+    const jar = await this.checkMono(id);
     if (!jar.success) {
-      return jar
+      return jar;
     }
 
-    let trackingAccount = await this.prisma.account.findFirst({where: {trackId: id}})
+    let trackingAccount = await this.prisma.account.findFirst({ where: { trackId: id } });
     if (trackingAccount) {
       if (!trackingAccount.isActive && force) {
         console.log(`reactivating old account: ${trackingAccount.trackId}`);
-        await this.activateAccount(trackingAccount.id)
+        await this.activateAccount(trackingAccount.id);
       }
       const incoming = await this.prisma.accountIncoming.findMany({
         where: { accountId: trackingAccount.id },
         orderBy: { trackedAt: 'desc' },
-        take: 30
-      })
+        take: 30,
+      });
       return {
         account: trackingAccount,
         jar,
-        incoming
-      }
+        incoming,
+      };
     }
 
-    trackingAccount = await this.prisma.account.create({data: {
-      trackId: id,
-      type,
-    }})
+    trackingAccount = await this.prisma.account.create({
+      data: {
+        trackId: id,
+        type,
+      },
+    });
 
     return {
       account: trackingAccount,
       jar,
-      incoming: []
-    }
+      incoming: [],
+    };
   }
 
   async getActiveAccounts() {
-    return await this.prisma.account.findMany({where: {isActive: true}})
+    return await this.prisma.account.findMany({ where: { isActive: true } });
   }
 
   async getActiveAccountIncomings() {
@@ -186,79 +189,85 @@ export class TrackService {
   }
 
   async refreshAccounts() {
-    const accounts = await this.getActiveAccountIncomings()
+    const accounts = await this.getActiveAccountIncomings();
     if (accounts.length == 0) {
-      console.log('no active accounts were found')
+      console.log('no active accounts were found');
       return;
     }
     let deactivatedAccounts = 0;
-    await Promise.all(accounts.map(async (account) => {
-      if (this.isAccountOld(account)) {
-        console.log(`deactivating old account: ${account.trackId}`);
-        await this.deactivateAccount(account.id);
-        this.analyticsService.trackEvent('TrackingAccountDeactivated', {account});
-        deactivatedAccounts++;
-        return;
-      }
-    }));
+    await Promise.all(
+      accounts.map(async account => {
+        if (this.isAccountOld(account)) {
+          console.log(`deactivating old account: ${account.trackId}`);
+          await this.deactivateAccount(account.id);
+          this.analyticsService.trackEvent('TrackingAccountDeactivated', { account });
+          deactivatedAccounts++;
+          return;
+        }
+      })
+    );
     if (deactivatedAccounts > 0) {
-      console.log('deactivated accounts:', deactivatedAccounts)
+      console.log('deactivated accounts:', deactivatedAccounts);
     } else {
-      console.log('non of accounts was deactivated')
+      console.log('non of accounts was deactivated');
     }
   }
-  
-  async syncAccounts() {
-    const accounts = await this.getActiveAccountIncomings()
-    await Promise.all(accounts.map(async (account) => {
-      switch (account.type) {
-        case AccountType.MONO:
-          const response = await this.checkMono(account.trackId);
-          if (this.isJarActiveStatus(response)) {
-            if (!response.balance) {
-              console.log(`no balance: ${account.id} - ${response.balance}`);
-              return
-            }
 
-            if (response.balance !== account.accountIncomings?.[0]?.balance) {
-              try {
-                const incoming = await this.prisma.accountIncoming.create({
-                  data: {
-                    accountId: account.id,
-                    balance: response.balance,
-                    trackedAt: new Date(),
-                  }
-                });
-                console.log(`updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance)/100)})`);
-              } catch (error) {
-                const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`
-                Sentry.captureMessage(errorMsg, error)
-                console.log(errorMsg)
-                // console.log(error.message)
+  async syncAccounts() {
+    const accounts = await this.getActiveAccountIncomings();
+    await Promise.all(
+      accounts.map(async account => {
+        switch (account.type) {
+          case AccountType.MONO:
+            const response = await this.checkMono(account.trackId);
+            if (this.isJarActiveStatus(response)) {
+              if (!response.balance) {
+                console.log(`no balance: ${account.id} - ${response.balance}`);
+                return;
+              }
+
+              if (response.balance !== account.accountIncomings?.[0]?.balance) {
+                try {
+                  const incoming = await this.prisma.accountIncoming.create({
+                    data: {
+                      accountId: account.id,
+                      balance: response.balance,
+                      trackedAt: new Date(),
+                    },
+                  });
+                  console.log(
+                    `updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
+                  );
+                } catch (error) {
+                  const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`;
+                  Sentry.captureMessage(errorMsg, error);
+                  console.log(errorMsg);
+                  // console.log(error.message)
+                }
               }
             }
-          }
-          break;
-        case AccountType.PRIVAT:
-          console.log({
-            success: false,
-            message: `Type is not yet supported: ${account.type}`
-          });
-          break;
-        default:
-          console.log({
-            success: false,
-            message: `Invalid type: ${account.type}`
-          });
-          break;
-      }
-    }));
+            break;
+          case AccountType.PRIVAT:
+            console.log({
+              success: false,
+              message: `Type is not yet supported: ${account.type}`,
+            });
+            break;
+          default:
+            console.log({
+              success: false,
+              message: `Invalid type: ${account.type}`,
+            });
+            break;
+        }
+      })
+    );
   }
 
   isAccountOld(account) {
-    console.log(account)
+    console.log(account);
     if (!account?.accountIncomings?.[0] && this.wasTwoWeeksAgo(account?.createdAt)) {
-      return true
+      return true;
     }
 
     if (this.wasTwoWeeksAgo(account?.accountIncomings?.[0].createdAt)) {
@@ -281,5 +290,4 @@ export class TrackService {
       data: { isActive: false },
     });
   }
-
 }

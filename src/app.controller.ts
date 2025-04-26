@@ -6,7 +6,7 @@ import { AnalyticsService } from './analytics/analytics.service';
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly analyticsService: AnalyticsService,
+    private readonly analyticsService: AnalyticsService
   ) {}
 
   @Get()
