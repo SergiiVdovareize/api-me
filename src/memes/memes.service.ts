@@ -32,7 +32,8 @@ export class MemesService {
   }
 
   private async execute(tool: string, toolUrl: string, memeUrl: string, script: () => void) {
-    // const phantomJsCloud = require('phantomjscloud');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const phantomJsCloud = require('phantomjscloud');
     // const phantomJsCloud =
     const apiKey = env.PHANTOMJS_CLOUD_API_KEY;
     const browser = new phantomJsCloud.BrowserApi(apiKey);

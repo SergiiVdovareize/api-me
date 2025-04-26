@@ -28,14 +28,14 @@ export class TrackController {
     });
   }
 
-  // @Get('')
-  // async track(@Query('loop') loop: number = 0) {
-  //   // console.log('track start loop', loop)
-  //   // this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
-  //   await this.trackService.syncAccounts();
-  //   // console.log('track finish loop', loop)
-  //   return { success: true };
-  // }
+  @Get('')
+  async track() {
+    // console.log('track start loop', loop)
+    // this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
+    await this.trackService.syncAccounts();
+    // console.log('track finish loop', loop)
+    return { success: true };
+  }
 
   @Get('/2')
   async track2() {
