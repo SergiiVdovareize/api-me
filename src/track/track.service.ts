@@ -265,7 +265,6 @@ export class TrackService {
   }
 
   isAccountOld(account) {
-    console.log(account);
     if (!account?.accountIncomings?.[0] && this.wasTwoWeeksAgo(account?.createdAt)) {
       return true;
     }
