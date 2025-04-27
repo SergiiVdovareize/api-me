@@ -270,7 +270,7 @@ export class TrackService {
       return true;
     }
 
-    if (this.wasTwoWeeksAgo(account?.accountIncomings?.[0].createdAt)) {
+    if (this.wasTwoWeeksAgo(account?.accountIncomings?.[0]?.createdAt)) {
       return true;
     }
 
