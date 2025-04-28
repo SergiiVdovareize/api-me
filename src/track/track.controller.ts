@@ -66,6 +66,13 @@ export class TrackController {
     return { success: true };
   }
 
+  @Get('deactivate/:trackId')
+  async deactivate(@Param('trackId') trackId: string) {
+    this.analyticsService.trackEvent('DeactivateAccount', { trackId });
+    await this.trackService.deactivateAccountByTrackId(trackId);
+    return { success: true };
+  }
+
   @Get('check/:type/:id')
   async check(
     @Param('type') type: AccountType,

@@ -236,7 +236,7 @@ export class TrackService {
                     },
                   });
                   console.log(
-                    `updated balance: ${response.title} - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
+                    `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
                   );
                 } catch (error) {
                   const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`;
@@ -281,6 +281,24 @@ export class TrackService {
       where: { id },
       data: { isActive: true },
     });
+  }
+
+  async deactivateAccountByTrackId(trackId: string) {
+    const account = await this.prisma.account.findFirst({ where: { trackId: trackId } });
+    if (!account) {
+      console.log(`account for deactivation not found: ${trackId}`);
+      return;
+    }
+
+    const jar = await this.checkMono(trackId);
+
+    if (!account.isActive) {
+      console.log(`account is already deactivated: ${jar.title} (${trackId})`);
+      return;
+    }
+
+    await this.deactivateAccount(account.id);
+    console.log(`account deactivated: ${jar.title} (${trackId})`);
   }
 
   async deactivateAccount(id: number) {
