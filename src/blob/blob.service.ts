@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { del, list } from '@vercel/blob';
-import { BlobReader } from 'src/common/helpers/blobReader';
 
 const OLD_INDICATOR_DAYS = 1;
+const MAX_BLOBS_TO_REMOVE = 100;
 
 @Injectable()
 export class BlobService {
-  constructor(private readonly blobReader: BlobReader) {}
-
   isBlobOld(date: Date) {
     if (!date) {
       return false;
@@ -19,7 +17,6 @@ export class BlobService {
   }
 
   async refresh() {
-    const maxBlobsToRemoved = 20;
     const blobList = await list();
     if (!blobList || !blobList.blobs || blobList.blobs.length === 0) {
       console.log('No blobs found');
@@ -30,7 +27,7 @@ export class BlobService {
 
     const oldBlobs = blobList.blobs
       .filter(blob => this.isBlobOld(blob.uploadedAt))
-      .slice(0, maxBlobsToRemoved);
+      .slice(0, MAX_BLOBS_TO_REMOVE);
 
     console.log('Old blobs found:', oldBlobs.length);
 
