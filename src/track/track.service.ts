@@ -7,7 +7,10 @@ import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { BlobReader } from 'src/common/helpers/blobReader';
 
-const activeAccountsFileName = `active-track-accounts-${env.HOST}`;
+const BLOB_FILE_NAMES = {
+  activeAccounts: `${env.HOST}-active-track-accounts`,
+  recentIncoming: `${env.HOST}-recent-incoming`,
+};
 
 @Injectable()
 export class TrackService {
@@ -23,7 +26,12 @@ export class TrackService {
 
   async invalidateBlobActiveAccounts() {
     console.log('invalidating blob active accounts');
-    this.blobReader.delete(activeAccountsFileName);
+    this.blobReader.delete(BLOB_FILE_NAMES.activeAccounts);
+  }
+
+  async invalidateBlobRecentIncoming(accountId: number) {
+    console.log('invalidating blob recent incoming', accountId);
+    this.blobReader.delete(`${BLOB_FILE_NAMES.recentIncoming}-${accountId}`);
   }
 
   wasTwoWeeksAgo(date: Date) {
@@ -189,10 +197,10 @@ export class TrackService {
   }
 
   async getActiveAccountIncomings() {
-    // const blobActiveAccounts = await this.blobReader.read(activeAccountsFileName);
-    const blobActiveAccounts = null;
+    // const blobActiveAccounts = null;
+    const blobActiveAccounts = await this.blobReader.read(BLOB_FILE_NAMES.activeAccounts);
     if (blobActiveAccounts) {
-      console.log('read active accounts from blob');
+      console.log('BLOB: read active accounts');
       return blobActiveAccounts;
     }
 
@@ -206,8 +214,8 @@ export class TrackService {
       },
     });
 
-    // this.blobReader.create(activeAccountsFileName, activeAccounts);
-    console.log('read active accounts from DB and updated blob');
+    this.blobReader.create(BLOB_FILE_NAMES.activeAccounts, activeAccounts);
+    console.log('DB: read active accounts and updated blob');
 
     return activeAccounts;
   }
@@ -250,7 +258,9 @@ export class TrackService {
                 return;
               }
 
-              if (response.balance !== account.accountIncomings?.[0]?.balance) {
+              const recentIncoming = await this.getRecentAccountIncoming(account.id);
+
+              if (!recentIncoming || response.balance !== recentIncoming.balance) {
                 try {
                   const incoming = await this.prisma.accountIncoming.create({
                     data: {
@@ -259,6 +269,8 @@ export class TrackService {
                       trackedAt: new Date(),
                     },
                   });
+
+                  this.invalidateBlobRecentIncoming(account.id);
                   console.log(
                     `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
                   );
@@ -266,7 +278,6 @@ export class TrackService {
                   const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`;
                   Sentry.captureMessage(errorMsg, error);
                   console.log(errorMsg);
-                  // console.log(error.message)
                 }
               }
             }
@@ -286,6 +297,25 @@ export class TrackService {
         }
       })
     );
+  }
+
+  async getRecentAccountIncoming(accountId: number) {
+    const blobRecentIncoming = await this.blobReader.read(
+      `${BLOB_FILE_NAMES.recentIncoming}-${accountId}`
+    );
+    if (blobRecentIncoming) {
+      console.log('BLOB: read recent incoming', accountId);
+      return blobRecentIncoming;
+    }
+
+    const recentIncoming = await this.prisma.accountIncoming.findFirst({
+      where: { accountId },
+      orderBy: { trackedAt: 'desc' },
+    });
+
+    console.log('DB: read recent incoming and updated blob', accountId);
+    this.blobReader.create(`${BLOB_FILE_NAMES.recentIncoming}-${accountId}`, recentIncoming);
+    return recentIncoming;
   }
 
   isAccountOld(account) {
