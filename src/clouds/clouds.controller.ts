@@ -31,7 +31,7 @@ export class CloudsController {
   @Get('/fibonacci/:index')
   async fibonacci(@Param('index', ParseIntPipe) index: number) {
     const count = await this.requestsService.countFibonacciThisMonth();
-    if (count >= LIMIT_MAP.ARMSTRONG) {
+    if (count >= LIMIT_MAP.FIBONACCI) {
       return limitedResponse;
     }
 
@@ -42,7 +42,7 @@ export class CloudsController {
   @Get('/prime/:index')
   async prime(@Param('index', ParseIntPipe) index: number) {
     const count = await this.requestsService.countPrimeThisMonth();
-    if (count >= LIMIT_MAP.ARMSTRONG) {
+    if (count >= LIMIT_MAP.PRIME) {
       return limitedResponse;
     }
 

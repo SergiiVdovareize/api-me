@@ -4,9 +4,10 @@ import { TrackController } from './track.controller';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { PosthogService } from 'src/posthog/posthog.service';
 import { PrismaService } from 'src/prisma.service';
+import { BlobReader } from 'src/common/helpers/blobReader';
 
 @Module({
   controllers: [TrackController],
-  providers: [TrackService, AnalyticsService, PosthogService, PrismaService],
+  providers: [TrackService, AnalyticsService, PosthogService, PrismaService, BlobReader],
 })
 export class TrackModule {}

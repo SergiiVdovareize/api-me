@@ -1,19 +1,29 @@
 import * as Sentry from '@sentry/nestjs';
+import { env } from 'process';
 import { Injectable } from '@nestjs/common';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
+import { BlobReader } from 'src/common/helpers/blobReader';
+
+const activeAccountsFileName = `active-track-accounts-${env.HOST}`;
 
 @Injectable()
 export class TrackService {
   constructor(
     private prisma: PrismaService,
-    private readonly analyticsService: AnalyticsService
+    private readonly analyticsService: AnalyticsService,
+    private readonly blobReader: BlobReader
   ) {}
 
   findAll() {
     return `This action returns all track`;
+  }
+
+  async invalidateBlobActiveAccounts() {
+    console.log('invalidating blob active accounts');
+    this.blobReader.delete(activeAccountsFileName);
   }
 
   wasTwoWeeksAgo(date: Date) {
@@ -165,6 +175,8 @@ export class TrackService {
       },
     });
 
+    await this.invalidateBlobActiveAccounts();
+
     return {
       account: trackingAccount,
       jar,
@@ -177,7 +189,13 @@ export class TrackService {
   }
 
   async getActiveAccountIncomings() {
-    return await this.prisma.account.findMany({
+    const blobActiveAccounts = await this.blobReader.read(activeAccountsFileName);
+    if (blobActiveAccounts) {
+      console.log('read active accounts from blob');
+      return blobActiveAccounts;
+    }
+
+    const activeAccounts = await this.prisma.account.findMany({
       where: { isActive: true },
       include: {
         accountIncomings: {
@@ -186,6 +204,11 @@ export class TrackService {
         },
       },
     });
+
+    this.blobReader.create(activeAccountsFileName, activeAccounts);
+    console.log('read active accounts from DB and updated blob');
+
+    return activeAccounts;
   }
 
   async refreshAccounts() {
@@ -281,6 +304,7 @@ export class TrackService {
       where: { id },
       data: { isActive: true },
     });
+    await this.invalidateBlobActiveAccounts();
   }
 
   async deactivateAccountByTrackId(trackId: string) {
@@ -298,6 +322,7 @@ export class TrackService {
     }
 
     await this.deactivateAccount(account.id);
+    await this.invalidateBlobActiveAccounts();
     console.log(`account deactivated: ${jar.title} (${trackId})`);
   }
 
