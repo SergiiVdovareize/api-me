@@ -17,6 +17,7 @@ import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
 import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BlobModule } from './blob/blob.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     MemesModule,
     AsyncModule,
     TrackModule,
+    BlobModule,
   ],
   controllers: [AppController],
   providers: [
