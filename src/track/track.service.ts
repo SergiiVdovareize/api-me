@@ -206,7 +206,7 @@ export class TrackService {
       },
     });
 
-    this.blobReader.create(activeAccountsFileName, activeAccounts);
+    // this.blobReader.create(activeAccountsFileName, activeAccounts);
     console.log('read active accounts from DB and updated blob');
 
     return activeAccounts;
