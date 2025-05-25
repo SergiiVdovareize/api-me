@@ -7,6 +7,8 @@ import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { BlobReader } from 'src/common/helpers/blobReader';
 
+const useBlobStorage = false;
+
 const BLOB_FILE_NAMES = {
   activeAccounts: `${env.HOST}-active-track-accounts`,
   recentIncoming: `${env.HOST}-recent-incoming`,
@@ -25,11 +27,17 @@ export class TrackService {
   }
 
   async invalidateBlobActiveAccounts() {
+    if (!useBlobStorage) {
+      return;
+    }
     console.log('invalidating blob active accounts');
     this.blobReader.delete(BLOB_FILE_NAMES.activeAccounts);
   }
 
   async invalidateBlobRecentIncoming(accountId: number) {
+    if (!useBlobStorage) {
+      return;
+    }
     console.log('invalidating blob recent incoming', accountId);
     this.blobReader.delete(`${BLOB_FILE_NAMES.recentIncoming}-${accountId}`);
   }
@@ -198,10 +206,12 @@ export class TrackService {
 
   async getActiveAccountIncomings() {
     // const blobActiveAccounts = null;
-    const blobActiveAccounts = await this.blobReader.read(BLOB_FILE_NAMES.activeAccounts);
-    if (blobActiveAccounts) {
-      console.log('BLOB: read active accounts');
-      return blobActiveAccounts;
+    if (useBlobStorage) {
+      const blobActiveAccounts = await this.blobReader.read(BLOB_FILE_NAMES.activeAccounts);
+      if (blobActiveAccounts) {
+        console.log('BLOB: read active accounts');
+        return blobActiveAccounts;
+      }
     }
 
     const activeAccounts = await this.prisma.account.findMany({
@@ -214,8 +224,10 @@ export class TrackService {
       },
     });
 
-    this.blobReader.create(BLOB_FILE_NAMES.activeAccounts, activeAccounts);
-    console.log('DB: read active accounts and updated blob');
+    if (useBlobStorage) {
+      this.blobReader.create(BLOB_FILE_NAMES.activeAccounts, activeAccounts);
+      console.log('DB: read active accounts and updated blob');
+    }
 
     return activeAccounts;
   }
@@ -258,9 +270,15 @@ export class TrackService {
                 return;
               }
 
-              const recentIncoming = await this.getRecentAccountIncoming(account.id);
+              let needUpdateIncoming = false;
+              if (useBlobStorage) {
+                const recentIncoming = await this.getRecentAccountIncoming(account.id);
+                needUpdateIncoming = !recentIncoming || response.balance !== recentIncoming.balance;
+              } else {
+                needUpdateIncoming = response.balance !== account.accountIncomings?.[0]?.balance;
+              }
 
-              if (!recentIncoming || response.balance !== recentIncoming.balance) {
+              if (needUpdateIncoming) {
                 try {
                   const incoming = await this.prisma.accountIncoming.create({
                     data: {
