@@ -189,7 +189,8 @@ export class TrackService {
   }
 
   async getActiveAccountIncomings() {
-    const blobActiveAccounts = await this.blobReader.read(activeAccountsFileName);
+    // const blobActiveAccounts = await this.blobReader.read(activeAccountsFileName);
+    const blobActiveAccounts = null;
     if (blobActiveAccounts) {
       console.log('read active accounts from blob');
       return blobActiveAccounts;
