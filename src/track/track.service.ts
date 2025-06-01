@@ -155,7 +155,6 @@ export class TrackService {
           balance: json.jarAmount,
           status: json.jarStatus,
           ownerName: json.ownerName,
-          extra: content
         };
   }
 
