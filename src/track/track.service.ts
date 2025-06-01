@@ -121,7 +121,7 @@ export class TrackService {
   // }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
-    const content = await this.readCache('bob.txt');
+    // const content = await this.readCache('bob.txt');
     const response = await fetch('https://send.monobank.ua/api/handler', {
       method: 'POST',
       headers: {
@@ -263,7 +263,7 @@ export class TrackService {
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings();
 
-    await this.cacheData('bob.txt', 'bob is here');
+    // await this.cacheData('bob.txt', 'bob is here');
 
     await Promise.all(
       accounts.map(async account => {
