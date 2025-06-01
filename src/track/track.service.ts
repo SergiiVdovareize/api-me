@@ -6,6 +6,7 @@ import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { BlobReader } from 'src/common/helpers/blobReader';
+import { promises as fs } from 'fs';
 
 const useBlobStorage = false;
 
@@ -120,6 +121,7 @@ export class TrackService {
   // }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
+    const content = await this.readCache('bob.txt');
     const response = await fetch('https://send.monobank.ua/api/handler', {
       method: 'POST',
       headers: {
@@ -153,6 +155,7 @@ export class TrackService {
           balance: json.jarAmount,
           status: json.jarStatus,
           ownerName: json.ownerName,
+          extra: content
         };
   }
 
@@ -259,6 +262,9 @@ export class TrackService {
 
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings();
+
+    await this.cacheData('bob.txt', 'bob is here');
+
     await Promise.all(
       accounts.map(async account => {
         switch (account.type) {
@@ -380,5 +386,39 @@ export class TrackService {
       where: { id },
       data: { isActive: false },
     });
+  }
+
+  /**
+   * Creates a file with the given name and writes the provided text if it does not exist.
+   * @param fileName The name of the file to create.
+   * @param text The text to write into the file.
+   */
+  async cacheData(fileName: string, text: string) {
+    try {
+      await fs.access(fileName);
+      // File exists, do nothing
+    } catch {
+      // File does not exist, create and write text
+      await fs.writeFile(fileName, text, { encoding: 'utf-8' });
+      console.log(`File created: ${fileName}`);
+    }
+  }
+
+  /**
+   * Reads the contents of a file if it exists.
+   * @param fileName The name of the file to read.
+   * @returns The file contents as a string, or null if the file does not exist.
+   */
+  async readCache(fileName: string): Promise<string | null> {
+    try {
+      await fs.access(fileName);
+      const content = await fs.readFile(fileName, { encoding: 'utf-8' });
+      console.log(`File content: ${content}`);
+      return content;
+    } catch {
+      // File does not exist
+      console.log(`File does not exist: ${fileName}`);
+      return null;
+    }
   }
 }

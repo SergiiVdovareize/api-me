@@ -10,4 +10,5 @@ export type JarResponse = {
   status?: JarStatus;
   title?: string;
   ownerName?: string;
+  extra?: string;
 };
