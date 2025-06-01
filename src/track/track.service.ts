@@ -394,30 +394,34 @@ export class TrackService {
    * @param text The text to write into the file.
    */
   async cacheData(fileName: string, text: string) {
+    const filePath = `tmp/${fileName}`;
     try {
-      await fs.access(fileName);
+      await fs.mkdir('tmp', { recursive: true });
+      await fs.access(filePath);
       // File exists, do nothing
     } catch {
       // File does not exist, create and write text
-      await fs.writeFile(fileName, text, { encoding: 'utf-8' });
-      console.log(`File created: ${fileName}`);
+      await fs.writeFile(filePath, text, { encoding: 'utf-8' });
+      console.log(`File created: ${filePath}`);
     }
   }
 
   /**
-   * Reads the contents of a file if it exists.
+   * Reads the contents of a file in the tmp folder if it exists.
    * @param fileName The name of the file to read.
    * @returns The file contents as a string, or null if the file does not exist.
    */
   async readCache(fileName: string): Promise<string | null> {
+    const filePath = `tmp/${fileName}`;
     try {
-      await fs.access(fileName);
-      const content = await fs.readFile(fileName, { encoding: 'utf-8' });
+      await fs.mkdir('tmp', { recursive: true });
+      await fs.access(filePath);
+      const content = await fs.readFile(filePath, { encoding: 'utf-8' });
       console.log(`File content: ${content}`);
       return content;
     } catch {
       // File does not exist
-      console.log(`File does not exist: ${fileName}`);
+      console.log(`File does not exist: ${filePath}`);
       return null;
     }
   }
