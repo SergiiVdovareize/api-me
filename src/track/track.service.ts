@@ -134,7 +134,21 @@ export class TrackService {
       }),
     });
 
-    const json = await response.json();
+    let json;
+    try {
+      json = await response.json();
+    } catch (error) {
+      // console.log('Error parsing JSON response:', error);
+      console.error('Error parsing JSON response:', error);
+      const html = await response.text();
+      console.error('Check HTML:', html);
+
+      return {
+        success: false,
+        message: 'error parsing json',
+      };
+    }
+
     if (!response.ok) {
       return {
         success: false,
