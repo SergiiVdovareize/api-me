@@ -7,6 +7,7 @@ import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { BlobReader } from 'src/common/helpers/blobReader';
 import { promises as fs } from 'fs';
+import { Redis } from '@upstash/redis';
 
 const useBlobStorage = false;
 
@@ -14,6 +15,8 @@ const BLOB_FILE_NAMES = {
   activeAccounts: `${env.HOST}-active-track-accounts`,
   recentIncoming: `${env.HOST}-recent-incoming`,
 };
+
+const redis = Redis.fromEnv();
 
 @Injectable()
 export class TrackService {
@@ -275,6 +278,8 @@ export class TrackService {
 
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings();
+    const result = await redis.get("item");
+    console.log('result', result)
 
     // await this.cacheData('bob.txt', 'bob is here');
 
