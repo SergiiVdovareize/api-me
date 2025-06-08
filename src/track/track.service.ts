@@ -5,45 +5,42 @@ import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
-import { BlobReader } from 'src/common/helpers/blobReader';
 import { promises as fs } from 'fs';
-import { Redis } from '@upstash/redis';
+import { RedisReader } from 'src/common/helpers/redisReader';
 
-const useBlobStorage = false;
+const useCacheStorage = true;
 
-const BLOB_FILE_NAMES = {
+const CACHE_KEYS = {
   activeAccounts: `${env.HOST}-active-track-accounts`,
   recentIncoming: `${env.HOST}-recent-incoming`,
 };
-
-const redis = Redis.fromEnv();
 
 @Injectable()
 export class TrackService {
   constructor(
     private prisma: PrismaService,
     private readonly analyticsService: AnalyticsService,
-    private readonly blobReader: BlobReader
+    private readonly redisReader: RedisReader
   ) {}
 
   findAll() {
     return `This action returns all track`;
   }
 
-  async invalidateBlobActiveAccounts() {
-    if (!useBlobStorage) {
+  async invalidateCachedActiveAccounts() {
+    if (!useCacheStorage) {
       return;
     }
-    console.log('invalidating blob active accounts');
-    this.blobReader.delete(BLOB_FILE_NAMES.activeAccounts);
+    console.log('invalidating cached active accounts');
+    this.redisReader.delete(CACHE_KEYS.activeAccounts);
   }
 
-  async invalidateBlobRecentIncoming(accountId: number) {
-    if (!useBlobStorage) {
+  async invalidateCacheRecentIncoming(accountId: number) {
+    if (!useCacheStorage) {
       return;
     }
-    console.log('invalidating blob recent incoming', accountId);
-    this.blobReader.delete(`${BLOB_FILE_NAMES.recentIncoming}-${accountId}`);
+    console.log('invalidating cached recent incoming', accountId);
+    this.redisReader.delete(`${CACHE_KEYS.recentIncoming}-${accountId}`);
   }
 
   wasTwoWeeksAgo(date: Date) {
@@ -210,7 +207,7 @@ export class TrackService {
       },
     });
 
-    await this.invalidateBlobActiveAccounts();
+    await this.invalidateCachedActiveAccounts();
 
     return {
       account: trackingAccount,
@@ -224,12 +221,11 @@ export class TrackService {
   }
 
   async getActiveAccountIncomings() {
-    // const blobActiveAccounts = null;
-    if (useBlobStorage) {
-      const blobActiveAccounts = await this.blobReader.read(BLOB_FILE_NAMES.activeAccounts);
-      if (blobActiveAccounts) {
-        console.log('BLOB: read active accounts');
-        return blobActiveAccounts;
+    if (useCacheStorage) {
+      const cachedActiveAccounts = await this.redisReader.read(CACHE_KEYS.activeAccounts);
+      if (cachedActiveAccounts) {
+        console.log('CACHE: read active accounts');
+        return cachedActiveAccounts;
       }
     }
 
@@ -243,9 +239,9 @@ export class TrackService {
       },
     });
 
-    if (useBlobStorage) {
-      this.blobReader.create(BLOB_FILE_NAMES.activeAccounts, activeAccounts);
-      console.log('DB: read active accounts and updated blob');
+    if (useCacheStorage) {
+      this.redisReader.write(CACHE_KEYS.activeAccounts, activeAccounts);
+      console.log('DB: read active accounts and updated cache');
     }
 
     return activeAccounts;
@@ -278,8 +274,6 @@ export class TrackService {
 
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings();
-    const result = await redis.get("item");
-    console.log('result', result)
 
     // await this.cacheData('bob.txt', 'bob is here');
 
@@ -295,7 +289,7 @@ export class TrackService {
               }
 
               let needUpdateIncoming = false;
-              if (useBlobStorage) {
+              if (useCacheStorage) {
                 const recentIncoming = await this.getRecentAccountIncoming(account.id);
                 needUpdateIncoming = !recentIncoming || response.balance !== recentIncoming.balance;
               } else {
@@ -312,7 +306,7 @@ export class TrackService {
                     },
                   });
 
-                  this.invalidateBlobRecentIncoming(account.id);
+                  this.invalidateCacheRecentIncoming(account.id);
                   console.log(
                     `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
                   );
@@ -342,12 +336,12 @@ export class TrackService {
   }
 
   async getRecentAccountIncoming(accountId: number) {
-    const blobRecentIncoming = await this.blobReader.read(
-      `${BLOB_FILE_NAMES.recentIncoming}-${accountId}`
+    const cachedRecentIncoming = await this.redisReader.read(
+      `${CACHE_KEYS.recentIncoming}-${accountId}`
     );
-    if (blobRecentIncoming) {
-      console.log('BLOB: read recent incoming', accountId);
-      return blobRecentIncoming;
+    if (cachedRecentIncoming) {
+      console.log('CACHE: read recent incoming', accountId);
+      return cachedRecentIncoming;
     }
 
     const recentIncoming = await this.prisma.accountIncoming.findFirst({
@@ -355,8 +349,8 @@ export class TrackService {
       orderBy: { trackedAt: 'desc' },
     });
 
-    console.log('DB: read recent incoming and updated blob', accountId);
-    this.blobReader.create(`${BLOB_FILE_NAMES.recentIncoming}-${accountId}`, recentIncoming);
+    console.log('DB: read recent incoming and updated cache', accountId);
+    this.redisReader.write(`${CACHE_KEYS.recentIncoming}-${accountId}`, recentIncoming);
     return recentIncoming;
   }
 
@@ -377,7 +371,7 @@ export class TrackService {
       where: { id },
       data: { isActive: true },
     });
-    await this.invalidateBlobActiveAccounts();
+    await this.invalidateCachedActiveAccounts();
   }
 
   async deactivateAccountByTrackId(trackId: string) {
@@ -395,7 +389,7 @@ export class TrackService {
     }
 
     await this.deactivateAccount(account.id);
-    await this.invalidateBlobActiveAccounts();
+    await this.invalidateCachedActiveAccounts();
     console.log(`account deactivated: ${jar.title} (${trackId})`);
   }
 
