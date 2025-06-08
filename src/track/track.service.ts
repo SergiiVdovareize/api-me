@@ -224,7 +224,7 @@ export class TrackService {
     if (useCacheStorage) {
       const cachedActiveAccounts = await this.redisReader.read(CACHE_KEYS.activeAccounts);
       if (cachedActiveAccounts) {
-        console.log('CACHE: read active accounts');
+        // console.log('CACHE: read active accounts');
         return cachedActiveAccounts;
       }
     }
@@ -340,7 +340,7 @@ export class TrackService {
       `${CACHE_KEYS.recentIncoming}-${accountId}`
     );
     if (cachedRecentIncoming) {
-      console.log('CACHE: read recent incoming', accountId);
+      // console.log('CACHE: read recent incoming', accountId);
       return cachedRecentIncoming;
     }
 
