@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 import { AnalyticsService } from './analytics/analytics.service';
 
@@ -13,6 +13,14 @@ export class AppController {
   async getHello(): Promise<string> {
     // this.analyticsService.trackEvent('HelloApi');
     return this.appService.getHello();
+  }
+
+  @Get('test')
+  async test(@Query('v') v: string) {
+    console.log('test', v);
+    return {
+      success: true,
+    };
   }
 
   // @Get('/debug-sentry')
