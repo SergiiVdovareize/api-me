@@ -33,28 +33,6 @@ export class TrackController {
     return { success: true };
   }
 
-  // @Get('/2')
-  // async track2() {
-  //   new Promise(async (resolve, reject) => {
-  //     const timeout = setTimeout(async () => {
-  //       console.log('track2 timeout', this.getTime());
-  //       try {
-  //         const loopHost =
-  //           env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
-  //         const data = await fetch(loopHost + '/track?loop=1');
-  //         const json = await data.json();
-  //         clearTimeout(timeout);
-  //         console.log('track2 result', json);
-  //         resolve(json);
-  //       } catch (error) {
-  //         clearTimeout(timeout);
-  //         reject(error);
-  //       }
-  //     }, 30000);
-  //   });
-  //   return { success: true };
-  // }
-
   @Get('refresh')
   async refresh() {
     this.analyticsService.trackEvent('Refresh');
