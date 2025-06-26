@@ -289,10 +289,10 @@ export class TrackService {
             const response = await this.checkMono(account.trackId);
             if (this.isJarActiveStatus(response)) {
               const balance = response.balance || 0;
-              if (!balance) {
-                console.log(`no balance: ${account.id} - ${response.balance}`);
-                return;
-              }
+              // if (!balance) {
+              //   console.log(`no balance: ${account.id} - ${response.balance}`);
+              //   return;
+              // }
 
               let needUpdateIncoming = false;
               if (this.useCacheStorage) {
