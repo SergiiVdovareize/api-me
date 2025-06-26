@@ -22,6 +22,7 @@ export class TrackService {
       return false;
     }
     const currentDay = new Date().getDate();
+    console.log('currentDay', currentDay);
     return currentDay % 3 !== 0;
   }
 
