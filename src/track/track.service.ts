@@ -8,7 +8,7 @@ import { AnalyticsService } from 'src/analytics/analytics.service';
 import { promises as fs } from 'fs';
 import { RedisReader } from 'src/common/helpers/redisReader';
 
-const useCacheStorage = true;
+const cacheStorageEnabled = true;
 
 const CACHE_KEYS = {
   activeAccounts: `${env.HOST}-active-track-accounts`,
@@ -17,6 +17,14 @@ const CACHE_KEYS = {
 
 @Injectable()
 export class TrackService {
+  get useCacheStorage(): boolean {
+    if (!cacheStorageEnabled) {
+      return false;
+    }
+    const currentDay = new Date().getDate();
+    return currentDay % 3 !== 0;
+  }
+
   constructor(
     private prisma: PrismaService,
     private readonly analyticsService: AnalyticsService,
@@ -28,7 +36,7 @@ export class TrackService {
   }
 
   async invalidateCachedActiveAccounts() {
-    if (!useCacheStorage) {
+    if (!this.useCacheStorage) {
       return;
     }
     console.log('invalidating cached active accounts');
@@ -36,7 +44,7 @@ export class TrackService {
   }
 
   async invalidateCacheRecentIncoming(accountId: number) {
-    if (!useCacheStorage) {
+    if (!this.useCacheStorage) {
       return;
     }
     console.log('invalidating cached recent incoming', accountId);
@@ -221,7 +229,7 @@ export class TrackService {
   }
 
   async getActiveAccountIncomings() {
-    if (useCacheStorage) {
+    if (this.useCacheStorage) {
       const cachedActiveAccounts = await this.redisReader.read(CACHE_KEYS.activeAccounts);
       if (cachedActiveAccounts) {
         // console.log('CACHE: read active accounts');
@@ -239,7 +247,7 @@ export class TrackService {
       },
     });
 
-    if (useCacheStorage) {
+    if (this.useCacheStorage) {
       this.redisReader.write(CACHE_KEYS.activeAccounts, activeAccounts);
       console.log('DB: read active accounts and updated cache');
     }
@@ -275,8 +283,6 @@ export class TrackService {
   async syncAccounts() {
     const accounts = await this.getActiveAccountIncomings();
 
-    // await this.cacheData('bob.txt', 'bob is here');
-
     await Promise.all(
       accounts.map(async account => {
         switch (account.type) {
@@ -289,7 +295,7 @@ export class TrackService {
               }
 
               let needUpdateIncoming = false;
-              if (useCacheStorage) {
+              if (this.useCacheStorage) {
                 const recentIncoming = await this.getRecentAccountIncoming(account.id);
                 needUpdateIncoming = !recentIncoming || response.balance !== recentIncoming.balance;
               } else {

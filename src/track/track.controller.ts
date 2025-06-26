@@ -2,7 +2,6 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { TrackService } from './track.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AccountType } from 'src/models/enums/account-type.enum';
-import { env } from 'process';
 
 @Controller('track')
 export class TrackController {
@@ -30,34 +29,31 @@ export class TrackController {
 
   @Get('')
   async track() {
-    // console.log('track start loop', loop)
-    // this.analyticsService.trackEvent('Track', {type: AccountType.MONO});
     await this.trackService.syncAccounts();
-    // console.log('track finish loop', loop)
     return { success: true };
   }
 
-  @Get('/2')
-  async track2() {
-    new Promise(async (resolve, reject) => {
-      const timeout = setTimeout(async () => {
-        console.log('track2 timeout', this.getTime());
-        try {
-          const loopHost =
-            env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
-          const data = await fetch(loopHost + '/track?loop=1');
-          const json = await data.json();
-          clearTimeout(timeout);
-          console.log('track2 result', json);
-          resolve(json);
-        } catch (error) {
-          clearTimeout(timeout);
-          reject(error);
-        }
-      }, 30000);
-    });
-    return { success: true };
-  }
+  // @Get('/2')
+  // async track2() {
+  //   new Promise(async (resolve, reject) => {
+  //     const timeout = setTimeout(async () => {
+  //       console.log('track2 timeout', this.getTime());
+  //       try {
+  //         const loopHost =
+  //           env.HOST === 'local' ? 'http://localhost:3000' : 'https://api.vdovareize.me';
+  //         const data = await fetch(loopHost + '/track?loop=1');
+  //         const json = await data.json();
+  //         clearTimeout(timeout);
+  //         console.log('track2 result', json);
+  //         resolve(json);
+  //       } catch (error) {
+  //         clearTimeout(timeout);
+  //         reject(error);
+  //       }
+  //     }, 30000);
+  //   });
+  //   return { success: true };
+  // }
 
   @Get('refresh')
   async refresh() {
