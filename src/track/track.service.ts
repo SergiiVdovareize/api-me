@@ -288,7 +288,8 @@ export class TrackService {
           case AccountType.MONO:
             const response = await this.checkMono(account.trackId);
             if (this.isJarActiveStatus(response)) {
-              if (!response.balance) {
+              const balance = response.balance || 0;
+              if (!balance) {
                 console.log(`no balance: ${account.id} - ${response.balance}`);
                 return;
               }
@@ -296,9 +297,9 @@ export class TrackService {
               let needUpdateIncoming = false;
               if (this.useCacheStorage) {
                 const recentIncoming = await this.getRecentAccountIncoming(account.id);
-                needUpdateIncoming = !recentIncoming || response.balance !== recentIncoming.balance;
+                needUpdateIncoming = !recentIncoming || balance !== recentIncoming.balance;
               } else {
-                needUpdateIncoming = response.balance !== account.accountIncomings?.[0]?.balance;
+                needUpdateIncoming = balance !== account.accountIncomings?.[0]?.balance;
               }
 
               if (needUpdateIncoming) {
@@ -306,7 +307,7 @@ export class TrackService {
                   const incoming = await this.prisma.accountIncoming.create({
                     data: {
                       accountId: account.id,
-                      balance: response.balance,
+                      balance: balance,
                       trackedAt: new Date(),
                     },
                   });
@@ -316,7 +317,7 @@ export class TrackService {
                     `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
                   );
                 } catch (error) {
-                  const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${response.balance}`;
+                  const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${balance}`;
                   Sentry.captureMessage(errorMsg, error);
                   console.log(errorMsg);
                 }
