@@ -10,22 +10,9 @@ const secondaryRedis = new Redis({
 });
 
 export class RedisReader {
-  constructor() {} // private readonly globalStateService: GlobalStateService
-
-  /**
-   * Get a new Redis instance for every operation.
-   */
   get redis() {
-    // this.globalStateService.log('RedisReader: get redis instance');
-    return secondaryRedis;
-    // switch (this.globalStateService.dataUsageState) {
-    //   case DataUsageState.MAIN_CACHE:
-    //     return mainRedis;
-    //   case DataUsageState.SECONDARY_CACHE:
-    //     return secondaryRedis;
-    //   default:
-    //     return mainRedis;
-    // }
+    const currentDay = new Date().getDate();
+    return currentDay % 2 == 0 ? mainRedis : secondaryRedis;
   }
 
   /**

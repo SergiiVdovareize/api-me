@@ -18,7 +18,7 @@ const CACHE_KEYS = {
 @Injectable()
 export class TrackService {
   get useCacheStorage(): boolean {
-    return true
+    return true;
     if (!cacheStorageEnabled) {
       return false;
     }
