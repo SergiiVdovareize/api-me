@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
 
-const defaultTtl = 86400; // Default TTL of 1 day
+const defaultTtl = 72000; // Default TTL, 20 hours
 
 const mainRedis = Redis.fromEnv();
 const secondaryRedis = new Redis({
