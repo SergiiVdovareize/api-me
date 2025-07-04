@@ -18,12 +18,12 @@ const CACHE_KEYS = {
 @Injectable()
 export class TrackService {
   get useCacheStorage(): boolean {
-    return true;
-    if (!cacheStorageEnabled) {
-      return false;
-    }
-    const currentDay = new Date().getDate();
-    return currentDay % 3 !== 0;
+    return cacheStorageEnabled;
+    // if (!cacheStorageEnabled) {
+    //   return false;
+    // }
+    // const currentDay = new Date().getDate();
+    // return currentDay % 3 !== 0;
   }
 
   constructor(

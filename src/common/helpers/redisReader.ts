@@ -1,18 +1,27 @@
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
 
-const defaultTtl = 72000; // Default TTL, 20 hours
-
 const mainRedis = Redis.fromEnv();
 const secondaryRedis = new Redis({
   url: env.UPSTASH_REDIS_2_REST_URL,
   token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
 });
 
+const defaultTtl = 72000; // Default TTL of 20 hours
 export class RedisReader {
   get redis() {
-    const currentDay = new Date().getDate();
-    return currentDay % 2 == 0 ? mainRedis : secondaryRedis;
+    const date = new Date();
+    const currentDay = date.getDate();
+
+    let isEven: boolean;
+    if (currentDay === 31) {
+      const currentMonth = date.getMonth();
+      isEven = currentMonth % 2 === 0;
+    } else {
+      isEven = currentDay % 2 === 0;
+    }
+
+    return isEven ? mainRedis : secondaryRedis;
   }
 
   /**
