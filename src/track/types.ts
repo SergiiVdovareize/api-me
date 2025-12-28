@@ -7,6 +7,7 @@ export type JarResponse = {
   success: boolean;
   message?: string;
   balance?: number;
+  goal?: number;
   status?: JarStatus;
   title?: string;
   ownerName?: string;

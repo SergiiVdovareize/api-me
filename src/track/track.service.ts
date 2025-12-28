@@ -175,6 +175,7 @@ export class TrackService {
           success: true,
           title: json.name,
           balance: json.jarAmount,
+          goal: json.jarGoal,
           status: json.jarStatus,
           ownerName: json.ownerName,
         };
@@ -379,6 +380,10 @@ export class TrackService {
       data: { isActive: true },
     });
     await this.invalidateCachedActiveAccounts();
+  }
+
+  async updateAccount(id: number) {
+    
   }
 
   async deactivateAccountByTrackId(trackId: string) {
