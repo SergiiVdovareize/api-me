@@ -33,6 +33,20 @@ export class TrackController {
     return { success: true };
   }
 
+  @Get('ping')
+  async ping() {
+    const timestamp = this.getTime();
+    console.log('ping:', timestamp);
+    return { state: 'ping', timestamp };
+  }
+
+  @Get('pong')
+  async pong() {
+    const timestamp = this.getTime();
+    console.log('pong:', timestamp);
+    return { state: 'pong', timestamp };
+  }
+
   @Get('refresh')
   async refresh() {
     this.analyticsService.trackEvent('Refresh');
