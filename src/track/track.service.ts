@@ -382,9 +382,7 @@ export class TrackService {
     await this.invalidateCachedActiveAccounts();
   }
 
-  async updateAccount(id: number) {
-    
-  }
+  // async updateAccount(id: number) {}
 
   async deactivateAccountByTrackId(trackId: string) {
     const account = await this.prisma.account.findFirst({ where: { trackId: trackId } });

@@ -23,6 +23,11 @@ export class AppController {
     };
   }
 
+  @Get('date')
+  async getRandomDate(): Promise<string> {
+    return this.appService.getRandomDate();
+  }
+
   // @Get('/debug-sentry')
   // getError() {
   //   throw new Error('My first Sentry error!');
