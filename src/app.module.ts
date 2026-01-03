@@ -20,6 +20,7 @@ import { DateService } from './date/date.service';
 import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { CacheModule } from './cache/cache.module';
     AsyncModule,
     TrackModule,
     CacheModule,
+    SchedulerModule,
   ],
   controllers: [AppController, DateController],
   providers: [
