@@ -3,6 +3,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppController } from './app.controller';
+import { DateController } from './date/date.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './models/prisma/prisma.module';
 import { RequestsModule } from './requests/requests.module';
@@ -15,6 +16,7 @@ import { MemesModule } from './memes/memes.module';
 import { AsyncModule } from './async/async.module';
 import { AnalyticsService } from './analytics/analytics.service';
 import { PosthogService } from './posthog/posthog.service';
+import { DateService } from './date/date.service';
 import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
@@ -32,7 +34,7 @@ import { CacheModule } from './cache/cache.module';
     TrackModule,
     CacheModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, DateController],
   providers: [
     {
       provide: APP_FILTER,
@@ -42,6 +44,7 @@ import { CacheModule } from './cache/cache.module';
     RequestsService,
     PosthogService,
     AnalyticsService,
+    DateService,
   ],
 })
 export class AppModule implements NestModule {
