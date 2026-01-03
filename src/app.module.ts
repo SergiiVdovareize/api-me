@@ -20,6 +20,7 @@ import { DateService } from './date/date.service';
 import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
+import { BlobService } from './blob/blob.service';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { CacheModule } from './cache/cache.module';
     PosthogService,
     AnalyticsService,
     DateService,
+    BlobService,
   ],
 })
 export class AppModule implements NestModule {
