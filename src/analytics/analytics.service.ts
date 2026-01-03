@@ -12,7 +12,7 @@ export class AnalyticsService {
       return;
     }
 
-    console.log('event tracked', event);
+    // console.log('event tracked', event);
     this.posthogService.trackEvent(event, properties);
   }
 }
