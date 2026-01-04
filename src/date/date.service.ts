@@ -22,7 +22,7 @@ export class DateService {
     const yyyy = d.getUTCFullYear();
     const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(d.getUTCDate()).padStart(2, '0');
-    const date = `${yyyy}.${mm}.${dd}`;
+    const date = `${dd}.${mm}.${yyyy}`;
 
     try {
       await this.blobService.create(dateFileName, { date });
