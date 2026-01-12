@@ -12,9 +12,26 @@ const thirdRedis = new Redis({
   token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
 });
 
-const defaultTtl = 72000; // Default TTL of 20 hours
+const redisMap = [{
+    url: env.UPSTASH_REDIS_1_REST_URL,
+    token: env.UPSTASH_REDIS_1_REST_API_TOKEN,
+  },
+  {
+    url: env.UPSTASH_REDIS_2_REST_URL,
+    token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
+  },
+  {
+    url: env.UPSTASH_REDIS_3_REST_URL,
+    token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
+  }
+]
+
+const defaultTtl = 100800; // Default TTL of 28 hours
 export class RedisReader {
   get redis() {
+    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846)
+    const redisNumber = dayNumber % redisMap.length
+
     const date = new Date();
     const currentDay = date.getDate();
 
@@ -26,7 +43,9 @@ export class RedisReader {
       isEven = currentDay % 2 === 0;
     }
 
-    return isEven ? secondaryRedis : mainRedis;
+    // return isEven ? secondaryRedis : mainRedis;
+    return secondaryRedis
+    return redisMap[redisNumber]
   }
 
   /**
