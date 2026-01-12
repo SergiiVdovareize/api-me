@@ -1,51 +1,41 @@
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
 
-const mainRedis = Redis.fromEnv();
+// const mainRedis = Redis.fromEnv();
 const secondaryRedis = new Redis({
   url: env.UPSTASH_REDIS_2_REST_URL,
   token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
 });
 
-const thirdRedis = new Redis({
-  url: env.UPSTASH_REDIS_3_REST_URL,
-  token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
-});
+// const thirdRedis = new Redis({
+//   url: env.UPSTASH_REDIS_3_REST_URL,
+//   token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
+// });
 
-const redisMap = [{
-    url: env.UPSTASH_REDIS_1_REST_URL,
-    token: env.UPSTASH_REDIS_1_REST_API_TOKEN,
-  },
-  {
-    url: env.UPSTASH_REDIS_2_REST_URL,
-    token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
-  },
-  {
-    url: env.UPSTASH_REDIS_3_REST_URL,
-    token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
-  }
-]
+// const redisMap = [
+//   {
+//     url: env.UPSTASH_REDIS_1_REST_URL,
+//     token: env.UPSTASH_REDIS_1_REST_API_TOKEN,
+//   },
+//   {
+//     url: env.UPSTASH_REDIS_2_REST_URL,
+//     token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
+//   },
+//   {
+//     url: env.UPSTASH_REDIS_3_REST_URL,
+//     token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
+//   },
+// ];
 
 const defaultTtl = 100800; // Default TTL of 28 hours
 export class RedisReader {
   get redis() {
-    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846)
-    const redisNumber = dayNumber % redisMap.length
-
-    const date = new Date();
-    const currentDay = date.getDate();
-
-    let isEven: boolean;
-    if (currentDay === 31) {
-      const currentMonth = date.getMonth();
-      isEven = currentMonth % 2 === 0;
-    } else {
-      isEven = currentDay % 2 === 0;
-    }
+    // const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
+    // const redisNumber = dayNumber % redisMap.length;
 
     // return isEven ? secondaryRedis : mainRedis;
-    return secondaryRedis
-    return redisMap[redisNumber]
+    return secondaryRedis;
+    // return redisMap[redisNumber];
   }
 
   /**
