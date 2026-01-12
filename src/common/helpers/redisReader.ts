@@ -7,6 +7,11 @@ const secondaryRedis = new Redis({
   token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
 });
 
+const thirdRedis = new Redis({
+  url: env.UPSTASH_REDIS_3_REST_URL,
+  token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
+});
+
 const defaultTtl = 72000; // Default TTL of 20 hours
 export class RedisReader {
   get redis() {
@@ -21,7 +26,7 @@ export class RedisReader {
       isEven = currentDay % 2 === 0;
     }
 
-    return isEven ? mainRedis : secondaryRedis;
+    return isEven ? secondaryRedis : mainRedis;
   }
 
   /**
