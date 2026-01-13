@@ -1,41 +1,20 @@
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
 
-// const mainRedis = Redis.fromEnv();
-const secondaryRedis = new Redis({
-  url: env.UPSTASH_REDIS_2_REST_URL,
-  token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
-});
-
-// const thirdRedis = new Redis({
-//   url: env.UPSTASH_REDIS_3_REST_URL,
-//   token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
-// });
-
-// const redisMap = [
-//   {
-//     url: env.UPSTASH_REDIS_1_REST_URL,
-//     token: env.UPSTASH_REDIS_1_REST_API_TOKEN,
-//   },
-//   {
-//     url: env.UPSTASH_REDIS_2_REST_URL,
-//     token: env.UPSTASH_REDIS_2_REST_API_TOKEN,
-//   },
-//   {
-//     url: env.UPSTASH_REDIS_3_REST_URL,
-//     token: env.UPSTASH_REDIS_3_REST_API_TOKEN,
-//   },
-// ];
+const redisProfilesCount = Object.keys(env).filter(prop =>
+  prop.startsWith('UPSTASH_REDIS_REST_URL')
+).length;
 
 const defaultTtl = 100800; // Default TTL of 28 hours
 export class RedisReader {
   get redis() {
-    // const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
-    // const redisNumber = dayNumber % redisMap.length;
+    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
+    const redisNumber = (dayNumber % redisProfilesCount) + 1;
 
-    // return isEven ? secondaryRedis : mainRedis;
-    return secondaryRedis;
-    // return redisMap[redisNumber];
+    return new Redis({
+      url: env[`UPSTASH_REDIS_REST_URL_${redisNumber}`],
+      token: env[`UPSTASH_REDIS_REST_TOKEN_${redisNumber}`],
+    });
   }
 
   /**
