@@ -9,7 +9,7 @@ import { getSnapScript } from 'src/common/phantomScripts/snap';
 import { RequestsService } from 'src/requests/requests.service';
 import { writeFile } from 'fs';
 import { ParseResult } from 'src/common/types/ParseResult';
-import { snapsave } from 'snapsave-adapter';
+// `snapsave-adapter` is an ESM-only package; we load it dynamically in `steelFromSnapsave`.
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
@@ -148,11 +148,15 @@ export class MemesService {
 
   async steelFromSnapsave(url: string): Promise<any> {
     try {
-      const result = await snapsave(url);
-      if (result.success && result?.data?.media) {
+      // snapsave-adapter is ESM-only; import dynamically to avoid require() errors in CommonJS runtime
+      const snapsaveModule = await import('snapsave-adapter');
+      const snapsaveFn = snapsaveModule.snapsave ?? snapsaveModule.default ?? snapsaveModule;
+
+      const result = await snapsaveFn(url);
+      if (result?.success && result?.data?.media?.length) {
         return {
           success: true,
-          data: result?.data?.media?.[0]?.url,
+          data: result.data.media[0].url,
         };
       }
       return {
@@ -160,7 +164,7 @@ export class MemesService {
         data: result,
       };
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('Download error (snapsave):', error);
       throw error;
     }
   }
