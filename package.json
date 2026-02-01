@@ -48,7 +48,7 @@
     "prisma": "^6.11.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "snapsave-adapter": "^1.0.7",
+    "snapsave-adapter": "^1.0.8",
     "typeorm": "^0.3.25",
     "vercel": "^50.9.6"
   },
