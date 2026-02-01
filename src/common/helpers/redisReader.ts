@@ -11,6 +11,7 @@ export class RedisReader {
     const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
     const redisNumber = (dayNumber % redisProfilesCount) + 1;
 
+    console.log('URL', redisNumber, env[`UPSTASH_REDIS_REST_URL_${redisNumber}`])
     return new Redis({
       url: env[`UPSTASH_REDIS_REST_URL_${redisNumber}`],
       token: env[`UPSTASH_REDIS_REST_TOKEN_${redisNumber}`],
