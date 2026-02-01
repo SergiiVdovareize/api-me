@@ -80,7 +80,6 @@ export class MemesService {
         // console.log('** errors', userResponse.content.data.errors)
         // console.log('stealing error');
         // console.error(error);
-        // console.log(userResponse);
         result = {
           success: false,
           error: 'could not steal the meme: ' + error,
