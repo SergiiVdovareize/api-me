@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { BlobService } from '../blob/blob.service';
+import { RedisReader } from 'src/common/helpers/redisReader';
 
 const OLD_INDICATOR_DAYS = 1;
 const MAX_ITEMS_TO_REMOVE = 100;
 
 @Injectable()
 export class CacheService {
-  constructor(private readonly blobService: BlobService) {}
+  constructor(
+    private readonly blobService: BlobService,
+    private readonly redisReader: RedisReader
+  ) {}
 
   isItemOld(date: Date) {
     if (!date) {
@@ -36,5 +40,9 @@ export class CacheService {
     });
     await Promise.all(deletePromises);
     console.log(`Total removed blob items: ${removedItems}`);
+  }
+
+  async nudge() {
+    this.redisReader.nudgeAll();
   }
 }

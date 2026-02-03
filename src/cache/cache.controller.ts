@@ -10,4 +10,10 @@ export class CacheController {
     await this.cacheService.refresh();
     return { success: true };
   }
+
+  @Get('nudge')
+  async nudge() {
+    await this.cacheService.nudge();
+    return { success: true };
+  }
 }
