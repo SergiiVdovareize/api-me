@@ -12,16 +12,23 @@ const restUrlProp = 'UPSTASH_REDIS_REST_URL_';
 const restTokenProp = 'UPSTASH_REDIS_REST_TOKEN_';
 export class RedisReader {
   private cachedValue: number;
+  private cachedTime: number;
 
   get redis() {
     
     if (this.cachedValue) {
-      console.log('use cachedValue ** ', this.cachedValue);
+      let usageTime = null;
+      if (this.cachedTime) {
+        usageTime = ((Date.now() - this.cachedTime) / 1000 / 60).toFixed(0)
+
+      }
+      console.log('use cachedValue', this.cachedValue, usageTime);
     } else {
       const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
       const redisNumber = dayNumber % redisProfilesCount;
       console.log('SET cachedValue -> ', redisNumber);
       this.cachedValue = redisNumber;
+      this.cachedTime = Date.now();
     }
     return this.getRedisPair(redisPairs[this.cachedValue]);
   }
