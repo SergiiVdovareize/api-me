@@ -8,16 +8,31 @@ const redisProfilesCount = redisPairs.length;
 
 const defaultTtl = 100800; // Default TTL of 28 hours
 const nudgeTtl = 43200; // 12 hours
+const restUrlProp = 'UPSTASH_REDIS_REST_URL_';
+const restTokenProp = 'UPSTASH_REDIS_REST_TOKEN_';
 export class RedisReader {
+  private cachedValue: number;
+
   get redis() {
     const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
     const redisNumber = dayNumber % redisProfilesCount;
-    const redisUrl = redisPairs[redisNumber];
-    const pairSuffix = redisUrl.match(/UPSTASH_REDIS_REST_URL_(.*)/)[1];
+    if (!this.cachedValue) {
+      console.log('set cachedValue - ', redisNumber);
+      this.cachedValue = redisNumber;
+    }
+    return this.getRedisPair(redisPairs[redisNumber]);
+  }
+
+  getRedisPair(restUrl: string) {
+    const suffixReg = new RegExp(`${restUrlProp}(.*)`);
+    const pairSuffix = restUrl.match(suffixReg)[1];
+    if (!pairSuffix) {
+      return null;
+    }
 
     return new Redis({
-      url: env[`UPSTASH_REDIS_REST_URL_${pairSuffix}`],
-      token: env[`UPSTASH_REDIS_REST_TOKEN_${pairSuffix}`],
+      url: env[`${restUrlProp}${pairSuffix}`],
+      token: env[`${restTokenProp}${pairSuffix}`],
     });
   }
 
@@ -61,10 +76,11 @@ export class RedisReader {
     await Promise.all(
       redisPairs.map(async pairUrl => {
         const pairSuffix = pairUrl.match(/UPSTASH_REDIS_REST_URL_(.*)/)[1];
-        const redis = new Redis({
-          url: env[`UPSTASH_REDIS_REST_URL_${pairSuffix}`],
-          token: env[`UPSTASH_REDIS_REST_TOKEN_${pairSuffix}`],
-        });
+        // const redis = new Redis({
+        //   url: env[`UPSTASH_REDIS_REST_URL_${pairSuffix}`],
+        //   token: env[`UPSTASH_REDIS_REST_TOKEN_${pairSuffix}`],
+        // });
+        const redis = this.getRedisPair(pairUrl);
         try {
           await redis.set(key, value, { ex: nudgeTtl });
           console.log(`successfully nudged UPSTASH_REDIS_REST_URL_${pairSuffix}`);
