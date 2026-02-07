@@ -2,35 +2,26 @@ import * as Sentry from '@sentry/nestjs';
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
 
-const redisPairs = Object.keys(env).filter(prop => prop.startsWith('UPSTASH_REDIS_REST_URL'));
-
-const redisProfilesCount = redisPairs.length;
-
 const defaultTtl = 100800; // Default TTL of 28 hours
 const nudgeTtl = 43200; // 12 hours
 const restUrlProp = 'UPSTASH_REDIS_REST_URL_';
 const restTokenProp = 'UPSTASH_REDIS_REST_TOKEN_';
+const redisPairs = Object.keys(env).filter(prop => prop.startsWith(restUrlProp));
+const redisProfilesCount = redisPairs.length;
 export class RedisReader {
-  private cachedValue: number;
-  private cachedTime: number;
+  private cachedRedisNumber: number;
 
   get redis() {
-    
-    if (this.cachedValue) {
-      let usageTime = null;
-      if (this.cachedTime) {
-        usageTime = ((Date.now() - this.cachedTime) / 1000 / 60).toFixed(0)
-
-      }
-      console.log('use cachedValue', this.cachedValue, usageTime);
-    } else {
-      const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
-      const redisNumber = dayNumber % redisProfilesCount;
-      console.log('SET cachedValue -> ', redisNumber);
-      this.cachedValue = redisNumber;
-      this.cachedTime = Date.now();
+    if (!this.cachedRedisNumber) {
+      this.cachedRedisNumber = this.getRedisPairNumber();
+      console.log('SET cachedRedisNumber', this.cachedRedisNumber);
     }
-    return this.getRedisPair(redisPairs[this.cachedValue]);
+    return this.getRedisPair(redisPairs[this.cachedRedisNumber]);
+  }
+
+  getRedisPairNumber() {
+    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
+    return dayNumber % redisProfilesCount;
   }
 
   getRedisPair(restUrl: string) {
