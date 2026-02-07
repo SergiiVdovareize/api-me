@@ -14,13 +14,16 @@ export class RedisReader {
   private cachedValue: number;
 
   get redis() {
-    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
-    const redisNumber = dayNumber % redisProfilesCount;
-    if (!this.cachedValue) {
-      console.log('set cachedValue - ', redisNumber);
+    
+    if (this.cachedValue) {
+      console.log('use cachedValue ** ', this.cachedValue);
+    } else {
+      const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
+      const redisNumber = dayNumber % redisProfilesCount;
+      console.log('SET cachedValue -> ', redisNumber);
       this.cachedValue = redisNumber;
     }
-    return this.getRedisPair(redisPairs[redisNumber]);
+    return this.getRedisPair(redisPairs[this.cachedValue]);
   }
 
   getRedisPair(restUrl: string) {
