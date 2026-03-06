@@ -12,6 +12,7 @@ import { ParseResult } from 'src/common/types/ParseResult';
 import { snapsave } from 'snapsave-adapter';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
+import { MemeType } from './meme-type.enum';
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
@@ -25,6 +26,16 @@ export class MemesService {
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
   ) {}
+
+  private getMemeTypeFromUrl(url: string): MemeType {
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
+    if (url.includes('instagram.com')) return MemeType.INSTAGRAM;
+    if (url.includes('x.com') || url.includes('twitter.com')) return MemeType.TWITTER;
+    if (url.includes('facebook.com') || url.includes('fb.watch')) return MemeType.FACEBOOK;
+    if (url.includes('tiktok.com')) return MemeType.TIKTOK;
+    if (url.includes('linkedin.com')) return MemeType.LINKEDIN;
+    return MemeType.UNKNOWN;
+  }
 
   private trackStealing(url: string, startTime: number, tool: string, result: ParseResult) {
     const data = {
@@ -150,7 +161,8 @@ export class MemesService {
   }
 
   async steelFromSnapsave(url: string): Promise<any> {
-    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { url });
+    const memeType = this.getMemeTypeFromUrl(url);
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { url, memeType });
     try {
       const result = await snapsave(url);
       if (result.success && result?.data?.media) {
