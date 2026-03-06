@@ -9,5 +9,6 @@ export enum AnalyticsEvent {
   TrackWatch = 'TrackWatch',
   StealMeme = 'StealMeme',
   StartGame = 'StartGame',
+  EndGame = 'EndGame',
   CVShown = 'CVShown',
 }
