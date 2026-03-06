@@ -6,6 +6,7 @@ import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { promises as fs } from 'fs';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import { RedisReader } from 'src/common/helpers/redisReader';
 
 const cacheStorageEnabled = true;
@@ -268,7 +269,7 @@ export class TrackService {
         if (this.isAccountOld(account)) {
           console.log(`deactivating old account: ${account.trackId}`);
           await this.deactivateAccount(account.id);
-          this.analyticsService.trackEvent('TrackingAccountDeactivated', { account });
+          this.analyticsService.trackEvent(AnalyticsEvent.TrackingAccountDeactivated, { account });
           deactivatedAccounts++;
           return;
         }

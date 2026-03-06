@@ -2,13 +2,14 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { TrackService } from './track.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AccountType } from 'src/models/enums/account-type.enum';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 @Controller('track')
 export class TrackController {
   constructor(
     private readonly trackService: TrackService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   getTime() {
     const now = new Date();
@@ -49,14 +50,14 @@ export class TrackController {
 
   @Get('refresh')
   async refresh() {
-    this.analyticsService.trackEvent('Refresh');
+    this.analyticsService.trackEvent(AnalyticsEvent.Refresh);
     await this.trackService.refreshAccounts();
     return { success: true };
   }
 
   @Get('deactivate/:trackId')
   async deactivate(@Param('trackId') trackId: string) {
-    this.analyticsService.trackEvent('DeactivateAccount', { trackId });
+    this.analyticsService.trackEvent(AnalyticsEvent.DeactivateAccount, { trackId });
     await this.trackService.deactivateAccountByTrackId(trackId);
     return { success: true };
   }
@@ -74,7 +75,7 @@ export class TrackController {
       };
     }
 
-    this.analyticsService.trackEvent('TrackCheck', { type, id, plain });
+    this.analyticsService.trackEvent(AnalyticsEvent.TrackCheck, { type, id, plain });
 
     switch (type) {
       case AccountType.MONO:
@@ -91,7 +92,7 @@ export class TrackController {
   @Get('mono/:id')
   async findOne(@Param('id') id: string, @Query('plain') plain: string) {
     const isPlain = ['true', '1'].includes(plain);
-    // this.analyticsService.trackEvent('BalanceTrack', { type: 'mono', id, plain: isPlain });
+    // this.analyticsService.trackEvent(AnalyticsEvent.BalanceTrack, { type: 'mono', id, plain: isPlain });
     return await this.trackService.checkMono(id, isPlain);
   }
 
@@ -102,7 +103,7 @@ export class TrackController {
     @Query('force') force: string
   ) {
     const isForce = ['true', '1'].includes(force);
-    this.analyticsService.trackEvent('TrackWatch', { type, id, force: isForce });
+    this.analyticsService.trackEvent(AnalyticsEvent.TrackWatch, { type, id, force: isForce });
     const account = await this.trackService.watch(type, id, isForce);
     return {
       success: true,

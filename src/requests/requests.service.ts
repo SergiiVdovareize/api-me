@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/models/prisma/prisma.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { AnalyticsService } from 'src/analytics/analytics.service';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 const API_TYPE = {
   PLAIN: 0,
@@ -72,7 +73,7 @@ export class RequestsService {
   }
 
   registerApiCall(apiType: number, extraData?: object) {
-    this.analyticsService.trackEvent('ApiCall', {
+    this.analyticsService.trackEvent(AnalyticsEvent.ApiCall, {
       apiType,
       ...extraData,
     });

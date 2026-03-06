@@ -8,7 +8,7 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   @Get()
   async getHello(): Promise<string> {

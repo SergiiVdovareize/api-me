@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { env } from 'process';
+// import { env } from 'process';
 import { PosthogService } from 'src/posthog/posthog.service';
 import { AnalyticsEvent } from './analytics.events';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private posthogService: PosthogService) { }
+  constructor(private posthogService: PosthogService) {}
 
-  trackEvent(event: AnalyticsEvent, properties: Record<string, any> = {}, forceEnv: boolean = false) {
+  trackEvent(
+    event: AnalyticsEvent,
+    properties: Record<string, any> = {}
+    // forceEnv: boolean = false
+  ) {
     // if (env.HOST !== 'prod' && !forceEnv) {
     //   console.log('event filtered', env.HOST);
     //   return;
