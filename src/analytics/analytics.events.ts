@@ -11,4 +11,12 @@ export enum AnalyticsEvent {
   StartGame = 'StartGame',
   EndGame = 'EndGame',
   CVShown = 'CVShown',
+  GithubLinkClicked = 'GithubLinkClicked',
+  WhatsappLinkClicked = 'WhatsappLinkClicked',
+  LinkedInLinkClicked = 'LinkedInLinkClicked',
+  EmailLinkClicked = 'EmailLinkClicked',
+  SetShortCvFormat = 'SetShortCvFormat',
+  SetDetailedCvFormat = 'SetDetailedCvFormat',
+  SetContrastCvView = 'SetContrastCvView',
+  SetDefaultCvView = 'SetDefaultCvView',
 }
