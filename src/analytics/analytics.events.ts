@@ -19,4 +19,6 @@ export enum AnalyticsEvent {
   SetDetailedCvFormat = 'SetDetailedCvFormat',
   SetContrastCvView = 'SetContrastCvView',
   SetDefaultCvView = 'SetDefaultCvView',
+  RepositoryClicked = 'RepositoryClicked',
+  DemoClicked = 'DemoClicked',
 }
