@@ -21,6 +21,7 @@ import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
 import { BlobService } from './blob/blob.service';
+import { AnalyticsController } from './analytics/analytics.controller';
 
 @Module({
   imports: [
@@ -35,7 +36,7 @@ import { BlobService } from './blob/blob.service';
     TrackModule,
     CacheModule,
   ],
-  controllers: [AppController, DateController],
+  controllers: [AppController, DateController, AnalyticsController],
   providers: [
     {
       provide: APP_FILTER,
