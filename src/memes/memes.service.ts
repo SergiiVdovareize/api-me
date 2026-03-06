@@ -162,7 +162,7 @@ export class MemesService {
 
   async steelFromSnapsave(url: string): Promise<any> {
     const memeType = this.getMemeTypeFromUrl(url);
-    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { url, memeType });
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
     try {
       const result = await snapsave(url);
       if (result.success && result?.data?.media) {
