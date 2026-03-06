@@ -8,7 +8,7 @@ export class TrackController {
   constructor(
     private readonly trackService: TrackService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   getTime() {
     const now = new Date();
@@ -91,7 +91,7 @@ export class TrackController {
   @Get('mono/:id')
   async findOne(@Param('id') id: string, @Query('plain') plain: string) {
     const isPlain = ['true', '1'].includes(plain);
-    this.analyticsService.trackEvent('BalanceTrack', { type: 'mono', id, plain: isPlain });
+    // this.analyticsService.trackEvent('BalanceTrack', { type: 'mono', id, plain: isPlain });
     return await this.trackService.checkMono(id, isPlain);
   }
 

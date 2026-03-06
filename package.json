@@ -44,7 +44,7 @@
     "@vercel/postgres": "^0.10.0",
     "class-validator": "^0.14.2",
     "phantomjscloud": "^3.5.5",
-    "posthog-node": "^5.1.1",
+    "posthog-node": "^5.28.0",
     "prisma": "^6.11.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",

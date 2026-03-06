@@ -1,17 +1,18 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 import { AnalyticsService } from './analytics/analytics.service';
+import { AnalyticsEvent } from './analytics/analytics.events';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   @Get()
   async getHello(): Promise<string> {
-    // this.analyticsService.trackEvent('HelloApi');
+    this.analyticsService.trackEvent(AnalyticsEvent.HelloApi);
     return this.appService.getHello();
   }
 

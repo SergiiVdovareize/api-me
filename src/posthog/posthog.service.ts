@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PostHog } from 'posthog-node';
 import { env } from 'process';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 @Injectable()
 export class PosthogService implements OnModuleDestroy {
@@ -17,11 +18,14 @@ export class PosthogService implements OnModuleDestroy {
    * @param event - The name of the event
    * @param properties - Additional properties for the event
    */
-  trackEvent(event: string, properties: Record<string, any> = {}) {
+  trackEvent(event: AnalyticsEvent, properties: Record<string, any> = {}) {
     this.posthog.capture({
       distinctId: properties.distinctId || 'anonymous', // Replace with user id if available
       event,
-      properties,
+      properties: {
+        ...properties,
+        env: env.HOST,
+      },
     });
   }
 
