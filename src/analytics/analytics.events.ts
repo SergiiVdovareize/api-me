@@ -7,4 +7,5 @@ export enum AnalyticsEvent {
   TrackCheck = 'TrackCheck',
   BalanceTrack = 'BalanceTrack',
   TrackWatch = 'TrackWatch',
+  StealMeme = 'StealMeme',
 }

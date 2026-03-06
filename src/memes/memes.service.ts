@@ -10,6 +10,8 @@ import { RequestsService } from 'src/requests/requests.service';
 import { writeFile } from 'fs';
 import { ParseResult } from 'src/common/types/ParseResult';
 import { snapsave } from 'snapsave-adapter';
+import { AnalyticsService } from 'src/analytics/analytics.service';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
@@ -20,7 +22,8 @@ const SNAP_URL = 'https://snap-insta.app';
 export class MemesService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService
+    private readonly requestsService: RequestsService,
+    private readonly analyticsService: AnalyticsService
   ) {}
 
   private trackStealing(url: string, startTime: number, tool: string, result: ParseResult) {
@@ -147,6 +150,7 @@ export class MemesService {
   }
 
   async steelFromSnapsave(url: string): Promise<any> {
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { url });
     try {
       const result = await snapsave(url);
       if (result.success && result?.data?.media) {
