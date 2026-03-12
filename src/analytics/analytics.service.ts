@@ -5,7 +5,14 @@ import { AnalyticsEvent } from './analytics.events';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private posthogService: PosthogService) {}
+  constructor(private posthogService: PosthogService) { }
+
+  trackApiEvent(
+    event: AnalyticsEvent,
+    properties: Record<string, any> = {}
+  ) {
+    this.trackEvent(event, { ...properties, distinctId: 'api-me' });
+  }
 
   trackEvent(
     event: AnalyticsEvent,

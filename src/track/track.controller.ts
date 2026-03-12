@@ -9,7 +9,7 @@ export class TrackController {
   constructor(
     private readonly trackService: TrackService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   getTime() {
     const now = new Date();
@@ -50,7 +50,7 @@ export class TrackController {
 
   @Get('refresh')
   async refresh() {
-    this.analyticsService.trackEvent(AnalyticsEvent.Refresh);
+    this.analyticsService.trackApiEvent(AnalyticsEvent.Refresh);
     await this.trackService.refreshAccounts();
     return { success: true };
   }

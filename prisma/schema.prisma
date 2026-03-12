@@ -38,6 +38,10 @@ enum AccountType {
   privat
 }
 
+enum GameType {
+  stroop
+}
+
 model AccountIncoming {
   id         Int      @id @default(autoincrement()) // Unique transaction ID
   balance    Int   // Account balance at the time of tracking
@@ -46,4 +50,12 @@ model AccountIncoming {
   // Foreign key to Account
   accountId  Int
   account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+model GameResult {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  gameType  GameType
+  name      String
+  result    Int
 }
