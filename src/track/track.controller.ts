@@ -9,7 +9,7 @@ export class TrackController {
   constructor(
     private readonly trackService: TrackService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   getTime() {
     const now = new Date();

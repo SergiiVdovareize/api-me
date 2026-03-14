@@ -22,6 +22,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
 import { BlobService } from './blob/blob.service';
 import { AnalyticsController } from './analytics/analytics.controller';
+import { GameResultsModule } from './game-results/game-results.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AnalyticsController } from './analytics/analytics.controller';
     AsyncModule,
     TrackModule,
     CacheModule,
+    GameResultsModule,
   ],
   controllers: [AppController, DateController, AnalyticsController],
   providers: [
