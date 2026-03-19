@@ -7,8 +7,11 @@ export class GameResultsController {
   constructor(private readonly gameResultsService: GameResultsService) {}
 
   @Post()
-  create(@Body() createGameResultDto: CreateGameResultDto) {
-    return this.gameResultsService.create(createGameResultDto);
+  async create(@Body() createGameResultDto: CreateGameResultDto) {
+    const record = await this.gameResultsService.create(createGameResultDto);
+    return {
+      success: !!record.id,
+    };
   }
 
   @Get()
