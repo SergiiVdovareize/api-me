@@ -10,6 +10,7 @@ export enum AnalyticsEvent {
   StealMeme = 'StealMeme',
   StartGame = 'StartGame',
   EndGame = 'EndGame',
+  PostGameResult = 'PostGameResult',
   CVShown = 'CVShown',
   GithubLinkClicked = 'GithubLinkClicked',
   WhatsappLinkClicked = 'WhatsappLinkClicked',

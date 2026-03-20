@@ -50,7 +50,7 @@
     "rxjs": "^7.8.2",
     "snapsave-adapter": "^1.0.8",
     "typeorm": "^0.3.25",
-    "vercel": "^50.28.0"
+    "vercel": "^50.34.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.7",
