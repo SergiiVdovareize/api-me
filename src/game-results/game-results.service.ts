@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { CreateGameResultDto } from './dto/create-game-result.dto';
+import { GameType } from '../models/enums/game-type.enum';
 
 @Injectable()
 export class GameResultsService {
@@ -21,6 +22,18 @@ export class GameResultsService {
       orderBy: {
         createdAt: 'desc',
       },
+    });
+  }
+
+  async findLeaders(gameType: GameType, limit: number = 5) {
+    return this.prisma.gameResult.findMany({
+      where: {
+        gameType,
+      },
+      orderBy: {
+        result: 'desc',
+      },
+      take: limit,
     });
   }
 }
