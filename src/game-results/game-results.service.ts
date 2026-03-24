@@ -36,4 +36,17 @@ export class GameResultsService {
       take: limit,
     });
   }
+
+  retokenize(t: string) {
+    const token = decodeURIComponent(
+      atob(t)
+        .split('')
+        .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+    );
+
+    const parts = token.toString().match(/.{1,4}/g);
+    const retoken = parseInt(`${parts[1]}${parts[2]}${parts[0]}${parts[3]}`, 10);
+    return retoken - 1654321;
+  }
 }

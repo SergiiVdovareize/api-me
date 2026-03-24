@@ -13,4 +13,8 @@ export class CreateGameResultDto {
   @IsNumber()
   @IsNotEmpty()
   result: number;
+
+  @IsString()
+  @IsNotEmpty()
+  t: string;
 }
