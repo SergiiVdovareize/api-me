@@ -25,7 +25,7 @@ export class MemesService {
     private readonly asyncService: AsyncService,
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   private getMemeTypeFromUrl(url: string): MemeType {
     if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
@@ -34,6 +34,7 @@ export class MemesService {
     if (url.includes('facebook.com') || url.includes('fb.watch')) return MemeType.FACEBOOK;
     if (url.includes('tiktok.com')) return MemeType.TIKTOK;
     if (url.includes('linkedin.com')) return MemeType.LINKEDIN;
+    if (url.includes('threads.com')) return MemeType.THREADS;
     return MemeType.UNKNOWN;
   }
 

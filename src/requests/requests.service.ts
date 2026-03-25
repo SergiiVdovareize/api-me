@@ -15,6 +15,7 @@ const API_TYPE = {
   MEME_FACE: 13,
   MEME_TIK: 14,
   MEME_LIN: 15,
+  MEME_THR: 16,
   MEME_UNK: 39,
 };
 
@@ -32,6 +33,7 @@ const MEME_MAP = {
   [API_TYPE.MEME_FACE]: ['facebook.com'],
   [API_TYPE.MEME_TIK]: ['tiktok.com'],
   [API_TYPE.MEME_LIN]: ['linkedin.com'],
+  [API_TYPE.MEME_THR]: ['threads.com'],
 };
 
 @Injectable()
@@ -39,7 +41,7 @@ export class RequestsService {
   constructor(
     private prisma: PrismaService,
     private analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   getDateMonthAgo(): Date {
     const today = new Date();

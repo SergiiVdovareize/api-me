@@ -6,4 +6,5 @@ export enum MemeType {
   TIKTOK = 'tiktok',
   LINKEDIN = 'linkedin',
   UNKNOWN = 'unknown',
+  THREADS = 'threads',
 }
