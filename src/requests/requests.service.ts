@@ -41,7 +41,7 @@ export class RequestsService {
   constructor(
     private prisma: PrismaService,
     private analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   getDateMonthAgo(): Date {
     const today = new Date();
