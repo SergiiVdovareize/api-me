@@ -50,20 +50,39 @@ model AlphadateBoard {
   pin       String?
   settings  Json?              @default("{}")
   partners  AlphadatePartner[]
+  history   AlphadateHistory[]
 }
 
 
 model AlphadatePartner {
-  id        Int            @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   boardId   String
-  board     AlphadateBoard @relation(fields: [boardId], references: [key], onDelete: Cascade)
+  board     AlphadateBoard     @relation(fields: [boardId], references: [key], onDelete: Cascade)
   name      String
-  turnOrder Int            @db.SmallInt
+  turnOrder Int                @db.SmallInt
+  history   AlphadateHistory[]
 
   @@unique([boardId, turnOrder])
 }
 
+model AlphadateHistory {
+  id        Int              @id @default(autoincrement())
+  boardId   String
+  board     AlphadateBoard   @relation(fields: [boardId], references: [key], onDelete: Cascade)
+  partnerId Int
+  partner   AlphadatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  letter    String           @db.Char(1)
+  status    LetterStatus
+  createdAt DateTime         @default(now())
 
+  @@unique([boardId, letter])
+}
+
+enum LetterStatus {
+  used
+  skipped
+  excluded
+}
 
 enum AccountType {
   mono
