@@ -1,55 +1,36 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url = env("POSTGRES_PRISMA_URL") // uses connection pooling
-  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model Request {
-  id        Int  @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   apiType   Int
   createdAt DateTime @default(now())
 }
 
 model Account {
-  id          Int              @id @default(autoincrement()) // Unique transaction ID
-  createdAt   DateTime         @default(now()) // Timestamp of account creation
-  isActive    Boolean          @default(true) // Whether the account is active
-  trackId     String           @unique // Unique tracking identifier
-  type        AccountType      // Enum for account type (mono, privat)
-  title       String?
-  description String?
-
-  // One-to-many relationship with AccountIncoming
+  id               Int               @id @default(autoincrement())
+  createdAt        DateTime          @default(now())
+  isActive         Boolean           @default(true)
+  trackId          String            @unique
+  type             AccountType
+  title            String?
+  description      String?
   accountIncomings AccountIncoming[]
 }
 
-enum AccountType {
-  mono
-  privat
-}
-
-enum GameType {
-  stroop
-}
-
 model AccountIncoming {
-  id         Int      @id @default(autoincrement()) // Unique transaction ID
-  balance    Int   // Account balance at the time of tracking
-  trackedAt  DateTime @default(now()) // When the balance was recorded
-
-  // Foreign key to Account
-  accountId  Int
-  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  balance   Int
+  trackedAt DateTime @default(now())
+  accountId Int
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model GameResult {
@@ -58,4 +39,37 @@ model GameResult {
   gameType  GameType
   name      String
   result    Int
+}
+
+model AlphadateBoard {
+  id        Int                @id @default(autoincrement())
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  key       String             @unique
+  name      String?
+  pin       String?
+  settings  Json?              @default("{}")
+  partners  AlphadatePartner[]
+}
+
+
+model AlphadatePartner {
+  id        Int            @id @default(autoincrement())
+  boardId   String
+  board     AlphadateBoard @relation(fields: [boardId], references: [key], onDelete: Cascade)
+  name      String
+  turnOrder Int            @db.SmallInt
+
+  @@unique([boardId, turnOrder])
+}
+
+
+
+enum AccountType {
+  mono
+  privat
+}
+
+enum GameType {
+  stroop
 }
