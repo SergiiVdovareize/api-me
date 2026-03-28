@@ -48,9 +48,12 @@ model AlphadateBoard {
   key       String             @unique
   name      String?
   pin       String?
-  settings  Json?              @default("{}")
-  partners  AlphadatePartner[]
-  history   AlphadateHistory[]
+  settings         Json?              @default("{}")
+  partners         AlphadatePartner[]
+  history          AlphadateHistory[]
+  currentLetter    String?            @db.Char(1)
+  currentPartnerId Int?
+  currentPartner   AlphadatePartner?  @relation("CurrentPartner", fields: [currentPartnerId], references: [id])
 }
 
 
@@ -59,8 +62,9 @@ model AlphadatePartner {
   boardId   String
   board     AlphadateBoard     @relation(fields: [boardId], references: [key], onDelete: Cascade)
   name      String
-  turnOrder Int                @db.SmallInt
-  history   AlphadateHistory[]
+  turnOrder      Int                @db.SmallInt
+  history        AlphadateHistory[]
+  currentInBoard AlphadateBoard[]   @relation("CurrentPartner")
 
   @@unique([boardId, turnOrder])
 }
