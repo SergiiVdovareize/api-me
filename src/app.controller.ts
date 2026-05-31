@@ -26,10 +26,10 @@ export class AppController {
   @Get('download')
   async download(
     @Query('url') url: string,
-    @Query('filename') filename: string
+    @Query('filename') filename?: string,
   ): Promise<StreamableFile> {
-    if (!url || !filename) {
-      throw new HttpException('Missing url or filename parameter', HttpStatus.BAD_REQUEST);
+    if (!url) {
+      throw new HttpException('Missing url parameter', HttpStatus.BAD_REQUEST);
     }
 
     try {
@@ -47,10 +47,60 @@ export class AppController {
 
       const nodeReadable = Readable.fromWeb(response.body as any);
       const contentLength = response.headers.get('content-length');
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+      const extensionMap: Record<string, string> = {
+        'video/mp4': 'mp4',
+        'video/webm': 'webm',
+        'video/ogg': 'ogg',
+        'video/quicktime': 'mov',
+        'audio/mpeg': 'mp3',
+        'audio/mp3': 'mp3',
+        'audio/ogg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/webm': 'webm',
+        'audio/x-m4a': 'm4a',
+        'audio/m4a': 'm4a',
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+      };
+
+      let ext = 'mp4';
+      let mediaType = 'video';
+      if (contentType.startsWith('audio/')) {
+        ext = 'mp3';
+        mediaType = 'audio';
+      } else if (contentType.startsWith('image/')) {
+        ext = 'jpg';
+        mediaType = 'image';
+      }
+
+      const contentTypeBase = contentType.split(';')[0].trim().toLowerCase();
+      if (extensionMap[contentTypeBase]) {
+        ext = extensionMap[contentTypeBase];
+      } else {
+        try {
+          const urlObj = new URL(url);
+          const pathExt = urlObj.pathname.split('.').pop();
+          if (pathExt && /^[a-zA-Z0-9]{2,4}$/.test(pathExt)) {
+            ext = pathExt.toLowerCase();
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+
+      let finalFilename = filename;
+      if (!finalFilename) {
+        const alphanumId = Math.random().toString(36).concat('00000000').slice(2, 10);
+        finalFilename = `${mediaType}_${alphanumId}.${ext}`;
+      }
 
       return new StreamableFile(nodeReadable, {
-        type: response.headers.get('content-type') || 'application/octet-stream',
-        disposition: `attachment; filename="${encodeURIComponent(filename)}"`,
+        type: contentType,
+        disposition: `attachment; filename="${encodeURIComponent(finalFilename)}"`,
         length: contentLength ? parseInt(contentLength, 10) : undefined,
       });
     } catch (error: any) {
