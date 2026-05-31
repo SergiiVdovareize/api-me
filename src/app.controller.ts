@@ -7,7 +7,7 @@ export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   @Get()
   async getHello(): Promise<string> {
@@ -26,7 +26,7 @@ export class AppController {
   @Get('download')
   async download(
     @Query('url') url: string,
-    @Query('filename') filename: string,
+    @Query('filename') filename: string
   ): Promise<StreamableFile> {
     if (!url || !filename) {
       throw new HttpException('Missing url or filename parameter', HttpStatus.BAD_REQUEST);
@@ -39,7 +39,10 @@ export class AppController {
       }
 
       if (!response.body) {
-        throw new HttpException('No response body received from media server', HttpStatus.INTERNAL_SERVER_ERROR);
+        throw new HttpException(
+          'No response body received from media server',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
       }
 
       const nodeReadable = Readable.fromWeb(response.body as any);
