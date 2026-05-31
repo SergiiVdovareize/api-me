@@ -43,12 +43,12 @@
     "@vercel/blob": "^2.0.0",
     "@vercel/postgres": "^0.10.0",
     "class-validator": "^0.14.2",
+    "mediasnap": "1.1.1",
     "phantomjscloud": "^3.5.5",
     "posthog-node": "^5.28.0",
     "prisma": "^6.11.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "snapsave-adapter": "^1.1.0",
     "typeorm": "^0.3.25",
     "vercel": "^50.34.2"
   },

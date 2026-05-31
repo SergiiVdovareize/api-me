@@ -9,7 +9,7 @@ import { getSnapScript } from 'src/common/phantomScripts/snap';
 import { RequestsService } from 'src/requests/requests.service';
 import { writeFile } from 'fs';
 import { ParseResult } from 'src/common/types/ParseResult';
-import { snapsave } from 'snapsave-adapter';
+import { downloadMedia, DownloadResult } from 'mediasnap';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import { MemeType } from './meme-type.enum';
@@ -25,7 +25,7 @@ export class MemesService {
     private readonly asyncService: AsyncService,
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   private getMemeTypeFromUrl(url: string): MemeType {
     if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
@@ -165,6 +165,8 @@ export class MemesService {
     const memeType = this.getMemeTypeFromUrl(url);
     this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const snapsave = require('snapsave-adapter').snapsave;
       const result = await snapsave(url);
       if (result.success && result?.data?.media) {
         return {
@@ -176,6 +178,18 @@ export class MemesService {
         success: false,
         data: result,
       };
+    } catch (error) {
+      console.error('Download error:', error);
+      throw error;
+    }
+  }
+
+  async stealWithMediasnap(url: string): Promise<DownloadResult> {
+    const memeType = this.getMemeTypeFromUrl(url);
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
+    try {
+      const result = await downloadMedia(url);
+      return result;
     } catch (error) {
       console.error('Download error:', error);
       throw error;
