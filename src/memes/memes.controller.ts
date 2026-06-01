@@ -15,7 +15,7 @@ export class MemesController {
     // const result = await this.memesService.steelFromSquidlr(url);
     // const result = await this.memesService.steelFromGetInDevice(url)
     // const result = await this.memesService.steelFromSnap(url)
-    const result = await this.memesService.stealWithMediasnap(url);
+    const result = await this.memesService.stealMeme(url);
 
     return result;
   }

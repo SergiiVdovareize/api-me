@@ -11,6 +11,7 @@ import { RequestsService } from 'src/requests/requests.service';
 import { writeFile } from 'fs';
 import { ParseResult } from 'src/common/types/ParseResult';
 import { downloadMedia, DownloadResult } from 'mediasnap';
+import { snapsave } from 'snapsave-adapter';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import { MemeType } from './meme-type.enum';
@@ -162,25 +163,23 @@ export class MemesService {
     );
   }
 
-  async steelFromSnapsave(url: string): Promise<any> {
+  async stealWithSnapsave(url: string): Promise<DownloadResult> {
     const memeType = this.getMemeTypeFromUrl(url);
     this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const snapsave = require('snapsave-adapter').snapsave;
       const result = await snapsave(url);
-      if (result.success && result?.data?.media) {
-        return {
-          success: true,
-          data: result?.data?.media?.[0]?.url,
-        };
+      if (result.error) {
+        Sentry.captureMessage(`stealWithSnapsave error, url - ${url}`, {
+          level: 'error',
+          extra: { memeType, error: result.error },
+        });
       }
-      return {
-        success: false,
-        data: result,
-      };
+      return result;
     } catch (error) {
-      console.error('Download error:', error);
+      Sentry.captureException(error, {
+        extra: { url, memeType },
+      });
+      console.error('Snapsave download error:', error);
       throw error;
     }
   }
@@ -203,6 +202,56 @@ export class MemesService {
       });
       console.error('Download error:', error);
       throw error;
+    }
+  }
+
+  async stealMeme(url: string): Promise<DownloadResult> {
+    const downloaders = [
+      { name: 'mediasnap', fn: () => this.stealWithMediasnap(url) },
+      { name: 'snapsave', fn: () => this.stealWithSnapsave(url) },
+    ];
+
+    const errors: { downloader: string; error: any }[] = [];
+
+    const run = async (downloader: (typeof downloaders)[0]) => {
+      try {
+        const res = await downloader.fn();
+        if (res && res.success) {
+          return res;
+        }
+        throw new Error(res?.error || `returned unsuccessful result`);
+      } catch (err) {
+        errors.push({ downloader: downloader.name, error: err });
+        throw err;
+      }
+    };
+
+    try {
+      const successfulResult = await Promise.any(downloaders.map(run));
+      return successfulResult;
+    } catch {
+      Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
+        level: 'error',
+        extra: {
+          url,
+          errors: errors.map(e => ({
+            downloader: e.downloader,
+            message: e.error?.message || String(e.error),
+            stack: e.error?.stack,
+          })),
+        },
+      });
+
+      return {
+        success: false,
+        platform: 'unknown',
+        title: null,
+        description: null,
+        thumbnail: null,
+        duration: null,
+        media: [],
+        error: 'could not download the media',
+      };
     }
   }
 }
