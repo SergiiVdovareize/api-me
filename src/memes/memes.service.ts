@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import phantomJsCloud from 'phantomjscloud';
 import { env } from 'process';
 import { AsyncService } from 'src/async/async.service';
@@ -189,8 +190,17 @@ export class MemesService {
     this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
     try {
       const result = await downloadMedia(url);
+      if (result.error) {
+        Sentry.captureMessage(`stealWithMediasnap error, url - ${url}`, {
+          level: 'error',
+          extra: { memeType, error: result.error },
+        });
+      }
       return result;
     } catch (error) {
+      Sentry.captureException(error, {
+        extra: { url, memeType },
+      });
       console.error('Download error:', error);
       throw error;
     }
