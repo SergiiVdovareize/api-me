@@ -26,7 +26,7 @@ export class AppController {
   @Get('download')
   async download(
     @Query('url') url: string,
-    @Query('filename') filename?: string,
+    @Query('filename') filename?: string
   ): Promise<StreamableFile> {
     if (!url) {
       throw new HttpException('Missing url parameter', HttpStatus.BAD_REQUEST);
