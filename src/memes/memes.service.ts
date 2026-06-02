@@ -15,6 +15,7 @@ import { snapsave } from 'snapsave-adapter';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import { MemeType } from './meme-type.enum';
+import { YtDlp } from 'ytdlp-nodejs';
 
 const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
@@ -27,7 +28,7 @@ export class MemesService {
     private readonly asyncService: AsyncService,
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   private getMemeTypeFromUrl(url: string): MemeType {
     if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
@@ -241,5 +242,14 @@ export class MemesService {
         error: 'could not download the media',
       };
     }
+  }
+
+  async stealWithYtdlp(url: string): Promise<any> {
+    console.log('stealWithYtdlp')
+    const ytdlp = new YtDlp();
+    console.log('stealWithYtdlp', ytdlp)
+    const info = await ytdlp.getInfoAsync(url);
+    console.log('info', info)
+    return info;
   }
 }

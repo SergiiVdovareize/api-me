@@ -16,11 +16,11 @@ jest.mock('@sentry/nestjs', () => {
 });
 
 describe('MemesController (e2e)', () => {
+  jest.setTimeout(30000);
   let app: INestApplication;
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    jest.setTimeout(30000);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -105,5 +105,17 @@ describe('MemesController (e2e)', () => {
     );
 
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('should return raw ytdlp info for a valid YouTube URL via ytdlp test endpoint', async () => {
+    const targetUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+
+    const response = await request(app.getHttpServer())
+      .get(`/memes/ytdlp/${encodeURIComponent(targetUrl)}`)
+      .expect(200);
+
+    expect(response.body).toBeDefined();
+    expect(response.body.title).toContain('Big Buck Bunny');
+    expect(response.body.id).toBe('aqz-KE-bpKQ');
   });
 });

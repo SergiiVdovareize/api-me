@@ -3,11 +3,20 @@ import { MemesService } from './memes.service';
 
 @Controller('memes')
 export class MemesController {
-  constructor(private readonly memesService: MemesService) {}
+  constructor(private readonly memesService: MemesService) { }
 
   @Get(':url')
   async steal(@Param('url') url: string): Promise<object> {
-    const result = await this.memesService.stealMeme(url);
+    // const result = await this.memesService.stealMeme(url);
+    const result = await this.memesService.stealWithYtdlp(url);
+    // console.log('result: ', result)
+
+    return result;
+  }
+
+  @Get('ytdlp/:url')
+  async stealWithYtdlp(@Param('url') url: string): Promise<object> {
+    const result = await this.memesService.stealWithYtdlp(url);
 
     return result;
   }
