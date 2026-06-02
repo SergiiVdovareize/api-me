@@ -14,19 +14,62 @@ describe('Memes Sanity (e2e)', () => {
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
       .expect(200);
 
-    // 2. Validate the API response structure
-    expect(response.body).toEqual(
-      expect.objectContaining({
-        success: true,
-        platform: 'instagram',
-        media: expect.arrayContaining([
-          expect.objectContaining({
-            type: expect.any(String),
-            url: expect.stringContaining('http'),
-          }),
-        ]),
-      })
-    );
+    // 2. Validate the API response structure specifically
+    expect(response.body).toEqual({
+      success: true,
+      platform: 'instagram',
+      title: null,
+      description: null,
+      thumbnail: null,
+      duration: null,
+      media: [
+        {
+          type: 'video',
+          url: expect.stringContaining('https://'),
+          quality: null,
+          format: 'mp4',
+          sizeMB: null,
+        },
+      ],
+    });
+
+    // 3. Extract the media URL and download it to verify downloading works
+    const mediaUrl = response.body.media[0].url;
+    expect(mediaUrl).toBeDefined();
+
+    const downloadResponse = await fetch(mediaUrl);
+    expect(downloadResponse.status).toBe(200);
+
+    const buffer = await downloadResponse.arrayBuffer();
+    expect(buffer.byteLength).toBeGreaterThan(0);
+  });
+
+  it('should successfully steal and download a meme from Threads', async () => {
+    const targetUrl = 'https://www.threads.com/@louandylou/post/DZC25KCknYd';
+
+    // 1. Call the real production API to steal the meme
+    const response = await request(API_URL)
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .expect(200);
+
+    // 2. Validate the API response structure specifically
+    expect(response.body).toEqual({
+      success: true,
+      platform: 'threads',
+      title: null,
+      description: null,
+      thumbnail: null,
+      duration: null,
+      media: [
+        {
+          type: 'video',
+          url: expect.stringContaining('https://'),
+          quality: null,
+          format: 'mp4',
+          sizeMB: null,
+        },
+      ],
+    });
 
     // 3. Extract the media URL and download it to verify downloading works
     const mediaUrl = response.body.media[0].url;
