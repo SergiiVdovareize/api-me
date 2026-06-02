@@ -19,7 +19,7 @@
     "test:sanity": "jest --config ./test/jest-e2e.json --testRegex '.*\\.sanity-spec\\.ts$'",
     "predeploy": "nest build",
     "deploy": "vercel --prod",
-    "postinstall": "prisma generate && npx prisma migrate deploy",
+    "postinstall": "prisma generate",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org home-sr9 --project api-me ./dist && sentry-cli sourcemaps upload --org home-sr9 --project api-me ./dist",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
