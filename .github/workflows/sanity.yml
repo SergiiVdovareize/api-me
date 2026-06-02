@@ -1,6 +1,7 @@
-name: Hourly E2E Integration Tests
+name: Sanity Tests
 
 on:
+  push:
   schedule:
     # Run at minute 0 of every hour
     - cron: '0 * * * *'
@@ -23,8 +24,5 @@ jobs:
       - name: Install Dependencies
         run: npm ci --ignore-scripts
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Run E2E Tests
-        run: npm run test:e2e
+      - name: Run Sanity Tests
+        run: npm run test:sanity
