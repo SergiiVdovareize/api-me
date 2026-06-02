@@ -1,14 +1,21 @@
 name: Sanity Tests
 
 on:
-  push:
   schedule:
     # Run at minute 0 of every hour
     - cron: '0 * * * *'
+  workflow_run:
+    workflows: ["Deploy"]
+    types:
+      - completed
   workflow_dispatch: # Enable manual run from GitHub UI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  e2e-tests:
+  sanity-tests:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install Dependencies
