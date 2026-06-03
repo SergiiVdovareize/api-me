@@ -28,7 +28,7 @@ export class MemesService {
     private readonly asyncService: AsyncService,
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
-  ) {}
+  ) { }
 
   private getMemeTypeFromUrl(url: string): MemeType {
     if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
@@ -363,6 +363,19 @@ export class MemesService {
 
     try {
       const successfulResult = await Promise.any(downloaders.map(run));
+      if (successfulResult && Array.isArray(successfulResult.media)) {
+        successfulResult.media = successfulResult.media.filter(item => {
+          if (!item || typeof item.url !== 'string') {
+            return false;
+          }
+          const urlStr = item.url.trim();
+          return (
+            urlStr.startsWith('http://') ||
+            urlStr.startsWith('https://') ||
+            urlStr.startsWith('//')
+          );
+        });
+      }
       return successfulResult;
     } catch {
       Sentry.captureMessage(`stealMeme failed, url - ${url}`, {

@@ -5,6 +5,8 @@ import { AppModule } from './../src/app.module';
 import * as Sentry from '@sentry/nestjs';
 import { PrismaService as PrismaService1 } from 'src/prisma.service';
 import { PrismaService as PrismaService2 } from 'src/models/prisma/prisma.service';
+import { MemesService } from 'src/memes/memes.service';
+
 
 jest.mock('@sentry/nestjs', () => {
   const actual = jest.requireActual('@sentry/nestjs');
@@ -129,5 +131,76 @@ describe('MemesController (e2e)', () => {
     );
 
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('should filter out media items that contain relative URLs or URLs starting with /render', async () => {
+    const memesService = app.get(MemesService);
+    jest.spyOn(memesService, 'stealWithMediasnap').mockResolvedValue({
+      success: true,
+      platform: 'instagram',
+      title: null,
+      description: null,
+      thumbnail: null,
+      duration: null,
+      media: [
+        {
+          type: 'video',
+          url: '/render.php?token=123',
+          quality: '1080p',
+          format: 'mp4',
+          sizeMB: null,
+        },
+        {
+          type: 'video',
+          url: 'https://d.rapidcdn.app/v2?token=456',
+          quality: '720p',
+          format: 'mp4',
+          sizeMB: null,
+        },
+        {
+          type: 'video',
+          url: 'render.php?token=789',
+          quality: '360p',
+          format: 'mp4',
+          sizeMB: null,
+        },
+        {
+          type: 'video',
+          url: '//d.rapidcdn.app/v2?token=abc',
+          quality: '480p',
+          format: 'mp4',
+          sizeMB: null,
+        },
+      ],
+    });
+    // Ensure snapsave and nextdownloader throw errors so that mediasnap is used
+    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
+    jest
+      .spyOn(memesService, 'stealWithNextdownloader')
+      .mockRejectedValue(new Error('nextdownloader error'));
+
+    const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
+    const response = await request(app.getHttpServer())
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.media).toHaveLength(2);
+    expect(response.body.media).toEqual([
+      {
+        type: 'video',
+        url: 'https://d.rapidcdn.app/v2?token=456',
+        quality: '720p',
+        format: 'mp4',
+        sizeMB: null,
+      },
+      {
+        type: 'video',
+        url: '//d.rapidcdn.app/v2?token=abc',
+        quality: '480p',
+        format: 'mp4',
+        sizeMB: null,
+      },
+    ]);
   });
 });
