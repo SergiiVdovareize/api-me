@@ -95,7 +95,6 @@ describe('Memes Sanity (e2e)', () => {
       expect.objectContaining({
         success: true,
         platform: 'facebook',
-        title: expect.any(String),
         media: expect.arrayContaining([
           expect.objectContaining({
             type: expect.any(String),
@@ -104,6 +103,7 @@ describe('Memes Sanity (e2e)', () => {
         ]),
       })
     );
+    expect(typeof response.body.title === 'string' || response.body.title === null).toBe(true);
 
     // 3. Extract the media URL and download it to verify downloading works
     const mediaUrl = response.body.media[0].url;

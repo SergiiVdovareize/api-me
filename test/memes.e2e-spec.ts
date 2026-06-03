@@ -52,6 +52,10 @@ describe('MemesController (e2e)', () => {
     await app.close();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('should return error when URL is unsupported or invalid', async () => {
     const targetUrl = 'https://example.com/invalid-meme-url-12345';
 
