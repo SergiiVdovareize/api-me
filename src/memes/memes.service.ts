@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, StreamableFile, HttpException, HttpStatus } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
 import phantomJsCloud from 'phantomjscloud';
 import { env } from 'process';
+import { Readable } from 'stream';
 import { AsyncService } from 'src/async/async.service';
 import { getPublerScript } from 'src/common/phantomScripts/publer';
 import { getIndeviceScript } from 'src/common/phantomScripts/getindevice';
@@ -187,10 +188,162 @@ export class MemesService {
     }
   }
 
+  async stealWithNextdownloader(url: string): Promise<DownloadResult> {
+    // console.log('stealWithNextdownloader', url);
+    const memeType = this.getMemeTypeFromUrl(url);
+    // console.log('memeType', memeType);
+
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
+
+    const cookies = env.YOUTUBE_COOKIES || null;
+
+    try {
+      const response = await fetch('https://api.nextdownloader.com/api/try-online/analyze', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json, text/plain, */*',
+          'accept-language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+          'content-type': 'application/json',
+          'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"macOS"',
+          'sec-fetch-dest': 'empty',
+          'sec-fetch-mode': 'cors',
+          'sec-fetch-site': 'same-site',
+          Referer: 'https://www.nextdownloader.com/',
+        },
+        body: JSON.stringify({ url, cookies }),
+      });
+      // console.log('response', response);
+
+      if (!response.ok) {
+        throw new Error(`NextDownloader analyze failed with status: ${response.status}`);
+      }
+
+      const data = (await response.json()) as any;
+      // console.log('data', data);
+
+      if (!data || !data.formats || data.formats.length === 0) {
+        throw new Error('NextDownloader returned no formats or invalid response');
+      }
+
+      const host = env.API_URL || 'http://localhost:3000';
+      const title = data.title || 'video';
+      const duration = data.duration || '';
+
+      const media = data.formats.map((format: any) => {
+        const isAudio = ['mp3', 'm4a', 'aac', 'flac', 'opus', 'wav'].includes(
+          format.ext?.toLowerCase()
+        );
+        const type = isAudio ? 'audio' : 'video';
+        const quality = format.quality || null;
+        const formatExt = format.ext || 'mp4';
+
+        const proxyUrl = `${host}/memes/download/next?url=${encodeURIComponent(url)}&type=${type}&quality=${encodeURIComponent(quality || '')}&ext=${formatExt}&title=${encodeURIComponent(title)}&duration=${encodeURIComponent(duration)}`;
+
+        return {
+          type,
+          url: proxyUrl,
+          quality,
+          format: formatExt,
+          sizeMB: null,
+        };
+      });
+
+      return {
+        success: true,
+        platform: memeType.toLowerCase(),
+        title: data.title || null,
+        description: data.description || null,
+        thumbnail: data.thumbnail || null,
+        duration: data.duration || null,
+        media,
+      };
+    } catch (error) {
+      console.error('NextDownloader download error:', error);
+      throw error;
+    }
+  }
+
+  async downloadFromNextdownloader(params: {
+    url: string;
+    type: string;
+    quality: string;
+    ext: string;
+    title: string;
+    duration: string;
+  }): Promise<StreamableFile> {
+    const { url, type, quality, ext, title, duration } = params;
+    const cookies = env.YOUTUBE_COOKIES || null;
+
+    try {
+      const response = await fetch('https://api.nextdownloader.com/api/try-online/download', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json, text/plain, */*',
+          'accept-language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+          'content-type': 'application/json',
+          'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"macOS"',
+          'sec-fetch-dest': 'empty',
+          'sec-fetch-mode': 'cors',
+          'sec-fetch-site': 'same-site',
+          Referer: 'https://www.nextdownloader.com/',
+        },
+        body: JSON.stringify({
+          url,
+          type,
+          quality,
+          ext,
+          title,
+          cookies,
+          duration,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new HttpException(
+          `Failed to download from NextDownloader: ${response.statusText}`,
+          response.status
+        );
+      }
+
+      if (!response.body) {
+        throw new HttpException(
+          'No response body received from NextDownloader',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+
+      const nodeReadable = Readable.fromWeb(response.body as any);
+      const contentLength = response.headers.get('content-length');
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+      const finalFilename = `${title || 'video'}.${ext}`;
+
+      return new StreamableFile(nodeReadable, {
+        type: contentType,
+        disposition: `attachment; filename="${encodeURIComponent(finalFilename)}"`,
+        length: contentLength ? parseInt(contentLength, 10) : undefined,
+      });
+    } catch (error: any) {
+      console.error('Error proxying NextDownloader download:', error.message);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        'Failed to download resource via NextDownloader',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   async stealMeme(url: string): Promise<DownloadResult> {
     const downloaders = [
       { name: 'mediasnap', fn: () => this.stealWithMediasnap(url) },
       { name: 'snapsave', fn: () => this.stealWithSnapsave(url) },
+      { name: 'nextdownloader', fn: () => this.stealWithNextdownloader(url) },
     ];
 
     const errors: { downloader: string; error: any }[] = [];

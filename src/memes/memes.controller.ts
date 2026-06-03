@@ -1,9 +1,28 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query, StreamableFile } from '@nestjs/common';
 import { MemesService } from './memes.service';
 
 @Controller('memes')
 export class MemesController {
   constructor(private readonly memesService: MemesService) {}
+
+  @Get('download/next')
+  async downloadNext(
+    @Query('url') url: string,
+    @Query('type') type: string,
+    @Query('quality') quality: string,
+    @Query('ext') ext: string,
+    @Query('title') title: string,
+    @Query('duration') duration: string
+  ): Promise<StreamableFile> {
+    return this.memesService.downloadFromNextdownloader({
+      url,
+      type,
+      quality,
+      ext,
+      title,
+      duration,
+    });
+  }
 
   @Get(':url')
   async steal(@Param('url') url: string): Promise<object> {

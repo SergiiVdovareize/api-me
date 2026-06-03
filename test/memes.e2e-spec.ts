@@ -77,6 +77,7 @@ describe('MemesController (e2e)', () => {
           errors: expect.arrayContaining([
             expect.objectContaining({ downloader: 'mediasnap' }),
             expect.objectContaining({ downloader: 'snapsave' }),
+            expect.objectContaining({ downloader: 'nextdownloader' }),
           ]),
         }),
       })
@@ -107,15 +108,26 @@ describe('MemesController (e2e)', () => {
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
   });
 
-  it('should return raw ytdlp info for a valid YouTube URL via ytdlp test endpoint', async () => {
-    const targetUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+  it('should return a successful result when using a real Facebook URL', async () => {
+    const targetUrl = 'https://www.facebook.com/share/v/1GWYmVZBUE/';
 
     const response = await request(app.getHttpServer())
-      .get(`/memes/ytdlp/${encodeURIComponent(targetUrl)}`)
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
       .expect(200);
 
-    expect(response.body).toBeDefined();
-    expect(response.body.title).toContain('Big Buck Bunny');
-    expect(response.body.id).toBe('aqz-KE-bpKQ');
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        platform: 'facebook',
+        media: expect.arrayContaining([
+          expect.objectContaining({
+            type: expect.any(String),
+            url: expect.stringContaining('http'),
+          }),
+        ]),
+      })
+    );
+
+    expect(Sentry.captureMessage).not.toHaveBeenCalled();
   });
 });
