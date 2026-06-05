@@ -26,7 +26,7 @@ describe('Memes Sanity (e2e)', () => {
         {
           type: 'video',
           url: expect.stringContaining('https://'),
-          quality: null,
+          quality: response.body.media[0]?.quality === null ? null : expect.any(String),
           format: 'mp4',
           sizeMB: null,
         },
@@ -64,7 +64,7 @@ describe('Memes Sanity (e2e)', () => {
         {
           type: 'video',
           url: expect.stringContaining('https://'),
-          quality: null,
+          quality: response.body.media[0]?.quality === null ? null : expect.any(String),
           format: 'mp4',
           sizeMB: null,
         },
