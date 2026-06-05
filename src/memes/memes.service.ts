@@ -21,6 +21,7 @@ const PUBLER_URL = 'https://publer.io/tools/media-downloader';
 const GETINDEVICE_URL = 'https://getindevice.com';
 const SQUIDLR_URL = 'https://www.squidlr.com';
 const SNAP_URL = 'https://snap-insta.app';
+const MAX_ATTEMPTS = 3;
 
 @Injectable()
 export class MemesService {
@@ -265,6 +266,78 @@ export class MemesService {
     }
   }
 
+  async stealWithHighreach(url: string): Promise<DownloadResult> {
+    const memeType = this.getMemeTypeFromUrl(url);
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
+
+    try {
+      const response = await fetch('https://highreach.ai/api/tools/twitter-gif-download', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: '*/*',
+        },
+        body: JSON.stringify({ tweet_url: url }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Highreach analyze failed with status: ${response.status}`);
+      }
+
+      const data = (await response.json()) as any;
+
+      if (!data) {
+        throw new Error('Highreach returned invalid or empty response');
+      }
+
+      const directUrl = data.url || data.download_url || data.downloadUrl || data.video_url || data.gif || data.video;
+      let media: any[] = [];
+
+      if (directUrl && typeof directUrl === 'string') {
+        media.push({
+          type: 'video',
+          url: directUrl,
+          quality: null,
+          format: 'mp4',
+          sizeMB: null,
+        });
+      } else if (Array.isArray(data.formats)) {
+        media = data.formats.map((format: any) => ({
+          type: format.type || 'video',
+          url: format.url || format.download_url,
+          quality: format.quality || null,
+          format: format.ext || format.format || 'mp4',
+          sizeMB: null,
+        }));
+      } else if (Array.isArray(data.media)) {
+        media = data.media.map((item: any) => ({
+          type: item.type || 'video',
+          url: item.url,
+          quality: item.quality || null,
+          format: item.format || 'mp4',
+          sizeMB: null,
+        }));
+      }
+
+      if (media.length === 0) {
+        throw new Error('Highreach returned no formats or invalid response');
+      }
+
+      return {
+        success: true,
+        platform: memeType.toLowerCase(),
+        title: data.title || null,
+        description: data.description || null,
+        thumbnail: data.thumbnail || null,
+        duration: data.duration || null,
+        media,
+      };
+    } catch (error) {
+      console.error('Highreach download error:', error);
+      throw error;
+    }
+  }
+
   async downloadFromNextdownloader(params: {
     url: string;
     type: string;
@@ -343,69 +416,88 @@ export class MemesService {
     const downloaders = [
       { name: 'mediasnap', fn: () => this.stealWithMediasnap(url) },
       { name: 'snapsave', fn: () => this.stealWithSnapsave(url) },
-      { name: 'nextdownloader', fn: () => this.stealWithNextdownloader(url) },
+      // { name: 'nextdownloader', fn: () => this.stealWithNextdownloader(url) },
+      { name: 'highreach', fn: () => this.stealWithHighreach(url) },
     ];
 
-    const errors: { downloader: string; error: any }[] = [];
+    const errors: { attempt: number; downloader: string; error: any }[] = [];
 
-    const run = async (downloader: (typeof downloaders)[0]) => {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const res = await downloader.fn();
-        if (res && res.success) {
-          return res;
+        const run = async (downloader: (typeof downloaders)[0]) => {
+          try {
+            const res = await downloader.fn();
+            if (res && res.success) {
+              return res;
+            }
+            throw new Error(res?.error || `returned unsuccessful result`);
+          } catch (err) {
+            errors.push({ attempt, downloader: downloader.name, error: err });
+            throw err;
+          }
+        };
+
+        const successfulResult = await Promise.any(downloaders.map(run));
+        if (successfulResult && Array.isArray(successfulResult.media)) {
+          successfulResult.media = successfulResult.media.filter(item => {
+            if (!item || typeof item.url !== 'string') {
+              return false;
+            }
+            const urlStr = item.url.trim();
+            return (
+              urlStr.startsWith('http://') ||
+              urlStr.startsWith('https://') ||
+              urlStr.startsWith('//')
+            );
+          });
         }
-        throw new Error(res?.error || `returned unsuccessful result`);
+
+        if (
+          successfulResult &&
+          successfulResult.success &&
+          successfulResult.media &&
+          successfulResult.media.length > 0
+        ) {
+          return successfulResult;
+        }
+
+        throw new Error('Success is false or media is empty');
       } catch (err) {
-        errors.push({ downloader: downloader.name, error: err });
-        throw err;
+        if (err.message === 'Success is false or media is empty') {
+          errors.push({ attempt, downloader: 'all', error: err });
+        }
       }
-    };
+    }
+
+    Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
+      level: 'error',
+      extra: {
+        url,
+        attempts: MAX_ATTEMPTS,
+        errors: errors.map(e => ({
+          attempt: e.attempt,
+          downloader: e.downloader,
+          message: e.error?.message || String(e.error),
+          stack: e.error?.stack,
+        })),
+      },
+    });
 
     try {
-      const successfulResult = await Promise.any(downloaders.map(run));
-      if (successfulResult && Array.isArray(successfulResult.media)) {
-        successfulResult.media = successfulResult.media.filter(item => {
-          if (!item || typeof item.url !== 'string') {
-            return false;
-          }
-          const urlStr = item.url.trim();
-          return (
-            urlStr.startsWith('http://') ||
-            urlStr.startsWith('https://') ||
-            urlStr.startsWith('//')
-          );
-        });
-      }
-      return successfulResult;
-    } catch {
-      Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
-        level: 'error',
-        extra: {
-          url,
-          errors: errors.map(e => ({
-            downloader: e.downloader,
-            message: e.error?.message || String(e.error),
-            stack: e.error?.stack,
-          })),
-        },
-      });
-
-      try {
-        await Sentry.flush(1000);
-      } catch (flushError) {
-        console.error('Sentry flush failed:', flushError);
-      }
-
-      return {
-        success: false,
-        platform: 'unknown',
-        title: null,
-        description: null,
-        thumbnail: null,
-        duration: null,
-        media: [],
-        error: 'could not download the media',
-      };
+      await Sentry.flush(1000);
+    } catch (flushError) {
+      console.error('Sentry flush failed:', flushError);
     }
+
+    return {
+      success: false,
+      platform: 'unknown',
+      title: null,
+      description: null,
+      thumbnail: null,
+      duration: null,
+      media: [],
+      error: 'could not download the media',
+    };
   }
 }

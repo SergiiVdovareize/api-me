@@ -83,7 +83,7 @@ describe('MemesController (e2e)', () => {
           errors: expect.arrayContaining([
             expect.objectContaining({ downloader: 'mediasnap' }),
             expect.objectContaining({ downloader: 'snapsave' }),
-            expect.objectContaining({ downloader: 'nextdownloader' }),
+            expect.objectContaining({ downloader: 'highreach' }),
           ]),
         }),
       })
@@ -177,11 +177,14 @@ describe('MemesController (e2e)', () => {
         },
       ],
     });
-    // Ensure snapsave and nextdownloader throw errors so that mediasnap is used
+    // Ensure snapsave, nextdownloader and highreach throw errors so that mediasnap is used
     jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
     jest
       .spyOn(memesService, 'stealWithNextdownloader')
       .mockRejectedValue(new Error('nextdownloader error'));
+    jest
+      .spyOn(memesService, 'stealWithHighreach')
+      .mockRejectedValue(new Error('highreach error'));
 
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
@@ -206,5 +209,69 @@ describe('MemesController (e2e)', () => {
         sizeMB: null,
       },
     ]);
+  });
+
+  it('should retry up to MAX_ATTEMPTS and succeed if a downloader succeeds on a subsequent attempt', async () => {
+    const memesService = app.get(MemesService);
+
+    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
+
+    jest
+      .spyOn(memesService, 'stealWithMediasnap')
+      .mockRejectedValueOnce(new Error('mediasnap error attempt 1'))
+      .mockResolvedValueOnce({
+        success: true,
+        platform: 'instagram',
+        title: 'Meme',
+        description: null,
+        thumbnail: null,
+        duration: null,
+        media: [
+          {
+            type: 'video',
+            url: 'https://example.com/media.mp4',
+            quality: '1080p',
+            format: 'mp4',
+            sizeMB: null,
+          },
+        ],
+      });
+
+    const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
+    const response = await request(app.getHttpServer())
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.media).toHaveLength(1);
+    expect(response.body.media[0].url).toBe('https://example.com/media.mp4');
+
+    expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    expect(memesService.stealWithMediasnap).toHaveBeenCalledTimes(2);
+  });
+
+  it('should call all downloaders exactly MAX_ATTEMPTS times when all attempts fail', async () => {
+    const memesService = app.get(MemesService);
+
+    jest.spyOn(memesService, 'stealWithMediasnap').mockRejectedValue(new Error('mediasnap error'));
+    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
+
+    const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
+    const response = await request(app.getHttpServer())
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .expect(200);
+
+    expect(response.body.success).toBe(false);
+
+    expect(memesService.stealWithMediasnap).toHaveBeenCalledTimes(3);
+    expect(memesService.stealWithSnapsave).toHaveBeenCalledTimes(3);
+    expect(memesService.stealWithHighreach).toHaveBeenCalledTimes(3);
+
+    expect(Sentry.captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('stealMeme failed'),
+      expect.any(Object)
+    );
   });
 });
