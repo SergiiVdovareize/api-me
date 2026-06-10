@@ -8,9 +8,11 @@ export class PosthogService implements OnModuleDestroy {
   private posthog: PostHog;
 
   constructor() {
-    this.posthog = new PostHog(env.POSTHOG_API_KEY!, {
-      host: 'https://eu.i.posthog.com',
-    });
+    if (process.env.NODE_ENV !== 'test' && env.HOST !== 'local') {
+      this.posthog = new PostHog(env.POSTHOG_API_KEY!, {
+        host: 'https://eu.i.posthog.com',
+      });
+    }
   }
 
   /**
@@ -19,6 +21,9 @@ export class PosthogService implements OnModuleDestroy {
    * @param properties - Additional properties for the event
    */
   trackEvent(event: AnalyticsEvent, properties: Record<string, any> = {}) {
+    if (process.env.NODE_ENV === 'test' || env.HOST === 'local' || !this.posthog) {
+      return;
+    }
     this.posthog.capture({
       distinctId: properties.distinctId || 'anonymous', // Replace with user id if available
       event,
@@ -35,6 +40,9 @@ export class PosthogService implements OnModuleDestroy {
    * @param properties - Additional properties for the user
    */
   identifyUser(distinctId: string, properties: Record<string, any> = {}) {
+    if (process.env.NODE_ENV === 'test' || env.HOST === 'local' || !this.posthog) {
+      return;
+    }
     this.posthog.identify({
       distinctId,
       properties,
@@ -45,6 +53,8 @@ export class PosthogService implements OnModuleDestroy {
    * Clean up the PostHog client before shutdown.
    */
   onModuleDestroy() {
-    this.posthog.shutdown();
+    if (this.posthog) {
+      this.posthog.shutdown();
+    }
   }
 }
