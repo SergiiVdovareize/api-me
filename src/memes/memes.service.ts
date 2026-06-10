@@ -29,7 +29,7 @@ export class MemesService {
     private readonly asyncService: AsyncService,
     private readonly requestsService: RequestsService,
     private readonly analyticsService: AnalyticsService
-  ) { }
+  ) {}
 
   private getMemeTypeFromUrl(url: string): MemeType {
     if (url.includes('youtube.com') || url.includes('youtu.be')) return MemeType.YOUTUBE;
@@ -290,7 +290,13 @@ export class MemesService {
         throw new Error('Highreach returned invalid or empty response');
       }
 
-      const directUrl = data.url || data.download_url || data.downloadUrl || data.video_url || data.gif || data.video;
+      const directUrl =
+        data.url ||
+        data.download_url ||
+        data.downloadUrl ||
+        data.video_url ||
+        data.gif ||
+        data.video;
       let media: any[] = [];
 
       if (directUrl && typeof directUrl === 'string') {
@@ -412,12 +418,159 @@ export class MemesService {
     }
   }
 
+  async stealWithVidssave(url: string): Promise<DownloadResult> {
+    const memeType = this.getMemeTypeFromUrl(url);
+    this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
+
+    try {
+      // 1. Get HTML content of the landing page
+      const landingRes = await fetch('https://vidssave.com/youtube-video-downloader-6fu');
+      if (!landingRes.ok) {
+        throw new Error(`Failed to fetch vidssave landing page: ${landingRes.statusText}`);
+      }
+      const landingHtml = await landingRes.text();
+
+      // 2. Find script tag with layout path (site)/layout-[id].js
+      const scriptRegex = /src="([^"]*\(site\)\/layout-[a-zA-Z0-9_-]+\.js)"/;
+      const scriptMatch = landingHtml.match(scriptRegex);
+      if (!scriptMatch || !scriptMatch[1]) {
+        throw new Error('Could not find the vidssave layout script URL in landing page HTML');
+      }
+
+      let scriptUrl = scriptMatch[1];
+      if (!scriptUrl.startsWith('http')) {
+        scriptUrl = `https://vidssave.com${scriptUrl.startsWith('/') ? '' : '/'}${scriptUrl}`;
+      }
+
+      // 3. Get the JS file content
+      const jsRes = await fetch(scriptUrl);
+      if (!jsRes.ok) {
+        throw new Error(`Failed to fetch vidssave layout script: ${jsRes.statusText}`);
+      }
+      const jsContent = await jsRes.text();
+
+      // 4. Find part starting with auth=
+      const authRegex = /auth=([a-zA-Z0-9_-]+)/;
+      const authMatch = jsContent.match(authRegex);
+      if (!authMatch || !authMatch[1]) {
+        throw new Error('Could not find auth token in vidssave layout script');
+      }
+      const auth = authMatch[1];
+
+      // 5. Using found token do POST request to parse endpoint
+      const body = new URLSearchParams({
+        auth,
+        domain: 'api-ak.vidssave.com',
+        origin: 'source',
+        link: url,
+      });
+
+      const parseRes = await fetch('https://api.vidssave.com/api/contentsite_api/media/parse', {
+        method: 'POST',
+        headers: {
+          accept: '*/*',
+          'accept-language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+          'cache-control': 'no-cache',
+          'content-type': 'application/x-www-form-urlencoded',
+          pragma: 'no-cache',
+          referer: 'https://vidssave.com/',
+        },
+        body: body.toString(),
+      });
+
+      if (!parseRes.ok) {
+        throw new Error(`Vidssave parse failed with status: ${parseRes.status}`);
+      }
+
+      const responseData = (await parseRes.json()) as any;
+      if (!responseData || responseData.status !== 1 || !responseData.data) {
+        throw new Error(responseData?.message || 'Vidssave parse response status is unsuccessful');
+      }
+
+      const data = responseData.data;
+
+      // 6. Convert response to the DownloadResult format
+      const mediaList: any[] = [];
+      if (Array.isArray(data.media)) {
+        for (const item of data.media) {
+          if (item && Array.isArray(item.resources)) {
+            for (const res of item.resources) {
+              if (res && res.download_url) {
+                const isAudio =
+                  res.type === 'audio' ||
+                  ['mp3', 'm4a', 'aac', 'flac', 'opus', 'wav'].includes(res.format?.toLowerCase());
+                mediaList.push({
+                  type: isAudio ? 'audio' : 'video',
+                  url: res.download_url,
+                  quality: res.quality || null,
+                  format: res.format?.toLowerCase() || null,
+                  sizeMB: res.size ? Number((res.size / (1024 * 1024)).toFixed(2)) : null,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: if data.media did not yield resources but data.resources has items
+      if (mediaList.length === 0 && Array.isArray(data.resources)) {
+        for (const res of data.resources) {
+          if (res && res.download_url) {
+            const isAudio =
+              res.type === 'audio' ||
+              ['mp3', 'm4a', 'aac', 'flac', 'opus', 'wav'].includes(res.format?.toLowerCase());
+            mediaList.push({
+              type: isAudio ? 'audio' : 'video',
+              url: res.download_url,
+              quality: res.quality || null,
+              format: res.format?.toLowerCase() || null,
+              sizeMB: res.size ? Number((res.size / (1024 * 1024)).toFixed(2)) : null,
+            });
+          }
+        }
+      }
+
+      // Sort media list by quality descending (best quality first)
+      this.sortMediaByQuality(mediaList);
+
+      if (mediaList.length === 0) {
+        throw new Error('Vidssave returned no formats/resources or invalid response structure');
+      }
+
+      return {
+        success: true,
+        platform: memeType.toLowerCase(),
+        title: data.title || null,
+        description: data.description || null,
+        thumbnail: data.thumbnail || null,
+        duration: data.duration || null,
+        media: mediaList,
+      };
+    } catch (error) {
+      console.error('Vidssave download error:', error);
+      throw error;
+    }
+  }
+
+  private sortMediaByQuality<T extends { quality?: string | null }>(media: T[]): T[] {
+    return media.sort((a, b) => {
+      const getQualityNum = (q: string | null | undefined): number => {
+        if (!q) return 0;
+        const cleanQ = q.replace(/mp4|mp3|m4a|3gp/gi, '');
+        const match = cleanQ.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      };
+      return getQualityNum(b.quality) - getQualityNum(a.quality);
+    });
+  }
+
   async stealMeme(url: string): Promise<DownloadResult> {
     const downloaders = [
       { name: 'mediasnap', fn: () => this.stealWithMediasnap(url) },
       { name: 'snapsave', fn: () => this.stealWithSnapsave(url) },
       // { name: 'nextdownloader', fn: () => this.stealWithNextdownloader(url) },
       { name: 'highreach', fn: () => this.stealWithHighreach(url) },
+      { name: 'vidssave', fn: () => this.stealWithVidssave(url) },
     ];
 
     const errors: { attempt: number; downloader: string; error: any }[] = [];
