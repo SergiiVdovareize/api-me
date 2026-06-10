@@ -12,6 +12,7 @@ describe('Memes Sanity (e2e)', () => {
     // 1. Call the real production API to steal the meme
     const response = await request(API_URL)
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     // 2. Validate the API response structure specifically
@@ -50,6 +51,7 @@ describe('Memes Sanity (e2e)', () => {
     // 1. Call the real production API to steal the meme
     const response = await request(API_URL)
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     // 2. Validate the API response structure specifically
@@ -88,6 +90,7 @@ describe('Memes Sanity (e2e)', () => {
     // 1. Call the real production API to steal the meme
     const response = await request(API_URL)
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     // 2. Validate the API response structure specifically
@@ -121,6 +124,7 @@ describe('Memes Sanity (e2e)', () => {
 
     const response = await request(API_URL)
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body).toEqual({

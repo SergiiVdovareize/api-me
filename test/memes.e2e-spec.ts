@@ -65,6 +65,7 @@ describe('MemesController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body).toEqual({
@@ -101,6 +102,7 @@ describe('MemesController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body).toEqual(
@@ -124,6 +126,7 @@ describe('MemesController (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body).toEqual(
@@ -193,6 +196,7 @@ describe('MemesController (e2e)', () => {
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body.success).toBe(true);
@@ -246,6 +250,7 @@ describe('MemesController (e2e)', () => {
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body.success).toBe(true);
@@ -267,6 +272,7 @@ describe('MemesController (e2e)', () => {
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body.success).toBe(false);
@@ -309,6 +315,7 @@ describe('MemesController (e2e)', () => {
     const targetUrl = 'https://www.youtube.com/watch?v=M-jtZUHWZ-o';
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://snip.vdovareize.me/')
       .expect(200);
 
     expect(response.body).toEqual({
@@ -328,5 +335,17 @@ describe('MemesController (e2e)', () => {
         },
       ],
     });
+  });
+
+  it('should restrict access when request referer and origin are missing or not matching allowed site', async () => {
+    const targetUrl = 'https://www.youtube.com/watch?v=M-jtZUHWZ-o';
+    await request(app.getHttpServer())
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get(`/memes/${encodeURIComponent(targetUrl)}`)
+      .set('referer', 'https://example.com/')
+      .expect(403);
   });
 });
