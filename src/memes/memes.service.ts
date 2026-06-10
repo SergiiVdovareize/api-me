@@ -603,6 +603,9 @@ export class MemesService {
               urlStr.startsWith('//')
             );
           });
+
+          // Sort media list by quality descending (best quality first)
+          this.sortMediaByQuality(successfulResult.media);
         }
 
         if (
