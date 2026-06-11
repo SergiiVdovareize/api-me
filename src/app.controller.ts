@@ -1,5 +1,14 @@
-import { Controller, Get, Query, HttpException, HttpStatus, StreamableFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  HttpException,
+  HttpStatus,
+  StreamableFile,
+  Res,
+} from '@nestjs/common';
 import { Readable } from 'stream';
+import { Response } from 'express';
 import { AppService } from './app.service';
 import { AnalyticsService } from './analytics/analytics.service';
 @Controller()
@@ -26,15 +35,32 @@ export class AppController {
   @Get('download')
   async download(
     @Query('url') url: string,
+    @Res({ passthrough: true }) res: Response,
     @Query('filename') filename?: string
-  ): Promise<StreamableFile> {
+  ): Promise<StreamableFile | void> {
     if (!url) {
       throw new HttpException('Missing url parameter', HttpStatus.BAD_REQUEST);
+    }
+
+    // Direct redirect for known IP-bound CDNs (googlevideo/youtube) to bypass server IP limitations
+    if (
+      url.includes('googlevideo.com') ||
+      url.includes('youtube.com') ||
+      url.includes('youtu.be')
+    ) {
+      return res.redirect(url);
     }
 
     try {
       const response = await fetch(url);
       if (!response.ok) {
+        // Fallback: If target CDN returns 403 Forbidden or 401 Unauthorized, redirect the browser to the URL directly
+        if (
+          response.status === HttpStatus.FORBIDDEN ||
+          response.status === HttpStatus.UNAUTHORIZED
+        ) {
+          return res.redirect(url);
+        }
         throw new HttpException(`Failed to fetch media: ${response.statusText}`, response.status);
       }
 

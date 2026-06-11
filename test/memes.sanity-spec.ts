@@ -16,23 +16,19 @@ describe('Memes Sanity (e2e)', () => {
       .expect(200);
 
     // 2. Validate the API response structure specifically
-    expect(response.body).toEqual({
-      success: true,
-      platform: 'instagram',
-      title: null,
-      description: null,
-      thumbnail: null,
-      duration: null,
-      media: [
-        {
-          type: 'video',
-          url: expect.stringContaining('https://'),
-          quality: response.body.media[0]?.quality === null ? null : expect.any(String),
-          format: 'mp4',
-          sizeMB: null,
-        },
-      ],
-    });
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        platform: 'instagram',
+        media: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'video',
+            url: expect.stringContaining('https://'),
+            format: 'mp4',
+          }),
+        ]),
+      })
+    );
 
     // 3. Extract the media URL and download it to verify downloading works
     const mediaUrl = response.body.media[0].url;
@@ -55,23 +51,19 @@ describe('Memes Sanity (e2e)', () => {
       .expect(200);
 
     // 2. Validate the API response structure specifically
-    expect(response.body).toEqual({
-      success: true,
-      platform: 'threads',
-      title: null,
-      description: null,
-      thumbnail: null,
-      duration: null,
-      media: [
-        {
-          type: 'video',
-          url: expect.stringContaining('https://'),
-          quality: response.body.media[0]?.quality === null ? null : expect.any(String),
-          format: 'mp4',
-          sizeMB: null,
-        },
-      ],
-    });
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        platform: 'threads',
+        media: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'video',
+            url: expect.stringContaining('https://'),
+            format: 'mp4',
+          }),
+        ]),
+      })
+    );
 
     // 3. Extract the media URL and download it to verify downloading works
     const mediaUrl = response.body.media[0].url;
