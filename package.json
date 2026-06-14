@@ -97,6 +97,17 @@
       "lcov",
       "text"
     ],
+    "coveragePathIgnorePatterns": [
+      "node_modules",
+      "dist",
+      "src/main.ts",
+      "src/instrument.ts",
+      ".*\\.module\\.ts$",
+      ".*\\.dto\\.ts$",
+      ".*\\.entity\\.ts$",
+      ".*\\.enum\\.ts$",
+      "src/models/prisma"
+    ],
     "testEnvironment": "node",
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
