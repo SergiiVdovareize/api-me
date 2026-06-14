@@ -27,7 +27,7 @@ import { GameResultsModule } from './game-results/game-results.module';
 @Module({
   imports: [
     SentryModule.forRoot(),
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
     RequestsModule,

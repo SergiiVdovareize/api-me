@@ -1,13 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { CloudsService } from './clouds.service';
 import { AsyncService } from 'src/async/async.service';
-import { RequestsService } from 'src/requests/requests.service';
 import { env } from 'process';
 
 describe('CloudsService', () => {
   let service: CloudsService;
   let asyncService: any;
-  let requestsService: any;
 
   beforeEach(async () => {
     asyncService = {
@@ -16,13 +15,21 @@ describe('CloudsService', () => {
         return await executeFn();
       }),
     };
-    requestsService = {};
+
+    const mockConfigService = {
+      get: jest.fn().mockImplementation((key: string) => {
+        if (key === 'FIBONACCI_URL') return env.FIBONACCI_URL;
+        if (key === 'PRIME_URL') return env.PRIME_URL;
+        if (key === 'ARMSTRONG_URL') return env.ARMSTRONG_URL;
+        return undefined;
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CloudsService,
         { provide: AsyncService, useValue: asyncService },
-        { provide: RequestsService, useValue: requestsService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 

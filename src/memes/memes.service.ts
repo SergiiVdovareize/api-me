@@ -9,8 +9,7 @@ import {
   VidssaveDownloader,
 } from './downloaders';
 import { sortMediaByQuality } from './utils/quality-sort';
-
-const MAX_ATTEMPTS = 3;
+import { MEMES_CONSTANTS } from './memes.constants';
 
 @Injectable()
 export class MemesService {
@@ -44,7 +43,7 @@ export class MemesService {
 
     const errors: { attempt: number; downloader: string; error: any }[] = [];
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 1; attempt <= MEMES_CONSTANTS.MAX_ATTEMPTS; attempt++) {
       try {
         const run = async (downloader: (typeof downloaders)[0]) => {
           try {
@@ -98,7 +97,7 @@ export class MemesService {
       level: 'error',
       extra: {
         url,
-        attempts: MAX_ATTEMPTS,
+        attempts: MEMES_CONSTANTS.MAX_ATTEMPTS,
         errors: errors.map(e => ({
           attempt: e.attempt,
           downloader: e.downloader,

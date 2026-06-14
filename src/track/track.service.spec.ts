@@ -3,6 +3,7 @@ import { TrackService } from './track.service';
 import { PrismaService } from 'src/prisma.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { RedisReader } from 'src/common/helpers/redisReader';
+import { ConfigService } from '@nestjs/config';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { JarStatus } from './types';
 import { promises as fs } from 'fs';
@@ -59,6 +60,10 @@ describe('TrackService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: RedisReader, useValue: redisReader },
         { provide: AnalyticsService, useValue: analyticsService },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('http://localhost') },
+        },
       ],
     }).compile();
 

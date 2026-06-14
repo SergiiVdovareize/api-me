@@ -3,6 +3,7 @@ import { PosthogService } from './posthog.service';
 import { PostHog } from 'posthog-node';
 import { env } from 'process';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
+import { ConfigService } from '@nestjs/config';
 
 const mockPostHogInstance = {
   capture: jest.fn(),
@@ -42,7 +43,20 @@ describe('PosthogService', () => {
       process.env.NODE_ENV = 'test';
 
       const module: TestingModule = await Test.createTestingModule({
-        providers: [PosthogService],
+        providers: [
+          PosthogService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn().mockImplementation((key: string) => {
+                if (key === 'NODE_ENV') return process.env.NODE_ENV;
+                if (key === 'HOST') return env.HOST;
+                if (key === 'POSTHOG_API_KEY') return env.POSTHOG_API_KEY;
+                return undefined;
+              }),
+            },
+          },
+        ],
       }).compile();
 
       service = module.get<PosthogService>(PosthogService);
@@ -77,7 +91,20 @@ describe('PosthogService', () => {
       env.POSTHOG_API_KEY = 'prod-key-123';
 
       const module: TestingModule = await Test.createTestingModule({
-        providers: [PosthogService],
+        providers: [
+          PosthogService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn().mockImplementation((key: string) => {
+                if (key === 'NODE_ENV') return process.env.NODE_ENV;
+                if (key === 'HOST') return env.HOST;
+                if (key === 'POSTHOG_API_KEY') return env.POSTHOG_API_KEY;
+                return undefined;
+              }),
+            },
+          },
+        ],
       }).compile();
 
       service = module.get<PosthogService>(PosthogService);

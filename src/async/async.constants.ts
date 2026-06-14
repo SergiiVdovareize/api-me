@@ -1,0 +1,5 @@
+export const ASYNC_CONSTANTS = {
+  SYNC_TIMEOUT: 1000,
+  MAX_TRIES: 7,
+  RETRY_DELAY: 500,
+};

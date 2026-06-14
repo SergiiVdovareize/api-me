@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OriginGuard } from './origin.guard';
 import { env } from 'process';
 
@@ -9,8 +10,23 @@ describe('OriginGuard', () => {
   let mockRequest: any;
 
   beforeEach(async () => {
+    const mockConfigService = {
+      get: jest.fn().mockImplementation((key: string, defaultValue?: any) => {
+        if (key === 'ALLOWED_ORIGIN') return 'https://snip.vdovareize.me/';
+        if (key === 'HOST') return env.HOST;
+        if (key === 'NODE_ENV') return process.env.NODE_ENV;
+        return defaultValue;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [OriginGuard],
+      providers: [
+        OriginGuard,
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+      ],
     }).compile();
 
     guard = module.get<OriginGuard>(OriginGuard);

@@ -1,43 +1,35 @@
 import { Injectable } from '@nestjs/common';
-import { env } from 'process';
+import { ConfigService } from '@nestjs/config';
 import { AsyncService } from 'src/async/async.service';
-import { RequestsService } from 'src/requests/requests.service';
 
 @Injectable()
 export class CloudsService {
   constructor(
     private readonly asyncService: AsyncService,
-    private readonly requestsService: RequestsService
+    private readonly configService: ConfigService
   ) {}
 
-  // private trackCalculations(type: number, startTime: number, result: { success: boolean, data: string}) {
-  //   const data = {
-  //     executionTime: Date.now() - startTime,
-  //     success: !!result.success,
-  //   }
-  //   this.requestsService.registerApiCall(type, data);
-  // }
-
   async getFibonacciNumber(index: number) {
-    const url = `${env.FIBONACCI_URL}?index=${index}`;
+    const baseUrl = this.configService.get<string>('FIBONACCI_URL');
+    const url = `${baseUrl}?index=${index}`;
     return this.getNumber(url);
   }
 
   async getPrimeNumber(index: number) {
-    const url = `${env.PRIME_URL}?index=${index}`;
+    const baseUrl = this.configService.get<string>('PRIME_URL');
+    const url = `${baseUrl}?index=${index}`;
     return this.getNumber(url);
   }
 
   async getArmstrongNumber(index: number) {
-    const url = `${env.ARMSTRONG_URL}?index=${index}`;
+    const baseUrl = this.configService.get<string>('ARMSTRONG_URL');
+    const url = `${baseUrl}?index=${index}`;
     return this.getNumber(url);
   }
 
   private async execute(url: string) {
-    // const startTime = Date.now();
     const data = await fetch(url);
     const result = await data.json();
-    // this.trackCalculations(startTime, result)
     return result;
   }
 

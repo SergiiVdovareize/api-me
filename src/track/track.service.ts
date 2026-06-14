@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nestjs';
-import { env } from 'process';
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
@@ -8,13 +8,9 @@ import { AnalyticsService } from 'src/analytics/analytics.service';
 import { promises as fs } from 'fs';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import { RedisReader } from 'src/common/helpers/redisReader';
+import { TRACK_CONSTANTS } from './track.constants';
 
 const cacheStorageEnabled = true;
-
-const CACHE_KEYS = {
-  activeAccounts: `${env.HOST}-active-track-accounts`,
-  recentIncoming: `${env.HOST}-recent-incoming`,
-};
 
 @Injectable()
 export class TrackService {
@@ -32,8 +28,17 @@ export class TrackService {
   constructor(
     private prisma: PrismaService,
     private readonly analyticsService: AnalyticsService,
-    private readonly redisReader: RedisReader
+    private readonly redisReader: RedisReader,
+    private readonly configService: ConfigService
   ) {}
+
+  private getCacheKeys() {
+    const host = this.configService.get<string>('HOST', '');
+    return {
+      activeAccounts: `${host}-active-track-accounts`,
+      recentIncoming: `${host}-recent-incoming`,
+    };
+  }
 
   findAll() {
     return `This action returns all track`;
@@ -44,7 +49,7 @@ export class TrackService {
       return;
     }
     this.logger.log('invalidating cached active accounts');
-    this.redisReader.delete(CACHE_KEYS.activeAccounts);
+    this.redisReader.delete(this.getCacheKeys().activeAccounts);
   }
 
   async invalidateCacheRecentIncoming(accountId: number) {
@@ -52,7 +57,7 @@ export class TrackService {
       return;
     }
     this.logger.log(`invalidating cached recent incoming for account ${accountId}`);
-    this.redisReader.delete(`${CACHE_KEYS.recentIncoming}-${accountId}`);
+    this.redisReader.delete(`${this.getCacheKeys().recentIncoming}-${accountId}`);
   }
 
   wasTwoWeeksAgo(date: Date) {
@@ -133,7 +138,7 @@ export class TrackService {
   // }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
-    const response = await fetch('https://send.monobank.ua/api/handler', {
+    const response = await fetch(TRACK_CONSTANTS.MONOBANK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -233,7 +238,7 @@ export class TrackService {
 
   async getActiveAccountIncomings() {
     if (this.useCacheStorage) {
-      const cachedActiveAccounts = await this.redisReader.read(CACHE_KEYS.activeAccounts);
+      const cachedActiveAccounts = await this.redisReader.read(this.getCacheKeys().activeAccounts);
       if (cachedActiveAccounts) {
         // console.log('CACHE: read active accounts');
         return cachedActiveAccounts;
@@ -251,7 +256,7 @@ export class TrackService {
     });
 
     if (this.useCacheStorage) {
-      this.redisReader.write(CACHE_KEYS.activeAccounts, activeAccounts);
+      this.redisReader.write(this.getCacheKeys().activeAccounts, activeAccounts);
       this.logger.log('DB: read active accounts and updated cache');
     }
 
@@ -341,7 +346,7 @@ export class TrackService {
 
   async getRecentAccountIncoming(accountId: number) {
     const cachedRecentIncoming = await this.redisReader.read(
-      `${CACHE_KEYS.recentIncoming}-${accountId}`
+      `${this.getCacheKeys().recentIncoming}-${accountId}`
     );
     if (cachedRecentIncoming) {
       // console.log('CACHE: read recent incoming', accountId);
@@ -354,7 +359,7 @@ export class TrackService {
     });
 
     this.logger.log(`DB: read recent incoming and updated cache for account ${accountId}`);
-    this.redisReader.write(`${CACHE_KEYS.recentIncoming}-${accountId}`, recentIncoming);
+    this.redisReader.write(`${this.getCacheKeys().recentIncoming}-${accountId}`, recentIncoming);
     return recentIncoming;
   }
 

@@ -1,6 +1,6 @@
-import { Injectable, HttpException, HttpStatus, StreamableFile } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, StreamableFile, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DownloadResult } from 'mediasnap';
-import { env } from 'process';
 import { Readable } from 'stream';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
@@ -11,14 +11,18 @@ import { NextDownloaderAdapter, NextDownloaderAnalyzeResponse } from './next.ada
 @Injectable()
 export class NextDownloader implements MemeDownloader {
   readonly name = 'nextdownloader';
+  private readonly logger = new Logger(NextDownloader.name);
 
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(
+    private readonly analyticsService: AnalyticsService,
+    private readonly configService: ConfigService
+  ) {}
 
   async steal(url: string): Promise<DownloadResult> {
     const memeType = getMemeTypeFromUrl(url);
     this.analyticsService.trackEvent(AnalyticsEvent.StealMeme, { memeUrl: url, memeType });
 
-    const cookies = env.YOUTUBE_COOKIES || null;
+    const cookies = this.configService.get<string>('YOUTUBE_COOKIES') || null;
 
     try {
       const response = await fetch('https://api.nextdownloader.com/api/try-online/analyze', {
@@ -48,10 +52,10 @@ export class NextDownloader implements MemeDownloader {
         throw new Error('NextDownloader returned no formats or invalid response');
       }
 
-      const host = env.API_URL || 'http://localhost:3000';
+      const host = this.configService.get<string>('API_URL') || 'http://localhost:3000';
       return NextDownloaderAdapter.toDownloadResult(data, url, host, memeType.toLowerCase());
     } catch (error) {
-      console.error('NextDownloader download error:', error);
+      this.logger.error(`NextDownloader download error: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -65,7 +69,7 @@ export class NextDownloader implements MemeDownloader {
     duration: string;
   }): Promise<StreamableFile> {
     const { url, type, quality, ext, title, duration } = params;
-    const cookies = env.YOUTUBE_COOKIES || null;
+    const cookies = this.configService.get<string>('YOUTUBE_COOKIES') || null;
 
     try {
       const response = await fetch('https://api.nextdownloader.com/api/try-online/download', {
@@ -119,7 +123,7 @@ export class NextDownloader implements MemeDownloader {
         length: contentLength ? parseInt(contentLength, 10) : undefined,
       });
     } catch (error: any) {
-      console.error('Error proxying NextDownloader download:', error.message);
+      this.logger.error(`Error proxying NextDownloader download: ${error.message}`, error.stack);
       if (error instanceof HttpException) {
         throw error;
       }

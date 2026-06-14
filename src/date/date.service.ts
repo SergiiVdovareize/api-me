@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BlobService } from '../blob/blob.service';
+import { DATE_CONSTANTS } from './date.constants';
 
 @Injectable()
 export class DateService {
+  private readonly logger = new Logger(DateService.name);
+
   constructor(private readonly blobService: BlobService) {}
 
   async getRandomDate(): Promise<string> {
@@ -15,8 +18,8 @@ export class DateService {
       return content?.date;
     }
 
-    const start = Date.UTC(2018, 7, 1);
-    const end = Date.UTC(2022, 1, 22);
+    const start = DATE_CONSTANTS.START_DATE;
+    const end = DATE_CONSTANTS.END_DATE;
     const time = start + Math.floor(Math.random() * (end - start + 1));
     const d = new Date(time);
     const yyyy = d.getUTCFullYear();
@@ -28,7 +31,7 @@ export class DateService {
       await this.blobService.create(dateFileName, { date });
     } catch (error) {
       // Log error but do not fail the request
-      console.error('Error caching date blob:', error);
+      this.logger.error('Error caching date blob:', error?.stack);
       return null;
     }
 

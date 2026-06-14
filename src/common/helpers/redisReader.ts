@@ -1,41 +1,52 @@
 import * as Sentry from '@sentry/nestjs';
 import { Redis } from '@upstash/redis';
-import { env } from 'process';
-import { Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { REDIS_CONSTANTS } from './redis.constants';
 
-const defaultTtl = 100800; // Default TTL of 28 hours
-const nudgeTtl = 43200; // 12 hours
-const restUrlProp = 'UPSTASH_REDIS_REST_URL_';
-const restTokenProp = 'UPSTASH_REDIS_REST_TOKEN_';
-const redisPairs = Object.keys(env).filter(prop => prop.startsWith(restUrlProp));
-const redisProfilesCount = redisPairs.length;
+@Injectable()
 export class RedisReader {
   private readonly logger = new Logger(RedisReader.name);
-  private cachedRedisNumber: number;
+  private cachedRedisNumber: number | undefined;
+  private redisPairs: string[] = [];
+
+  constructor(private readonly configService: ConfigService) {
+    this.redisPairs = Object.keys(process.env).filter(prop =>
+      prop.startsWith(REDIS_CONSTANTS.REST_URL_PROP)
+    );
+  }
 
   get redis() {
-    if (!this.cachedRedisNumber) {
+    if (this.cachedRedisNumber === undefined) {
       this.cachedRedisNumber = this.getRedisPairNumber();
       this.logger.log(`SET cachedRedisNumber: ${this.cachedRedisNumber}`);
     }
-    return this.getRedisPair(redisPairs[this.cachedRedisNumber]);
+    return this.getRedisPair(this.redisPairs[this.cachedRedisNumber]);
   }
 
   getRedisPairNumber() {
-    const dayNumber = Math.round((Date.now() - 1767229200000) / 100000 / 846);
-    return dayNumber % redisProfilesCount;
+    const dayNumber = Math.round((Date.now() - REDIS_CONSTANTS.BASE_TIMESTAMP) / 100000 / 846);
+    const redisProfilesCount = this.redisPairs.length;
+    return redisProfilesCount > 0 ? dayNumber % redisProfilesCount : 0;
   }
 
   getRedisPair(restUrl: string) {
-    const suffixReg = new RegExp(`${restUrlProp}(.*)`);
-    const pairSuffix = restUrl.match(suffixReg)[1];
+    if (!restUrl) {
+      return null;
+    }
+    const suffixReg = new RegExp(`${REDIS_CONSTANTS.REST_URL_PROP}(.*)`);
+    const match = restUrl.match(suffixReg);
+    const pairSuffix = match ? match[1] : null;
     if (!pairSuffix) {
       return null;
     }
 
+    const url = this.configService.get<string>(`${REDIS_CONSTANTS.REST_URL_PROP}${pairSuffix}`);
+    const token = this.configService.get<string>(`${REDIS_CONSTANTS.REST_TOKEN_PROP}${pairSuffix}`);
+
     return new Redis({
-      url: env[`${restUrlProp}${pairSuffix}`],
-      token: env[`${restTokenProp}${pairSuffix}`],
+      url,
+      token,
     });
   }
 
@@ -60,7 +71,7 @@ export class RedisReader {
    * @returns The result of the set operation.
    */
   async write(key: string, value: any): Promise<any> {
-    return await this.redis.set(key, value, { ex: defaultTtl });
+    return await this.redis.set(key, value, { ex: REDIS_CONSTANTS.DEFAULT_TTL });
   }
 
   /**
@@ -77,15 +88,16 @@ export class RedisReader {
     const value = Date.now();
 
     await Promise.all(
-      redisPairs.map(async pairUrl => {
-        const pairSuffix = pairUrl.match(/UPSTASH_REDIS_REST_URL_(.*)/)[1];
-        // const redis = new Redis({
-        //   url: env[`UPSTASH_REDIS_REST_URL_${pairSuffix}`],
-        //   token: env[`UPSTASH_REDIS_REST_TOKEN_${pairSuffix}`],
-        // });
+      this.redisPairs.map(async pairUrl => {
+        const match = pairUrl.match(/UPSTASH_REDIS_REST_URL_(.*)/);
+        const pairSuffix = match ? match[1] : null;
+        if (!pairSuffix) return;
+
         const redis = this.getRedisPair(pairUrl);
+        if (!redis) return;
+
         try {
-          await redis.set(key, value, { ex: nudgeTtl });
+          await redis.set(key, value, { ex: REDIS_CONSTANTS.NUDGE_TTL });
           this.logger.log(`successfully nudged UPSTASH_REDIS_REST_URL_${pairSuffix}`);
         } catch (error) {
           this.logger.error(`couldn't nudge UPSTASH_REDIS_REST_URL_${pairSuffix}`, error?.stack);

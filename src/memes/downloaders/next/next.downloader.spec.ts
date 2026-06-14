@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { NextDownloader } from './next.downloader';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { HttpException, StreamableFile } from '@nestjs/common';
@@ -17,6 +18,12 @@ describe('NextDownloader', () => {
           provide: AnalyticsService,
           useValue: {
             trackEvent: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue(null),
           },
         },
       ],

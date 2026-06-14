@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
 import { DateService } from './date.service';
 import { BlobService } from '../blob/blob.service';
 
@@ -70,14 +71,14 @@ describe('DateService', () => {
 
     it('should catch cache write errors, log them, and return null', async () => {
       mockBlobService.read.mockResolvedValue(null);
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
       mockBlobService.create.mockRejectedValue(new Error('Write failed'));
 
       const result = await service.getRandomDate();
 
       expect(result).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      consoleErrorSpy.mockRestore();
+      expect(loggerSpy).toHaveBeenCalled();
+      loggerSpy.mockRestore();
     });
   });
 });
