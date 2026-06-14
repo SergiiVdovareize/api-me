@@ -3,7 +3,6 @@ import { MemesController } from './memes.controller';
 import { RequestsService } from 'src/requests/requests.service';
 import { PrismaModule } from 'src/models/prisma/prisma.module';
 import { MemesService } from './memes.service';
-import { AsyncService } from 'src/async/async.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { PosthogService } from 'src/posthog/posthog.service';
 import {
@@ -20,7 +19,6 @@ import {
   providers: [
     MemesService,
     RequestsService,
-    AsyncService,
     AnalyticsService,
     PosthogService,
     SnapsaveDownloader,

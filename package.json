@@ -45,7 +45,6 @@
     "@vercel/postgres": "^0.10.0",
     "class-validator": "^0.14.2",
     "mediasnap": "1.1.2",
-    "phantomjscloud": "^3.5.5",
     "posthog-node": "^5.28.0",
     "prisma": "^6.11.1",
     "reflect-metadata": "^0.2.2",

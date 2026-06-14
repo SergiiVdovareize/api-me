@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { MemesService } from './memes.service';
-import { AsyncService } from 'src/async/async.service';
 import { RequestsService } from 'src/requests/requests.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import {
@@ -17,10 +16,6 @@ describe('MemesService', () => {
     await Test.createTestingModule({
       providers: [
         MemesService,
-        {
-          provide: AsyncService,
-          useValue: {},
-        },
         {
           provide: RequestsService,
           useValue: {},
