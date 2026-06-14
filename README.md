@@ -5,7 +5,7 @@
 [![Sanity Tests](https://img.shields.io/badge/Sanity%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
 [![Lint & Format](https://img.shields.io/badge/Lint%20%26%20Format-passing-brightgreen?style=flat-square&logo=eslint)](https://github.com/SergiiVdovareize/api-me)
 [![Deploy Status](https://github.com/SergiiVdovareize/api-me/actions/workflows/deploy.yml/badge.svg?style=flat-square)](https://github.com/SergiiVdovareize/api-me/actions)
-[![Version](https://img.shields.io/badge/Version-Releases-blue?style=flat-square)](https://github.com/SergiiVdovareize/api-me/releases)
+[![Version](https://img.shields.io/badge/Version-v1.4.1-blue?style=flat-square)](https://github.com/SergiiVdovareize/api-me/releases)
 
 
 
