@@ -6,10 +6,28 @@ import { MemesService } from './memes.service';
 import { AsyncService } from 'src/async/async.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { PosthogService } from 'src/posthog/posthog.service';
+import {
+  SnapsaveDownloader,
+  MediasnapDownloader,
+  NextDownloader,
+  HighreachDownloader,
+  VidssaveDownloader,
+} from './downloaders';
 
 @Module({
   imports: [PrismaModule],
   controllers: [MemesController],
-  providers: [MemesService, RequestsService, AsyncService, AnalyticsService, PosthogService],
+  providers: [
+    MemesService,
+    RequestsService,
+    AsyncService,
+    AnalyticsService,
+    PosthogService,
+    SnapsaveDownloader,
+    MediasnapDownloader,
+    NextDownloader,
+    HighreachDownloader,
+    VidssaveDownloader,
+  ],
 })
 export class MemesModule {}

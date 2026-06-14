@@ -5,7 +5,13 @@ import { AppModule } from './../src/app.module';
 import * as Sentry from '@sentry/nestjs';
 import { PrismaService as PrismaService1 } from 'src/prisma.service';
 import { PrismaService as PrismaService2 } from 'src/models/prisma/prisma.service';
-import { MemesService } from 'src/memes/memes.service';
+import {
+  SnapsaveDownloader,
+  MediasnapDownloader,
+  NextDownloader,
+  HighreachDownloader,
+  VidssaveDownloader,
+} from 'src/memes/downloaders';
 
 jest.mock('@sentry/nestjs', () => {
   const actual = jest.requireActual('@sentry/nestjs');
@@ -57,11 +63,15 @@ describe('MemesController (e2e)', () => {
 
   it('should return error when URL is unsupported or invalid', async () => {
     const targetUrl = 'https://example.com/invalid-meme-url-12345';
-    const memesService = app.get(MemesService);
-    jest.spyOn(memesService, 'stealWithMediasnap').mockRejectedValue(new Error('mediasnap error'));
-    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
-    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
-    jest.spyOn(memesService, 'stealWithVidssave').mockRejectedValue(new Error('vidssave error'));
+    const mediasnapDownloader = app.get(MediasnapDownloader);
+    const snapsaveDownloader = app.get(SnapsaveDownloader);
+    const highreachDownloader = app.get(HighreachDownloader);
+    const vidssaveDownloader = app.get(VidssaveDownloader);
+
+    jest.spyOn(mediasnapDownloader, 'steal').mockRejectedValue(new Error('mediasnap error'));
+    jest.spyOn(snapsaveDownloader, 'steal').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(highreachDownloader, 'steal').mockRejectedValue(new Error('highreach error'));
+    jest.spyOn(vidssaveDownloader, 'steal').mockRejectedValue(new Error('vidssave error'));
 
     const response = await request(app.getHttpServer())
       .get(`/memes/${encodeURIComponent(targetUrl)}`)
@@ -146,8 +156,13 @@ describe('MemesController (e2e)', () => {
   });
 
   it('should filter out media items that contain relative URLs or URLs starting with /render', async () => {
-    const memesService = app.get(MemesService);
-    jest.spyOn(memesService, 'stealWithMediasnap').mockResolvedValue({
+    const mediasnapDownloader = app.get(MediasnapDownloader);
+    const snapsaveDownloader = app.get(SnapsaveDownloader);
+    const nextDownloader = app.get(NextDownloader);
+    const highreachDownloader = app.get(HighreachDownloader);
+    const vidssaveDownloader = app.get(VidssaveDownloader);
+
+    jest.spyOn(mediasnapDownloader, 'steal').mockResolvedValue({
       success: true,
       platform: 'instagram',
       title: null,
@@ -186,12 +201,10 @@ describe('MemesController (e2e)', () => {
       ],
     });
     // Ensure snapsave, nextdownloader, highreach and vidssave throw errors so that mediasnap is used
-    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
-    jest
-      .spyOn(memesService, 'stealWithNextdownloader')
-      .mockRejectedValue(new Error('nextdownloader error'));
-    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
-    jest.spyOn(memesService, 'stealWithVidssave').mockRejectedValue(new Error('vidssave error'));
+    jest.spyOn(snapsaveDownloader, 'steal').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(nextDownloader, 'steal').mockRejectedValue(new Error('nextdownloader error'));
+    jest.spyOn(highreachDownloader, 'steal').mockRejectedValue(new Error('highreach error'));
+    jest.spyOn(vidssaveDownloader, 'steal').mockRejectedValue(new Error('vidssave error'));
 
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
@@ -220,14 +233,17 @@ describe('MemesController (e2e)', () => {
   });
 
   it('should retry up to MAX_ATTEMPTS and succeed if a downloader succeeds on a subsequent attempt', async () => {
-    const memesService = app.get(MemesService);
+    const mediasnapDownloader = app.get(MediasnapDownloader);
+    const snapsaveDownloader = app.get(SnapsaveDownloader);
+    const highreachDownloader = app.get(HighreachDownloader);
+    const vidssaveDownloader = app.get(VidssaveDownloader);
 
-    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
-    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
-    jest.spyOn(memesService, 'stealWithVidssave').mockRejectedValue(new Error('vidssave error'));
+    jest.spyOn(snapsaveDownloader, 'steal').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(highreachDownloader, 'steal').mockRejectedValue(new Error('highreach error'));
+    jest.spyOn(vidssaveDownloader, 'steal').mockRejectedValue(new Error('vidssave error'));
 
     jest
-      .spyOn(memesService, 'stealWithMediasnap')
+      .spyOn(mediasnapDownloader, 'steal')
       .mockRejectedValueOnce(new Error('mediasnap error attempt 1'))
       .mockResolvedValueOnce({
         success: true,
@@ -258,16 +274,19 @@ describe('MemesController (e2e)', () => {
     expect(response.body.media[0].url).toBe('https://example.com/media.mp4');
 
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
-    expect(memesService.stealWithMediasnap).toHaveBeenCalledTimes(2);
+    expect(mediasnapDownloader.steal).toHaveBeenCalledTimes(2);
   });
 
   it('should call all downloaders exactly MAX_ATTEMPTS times when all attempts fail', async () => {
-    const memesService = app.get(MemesService);
+    const mediasnapDownloader = app.get(MediasnapDownloader);
+    const snapsaveDownloader = app.get(SnapsaveDownloader);
+    const highreachDownloader = app.get(HighreachDownloader);
+    const vidssaveDownloader = app.get(VidssaveDownloader);
 
-    jest.spyOn(memesService, 'stealWithMediasnap').mockRejectedValue(new Error('mediasnap error'));
-    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
-    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
-    jest.spyOn(memesService, 'stealWithVidssave').mockRejectedValue(new Error('vidssave error'));
+    jest.spyOn(mediasnapDownloader, 'steal').mockRejectedValue(new Error('mediasnap error'));
+    jest.spyOn(snapsaveDownloader, 'steal').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(highreachDownloader, 'steal').mockRejectedValue(new Error('highreach error'));
+    jest.spyOn(vidssaveDownloader, 'steal').mockRejectedValue(new Error('vidssave error'));
 
     const targetUrl = 'https://www.instagram.com/p/C51YHfWJwHK/';
     const response = await request(app.getHttpServer())
@@ -277,10 +296,10 @@ describe('MemesController (e2e)', () => {
 
     expect(response.body.success).toBe(false);
 
-    expect(memesService.stealWithMediasnap).toHaveBeenCalledTimes(3);
-    expect(memesService.stealWithSnapsave).toHaveBeenCalledTimes(3);
-    expect(memesService.stealWithHighreach).toHaveBeenCalledTimes(3);
-    expect(memesService.stealWithVidssave).toHaveBeenCalledTimes(3);
+    expect(mediasnapDownloader.steal).toHaveBeenCalledTimes(3);
+    expect(snapsaveDownloader.steal).toHaveBeenCalledTimes(3);
+    expect(highreachDownloader.steal).toHaveBeenCalledTimes(3);
+    expect(vidssaveDownloader.steal).toHaveBeenCalledTimes(3);
 
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
       expect.stringContaining('stealMeme failed'),
@@ -289,8 +308,12 @@ describe('MemesController (e2e)', () => {
   });
 
   it('should correctly download using vidssave', async () => {
-    const memesService = app.get(MemesService);
-    jest.spyOn(memesService, 'stealWithVidssave').mockResolvedValue({
+    const mediasnapDownloader = app.get(MediasnapDownloader);
+    const snapsaveDownloader = app.get(SnapsaveDownloader);
+    const highreachDownloader = app.get(HighreachDownloader);
+    const vidssaveDownloader = app.get(VidssaveDownloader);
+
+    jest.spyOn(vidssaveDownloader, 'steal').mockResolvedValue({
       success: true,
       platform: 'youtube',
       title: 'Meme Video',
@@ -308,9 +331,9 @@ describe('MemesController (e2e)', () => {
       ],
     });
     // Mock other services to fail
-    jest.spyOn(memesService, 'stealWithMediasnap').mockRejectedValue(new Error('mediasnap error'));
-    jest.spyOn(memesService, 'stealWithSnapsave').mockRejectedValue(new Error('snapsave error'));
-    jest.spyOn(memesService, 'stealWithHighreach').mockRejectedValue(new Error('highreach error'));
+    jest.spyOn(mediasnapDownloader, 'steal').mockRejectedValue(new Error('mediasnap error'));
+    jest.spyOn(snapsaveDownloader, 'steal').mockRejectedValue(new Error('snapsave error'));
+    jest.spyOn(highreachDownloader, 'steal').mockRejectedValue(new Error('highreach error'));
 
     const targetUrl = 'https://www.youtube.com/watch?v=M-jtZUHWZ-o';
     const response = await request(app.getHttpServer())

@@ -1,14 +1,20 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { MemesService } from './memes.service';
 import { AsyncService } from 'src/async/async.service';
 import { RequestsService } from 'src/requests/requests.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
+import {
+  SnapsaveDownloader,
+  MediasnapDownloader,
+  NextDownloader,
+  HighreachDownloader,
+  VidssaveDownloader,
+} from './downloaders';
+import { sortMediaByQuality } from './utils/quality-sort';
 
 describe('MemesService', () => {
-  let service: MemesService;
-
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    await Test.createTestingModule({
       providers: [
         MemesService,
         {
@@ -25,10 +31,28 @@ describe('MemesService', () => {
             trackEvent: jest.fn(),
           },
         },
+        {
+          provide: SnapsaveDownloader,
+          useValue: {},
+        },
+        {
+          provide: MediasnapDownloader,
+          useValue: {},
+        },
+        {
+          provide: NextDownloader,
+          useValue: {},
+        },
+        {
+          provide: HighreachDownloader,
+          useValue: {},
+        },
+        {
+          provide: VidssaveDownloader,
+          useValue: {},
+        },
       ],
     }).compile();
-
-    service = module.get<MemesService>(MemesService);
   });
 
   describe('sortMediaByQuality', () => {
@@ -41,7 +65,7 @@ describe('MemesService', () => {
         { url: 'url5', quality: '480' },
       ];
 
-      const sorted = service['sortMediaByQuality'](media);
+      const sorted = sortMediaByQuality(media);
 
       expect(sorted).toEqual([
         { url: 'url2', quality: '1080P' },
@@ -60,7 +84,7 @@ describe('MemesService', () => {
         { url: 'url4', quality: undefined },
       ];
 
-      const sorted = service['sortMediaByQuality'](media as any);
+      const sorted = sortMediaByQuality(media as any);
 
       expect(sorted).toEqual([
         { url: 'url3', quality: 'mid-256kbps' },
@@ -69,6 +93,7 @@ describe('MemesService', () => {
         { url: 'url4', quality: undefined },
       ]);
     });
+
     it('should correctly ignore format name digits (e.g. mp4, m4a, 3gp) when sorting', () => {
       const media = [
         { url: 'url1', quality: 'mp4 (360p)' },
@@ -78,7 +103,7 @@ describe('MemesService', () => {
         { url: 'url5', quality: 'mp4 (720p)' },
       ];
 
-      const sorted = service['sortMediaByQuality'](media);
+      const sorted = sortMediaByQuality(media);
 
       expect(sorted).toEqual([
         { url: 'url2', quality: 'mp4 (1080p)' },
@@ -101,7 +126,7 @@ describe('MemesService', () => {
         { type: 'video', url: 'url-128kb', quality: 'opus (128kb/s)', format: 'mp4', sizeMB: null },
       ];
 
-      const sorted = service['sortMediaByQuality'](media);
+      const sorted = sortMediaByQuality(media);
 
       expect(sorted).toEqual([
         { type: 'video', url: 'url-1080p', quality: 'mp4 (1080p)', format: 'mp4', sizeMB: null },
