@@ -10,7 +10,9 @@ import {
   NextDownloader,
   HighreachDownloader,
   VidssaveDownloader,
+  VidssaveTokenParser,
 } from './downloaders';
+import { BlobService } from 'src/blob/blob.service';
 
 @Module({
   imports: [PrismaModule],
@@ -24,6 +26,8 @@ import {
     NextDownloader,
     HighreachDownloader,
     VidssaveDownloader,
+    VidssaveTokenParser,
+    BlobService,
   ],
 })
 export class MemesModule {}
