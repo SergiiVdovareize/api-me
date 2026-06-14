@@ -4,7 +4,7 @@
 [![E2E Tests](https://img.shields.io/badge/E2E%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
 [![Sanity Tests](https://img.shields.io/badge/Sanity%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
 [![Lint & Format](https://img.shields.io/badge/Lint%20%26%20Format-passing-brightgreen?style=flat-square&logo=eslint)](https://github.com/SergiiVdovareize/api-me)
-[![Deploy Status](https://github.com/SergiiVdovareize/api-me/actions/workflows/deploy.yml/badge.svg?style=flat-square)](https://github.com/SergiiVdovareize/api-me/actions)
+[![Vercel Deployment](https://deploy-badge.vercel.app/api/SergiiVdovareize/api-me?style=flat-square)](https://vercel.com/)
 [![Version](https://img.shields.io/github/v/release/SergiiVdovareize/api-me?style=flat-square)](https://github.com/SergiiVdovareize/api-me/releases)
 
 
