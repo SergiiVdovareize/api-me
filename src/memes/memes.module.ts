@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { MemesController } from './memes.controller';
-import { RequestsService } from 'src/requests/requests.service';
 import { PrismaModule } from 'src/models/prisma/prisma.module';
 import { MemesService } from './memes.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
@@ -18,7 +17,6 @@ import {
   controllers: [MemesController],
   providers: [
     MemesService,
-    RequestsService,
     AnalyticsService,
     PosthogService,
     SnapsaveDownloader,

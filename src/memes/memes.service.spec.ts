@@ -1,7 +1,5 @@
 import { Test } from '@nestjs/testing';
 import { MemesService } from './memes.service';
-import { RequestsService } from 'src/requests/requests.service';
-import { AnalyticsService } from 'src/analytics/analytics.service';
 import {
   SnapsaveDownloader,
   MediasnapDownloader,
@@ -16,16 +14,6 @@ describe('MemesService', () => {
     await Test.createTestingModule({
       providers: [
         MemesService,
-        {
-          provide: RequestsService,
-          useValue: {},
-        },
-        {
-          provide: AnalyticsService,
-          useValue: {
-            trackEvent: jest.fn(),
-          },
-        },
         {
           provide: SnapsaveDownloader,
           useValue: {},

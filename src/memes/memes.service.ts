@@ -1,7 +1,5 @@
 import { Injectable, StreamableFile } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
-import { RequestsService } from 'src/requests/requests.service';
-import { AnalyticsService } from 'src/analytics/analytics.service';
 import { DownloadResult } from 'mediasnap';
 import {
   SnapsaveDownloader,
@@ -17,8 +15,6 @@ const MAX_ATTEMPTS = 3;
 @Injectable()
 export class MemesService {
   constructor(
-    private readonly requestsService: RequestsService,
-    private readonly analyticsService: AnalyticsService,
     private readonly snapsaveDownloader: SnapsaveDownloader,
     private readonly mediasnapDownloader: MediasnapDownloader,
     private readonly nextDownloader: NextDownloader,
