@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nestjs';
 import { env } from 'process';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AccountType } from 'src/models/enums/account-type.enum';
 import { PrismaService } from 'src/prisma.service';
 import { JarResponse, JarStatus } from './types';
@@ -18,6 +18,8 @@ const CACHE_KEYS = {
 
 @Injectable()
 export class TrackService {
+  private readonly logger = new Logger(TrackService.name);
+
   get useCacheStorage(): boolean {
     return cacheStorageEnabled;
     // if (!cacheStorageEnabled) {
@@ -41,7 +43,7 @@ export class TrackService {
     if (!this.useCacheStorage) {
       return;
     }
-    console.log('invalidating cached active accounts');
+    this.logger.log('invalidating cached active accounts');
     this.redisReader.delete(CACHE_KEYS.activeAccounts);
   }
 
@@ -49,7 +51,7 @@ export class TrackService {
     if (!this.useCacheStorage) {
       return;
     }
-    console.log('invalidating cached recent incoming', accountId);
+    this.logger.log(`invalidating cached recent incoming for account ${accountId}`);
     this.redisReader.delete(`${CACHE_KEYS.recentIncoming}-${accountId}`);
   }
 
@@ -147,10 +149,9 @@ export class TrackService {
     try {
       json = await response.json();
     } catch (error) {
-      // console.log('Error parsing JSON response:', error);
-      console.error('Error parsing JSON response:', error);
+      this.logger.error('Error parsing JSON response:', error?.stack);
       const html = await response.text();
-      console.error('Check HTML:', html);
+      this.logger.error(`Check HTML: ${html}`);
 
       return {
         success: false,
@@ -195,7 +196,7 @@ export class TrackService {
     let trackingAccount = await this.prisma.account.findFirst({ where: { trackId: id } });
     if (trackingAccount) {
       if (!trackingAccount.isActive && force) {
-        console.log(`reactivating old account: ${trackingAccount.trackId}`);
+        this.logger.log(`reactivating old account: ${trackingAccount.trackId}`);
         await this.activateAccount(trackingAccount.id);
       }
       const incoming = await this.prisma.accountIncoming.findMany({
@@ -251,7 +252,7 @@ export class TrackService {
 
     if (this.useCacheStorage) {
       this.redisReader.write(CACHE_KEYS.activeAccounts, activeAccounts);
-      console.log('DB: read active accounts and updated cache');
+      this.logger.log('DB: read active accounts and updated cache');
     }
 
     return activeAccounts;
@@ -260,14 +261,14 @@ export class TrackService {
   async refreshAccounts() {
     const accounts = await this.getActiveAccountIncomings();
     if (accounts.length == 0) {
-      console.log('no active accounts were found');
+      this.logger.log('no active accounts were found');
       return;
     }
     let deactivatedAccounts = 0;
     await Promise.all(
       accounts.map(async account => {
         if (this.isAccountOld(account)) {
-          console.log(`deactivating old account: ${account.trackId}`);
+          this.logger.log(`deactivating old account: ${account.trackId}`);
           await this.deactivateAccount(account.id);
           this.analyticsService.trackEvent(AnalyticsEvent.TrackingAccountDeactivated, { account });
           deactivatedAccounts++;
@@ -276,9 +277,9 @@ export class TrackService {
       })
     );
     if (deactivatedAccounts > 0) {
-      console.log('deactivated accounts:', deactivatedAccounts);
+      this.logger.log(`deactivated accounts: ${deactivatedAccounts}`);
     } else {
-      console.log('non of accounts was deactivated');
+      this.logger.log('none of accounts was deactivated');
     }
   }
 
@@ -316,28 +317,22 @@ export class TrackService {
                   });
 
                   this.invalidateCacheRecentIncoming(account.id);
-                  console.log(
+                  this.logger.log(
                     `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
                   );
                 } catch (error) {
                   const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${balance}`;
                   Sentry.captureMessage(errorMsg, error);
-                  console.log(errorMsg);
+                  this.logger.error(errorMsg, error?.stack);
                 }
               }
             }
             break;
           case AccountType.PRIVAT:
-            console.log({
-              success: false,
-              message: `Type is not yet supported: ${account.type}`,
-            });
+            this.logger.warn(`Type is not yet supported: ${account.type}`);
             break;
           default:
-            console.log({
-              success: false,
-              message: `Invalid type: ${account.type}`,
-            });
+            this.logger.warn(`Invalid type: ${account.type}`);
             break;
         }
       })
@@ -358,7 +353,7 @@ export class TrackService {
       orderBy: { trackedAt: 'desc' },
     });
 
-    console.log('DB: read recent incoming and updated cache', accountId);
+    this.logger.log(`DB: read recent incoming and updated cache for account ${accountId}`);
     this.redisReader.write(`${CACHE_KEYS.recentIncoming}-${accountId}`, recentIncoming);
     return recentIncoming;
   }
@@ -388,20 +383,20 @@ export class TrackService {
   async deactivateAccountByTrackId(trackId: string) {
     const account = await this.prisma.account.findFirst({ where: { trackId: trackId } });
     if (!account) {
-      console.log(`account for deactivation not found: ${trackId}`);
+      this.logger.log(`account for deactivation not found: ${trackId}`);
       return;
     }
 
     const jar = await this.checkMono(trackId);
 
     if (!account.isActive) {
-      console.log(`account is already deactivated: ${jar.title} (${trackId})`);
+      this.logger.log(`account is already deactivated: ${jar.title} (${trackId})`);
       return;
     }
 
     await this.deactivateAccount(account.id);
     await this.invalidateCachedActiveAccounts();
-    console.log(`account deactivated: ${jar.title} (${trackId})`);
+    this.logger.log(`account deactivated: ${jar.title} (${trackId})`);
   }
 
   async deactivateAccount(id: number) {
@@ -425,7 +420,7 @@ export class TrackService {
     } catch {
       // File does not exist, create and write text
       await fs.writeFile(filePath, text, { encoding: 'utf-8' });
-      console.log(`File created: ${filePath}`);
+      this.logger.log(`File created: ${filePath}`);
     }
   }
 
@@ -440,11 +435,11 @@ export class TrackService {
       await fs.mkdir('tmp', { recursive: true });
       await fs.access(filePath);
       const content = await fs.readFile(filePath, { encoding: 'utf-8' });
-      console.log(`File content: ${content}`);
+      this.logger.log(`File content read from cache: ${content}`);
       return content;
     } catch {
       // File does not exist
-      console.log(`File does not exist: ${filePath}`);
+      this.logger.log(`File does not exist: ${filePath}`);
       return null;
     }
   }

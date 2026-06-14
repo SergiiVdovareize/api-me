@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BlobService } from '../blob/blob.service';
 import { RedisReader } from 'src/common/helpers/redisReader';
 
@@ -7,6 +7,8 @@ const MAX_ITEMS_TO_REMOVE = 100;
 
 @Injectable()
 export class CacheService {
+  private readonly logger = new Logger(CacheService.name);
+
   constructor(
     private readonly blobService: BlobService,
     private readonly redisReader: RedisReader
@@ -24,22 +26,22 @@ export class CacheService {
   async refresh() {
     const blobList = await this.blobService.list();
     if (!blobList?.length) {
-      console.log('No blob items found');
+      this.logger.log('No blob items found');
       return;
     }
-    console.log('Total blob items found:', blobList.length);
+    this.logger.log(`Total blob items found: ${blobList.length}`);
     const oldItems = blobList
       .filter(item => this.isItemOld(item.uploadedAt))
       .slice(0, MAX_ITEMS_TO_REMOVE);
-    console.log('Old blob items found:', oldItems.length);
+    this.logger.log(`Old blob items found: ${oldItems.length}`);
     let removedItems = 0;
     const deletePromises = oldItems.map(async item => {
-      console.log(`Deleting old blob item: ${item.pathname} uploaded at ${item.uploadedAt}`);
+      this.logger.log(`Deleting old blob item: ${item.pathname} uploaded at ${item.uploadedAt}`);
       this.blobService.remove(item.pathname);
       removedItems++;
     });
     await Promise.all(deletePromises);
-    console.log(`Total removed blob items: ${removedItems}`);
+    this.logger.log(`Total removed blob items: ${removedItems}`);
   }
 
   async nudge() {

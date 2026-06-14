@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nestjs';
 import { Redis } from '@upstash/redis';
 import { env } from 'process';
+import { Logger } from '@nestjs/common';
 
 const defaultTtl = 100800; // Default TTL of 28 hours
 const nudgeTtl = 43200; // 12 hours
@@ -9,12 +10,13 @@ const restTokenProp = 'UPSTASH_REDIS_REST_TOKEN_';
 const redisPairs = Object.keys(env).filter(prop => prop.startsWith(restUrlProp));
 const redisProfilesCount = redisPairs.length;
 export class RedisReader {
+  private readonly logger = new Logger(RedisReader.name);
   private cachedRedisNumber: number;
 
   get redis() {
     if (!this.cachedRedisNumber) {
       this.cachedRedisNumber = this.getRedisPairNumber();
-      console.log('SET cachedRedisNumber', this.cachedRedisNumber);
+      this.logger.log(`SET cachedRedisNumber: ${this.cachedRedisNumber}`);
     }
     return this.getRedisPair(redisPairs[this.cachedRedisNumber]);
   }
@@ -84,9 +86,9 @@ export class RedisReader {
         const redis = this.getRedisPair(pairUrl);
         try {
           await redis.set(key, value, { ex: nudgeTtl });
-          console.log(`successfully nudged UPSTASH_REDIS_REST_URL_${pairSuffix}`);
+          this.logger.log(`successfully nudged UPSTASH_REDIS_REST_URL_${pairSuffix}`);
         } catch (error) {
-          console.log(`couldn't nudge UPSTASH_REDIS_REST_URL_${pairSuffix}`);
+          this.logger.error(`couldn't nudge UPSTASH_REDIS_REST_URL_${pairSuffix}`, error?.stack);
           Sentry.captureMessage(`couldn't nudge UPSTASH_REDIS_REST_URL_${pairSuffix}`, error);
         }
       })
