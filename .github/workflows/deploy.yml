@@ -14,6 +14,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      pages: write
+      id-token: write
 
     steps:
       - name: Checkout Repository
@@ -30,6 +32,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: npx prisma generate
+
+      - name: Run Test Coverage
+        run: npm run test:cov
 
       - name: Run Database Migrations
         run: npx prisma migrate deploy
@@ -49,4 +54,23 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: team_ydFqVNs9ChPOZxzZiBl9eI8Z
           VERCEL_PROJECT_ID: prj_LJ8ZoTkOH5bJWnO9o2SvqrZ4Guon
+
+      - name: Prepare Pages Directory
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p coverage_pages/coverage
+          cp -R coverage/lcov-report/* coverage_pages/coverage/
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=./coverage/"><script>window.location.replace("./coverage/")</script></head><body>Redirecting to <a href="./coverage/">coverage report</a>...</body></html>' > coverage_pages/index.html
+
+      - name: Upload Pages Artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage_pages/
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
+
+
 
