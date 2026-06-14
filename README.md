@@ -6,7 +6,7 @@
 [![Lint & Format](https://img.shields.io/badge/Lint%20%26%20Format-passing-brightgreen?style=flat-square&logo=eslint)](https://github.com/SergiiVdovareize/api-me)
 [![Deploy Status](https://github.com/SergiiVdovareize/api-me/actions/workflows/deploy.yml/badge.svg?style=flat-square)](https://github.com/SergiiVdovareize/api-me/actions)
 [![Version](https://img.shields.io/badge/Version-v1.4.1-blue?style=flat-square)](https://github.com/SergiiVdovareize/api-me/releases)
-[![Coverage](https://img.shields.io/badge/Coverage-View%20Report-blueviolet?style=flat-square&logo=jest)](https://SergiiVdovareize.github.io/api-me/coverage/)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https://SergiiVdovareize.github.io/api-me/coverage/coverage-summary.json&query=$.total.lines.pct&label=coverage&suffix=%25&color=brightgreen&style=flat-square&logo=jest)](https://SergiiVdovareize.github.io/api-me/coverage/)
 
 
 

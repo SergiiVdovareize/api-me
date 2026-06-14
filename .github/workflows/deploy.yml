@@ -60,7 +60,9 @@ jobs:
         run: |
           mkdir -p coverage_pages/coverage
           cp -R coverage/lcov-report/* coverage_pages/coverage/
+          cp coverage/coverage-summary.json coverage_pages/coverage/
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=./coverage/"><script>window.location.replace("./coverage/")</script></head><body>Redirecting to <a href="./coverage/">coverage report</a>...</body></html>' > coverage_pages/index.html
+
 
       - name: Upload Pages Artifact
         if: github.ref == 'refs/heads/main'
