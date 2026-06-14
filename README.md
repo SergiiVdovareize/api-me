@@ -1,73 +1,121 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# api-me 🚀
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![Unit Tests](https://img.shields.io/badge/Unit%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
+[![E2E Tests](https://img.shields.io/badge/E2E%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
+[![Sanity Tests](https://img.shields.io/badge/Sanity%20Tests-passing-brightgreen?style=flat-square&logo=jest)](https://github.com/SergiiVdovareize/api-me)
+[![Lint & Format](https://img.shields.io/badge/Lint%20%26%20Format-passing-brightgreen?style=flat-square&logo=eslint)](https://github.com/SergiiVdovareize/api-me)
+[![Deployment](https://img.shields.io/badge/Deployment-Vercel-black?style=flat-square&logo=vercel)](https://vercel.com/)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+A modular NestJS API designed for personal utility, serverless computation, bank account tracking, and media extraction. Built with TypeScript, Prisma, and PostgreSQL, and optimized for deployment on Vercel.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Installation
+## 🛠️ Technology Stack
 
+* **Framework**: NestJS (v11)
+* **Language**: TypeScript
+* **Database & ORM**: PostgreSQL & Prisma ORM
+* **Caching**: Upstash Redis
+* **Analytics**: Sentry & PostHog
+* **Deployment**: Vercel Serverless Functions & Vercel Blob Storage
+
+---
+
+## 📂 Project Architecture & Modules
+
+The application is split into highly modular, decoupled domains:
+
+### 1. Memes (Media Extraction) — `src/memes`
+Steals and processes media resources from external social media URLs (Instagram, Facebook, Threads, etc.) using multiple concurrent scraper/downloader attempts.
+* **Controller**: `GET /memes/:url` — Extracted media info is fetched from different providers concurrently.
+* **Decoupled Downloaders**: Under `src/memes/downloaders/`, each scraping provider has its own folder containing a downloader class and a response adapter class:
+  * **Snapsave**: Uses `snapsave-adapter` to query and format Instagram/Facebook/Threads URLs.
+  * **Mediasnap**: Integrates `mediasnap` library.
+  * **Vidssave**: Scrapes and parses direct layout configs/auth tokens to fetch resources.
+  * **Highreach** & **Next**: Scrapers for other custom endpoints.
+* **Unified Data Model**: All adapters format different responses into a consistent `DownloadResult` interface.
+* **Nextdownloader Proxy**: `GET /memes/download/next` — Handles specialized media chunk proxying.
+* **Security**: Enforces origin verification through the `OriginGuard` to only allow incoming requests from `https://snip.vdovareize.me/` (or `localhost` in local development mode).
+
+### 2. General File Proxy — `src/app.controller.ts`
+* **Route**: `GET /download?url=...&filename=...`
+* **Logic**: Downloads remote files on-the-fly, auto-detects standard mime-types (video, audio, images), and returns a `StreamableFile` attachment to bypass CORS restrictions for media streaming.
+
+### 3. Track (Bank Account Tracking) — `src/track`
+Monitors bank account balances and keeps history inside PostgreSQL.
+* **Routes**:
+  * `GET /track`: Syncs all bank accounts.
+  * `GET /track/refresh`: Refreshes and logs track analytics.
+  * `GET /track/deactivate/:trackId`: Deactivates balance tracking for a specific account.
+  * `GET /track/check/:type/:id`: Queries the Mono/Privat bank API for account info and balance.
+  * `GET /track/mono/:id`: Mono-specific balance checker.
+  * `GET /track/watch/:type/:id`: Starts tracking/watching a specific bank account.
+
+### 4. Clouds (Serverless Computations) — `src/clouds`
+Provides microservice mathematical computations with monthly quotas (900 calls/month).
+* **Routes**:
+  * `GET /clouds/fibonacci/:index` — Computes the N-th Fibonacci number.
+  * `GET /clouds/prime/:index` — Computes the N-th Prime number.
+  * `GET /clouds/armstrong/:index` — Computes the N-th Armstrong number.
+  * `GET /clouds/result/:id` — Retries and queries Vercel Blob storage for delayed background job JSON results.
+
+### 5. Game Results (Leaderboards) — `src/game-results`
+Maintains score leaderboards for mini-games (e.g., Stroop color matching game).
+* **Routes**:
+  * `POST /game-results`: Creates a new record with cryptographic expiration tokens to prevent spoofing/tampering.
+  * `GET /game-results`: Returns all game records.
+  * `GET /game-results/leaders?type=...`: Returns descending highscore leaders grouped by `GameType`.
+
+---
+
+## 🗄️ Database Schema (Prisma)
+
+The application uses a PostgreSQL database structured via Prisma:
+* **`Request`**: Stores logs of microservice api calculations to enforce limits.
+* **`Account`**: Represents a tracked bank account (e.g., Mono bank).
+* **`AccountIncoming`**: Stores periodic balance statements linked to an `Account`.
+* **`GameResult`**: Stores player names, scores, and timestamps for games like `stroop`.
+
+
+
+## 🚀 Running the Server
+
+### Installation
 ```bash
-$ npm install
+npm install
 ```
 
-## Running the app
-
+### Prisma Client & Migrations
 ```bash
-# development
-$ npm run start
+# Generate Prisma Client
+npx prisma generate
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Apply local migrations
+npx prisma migrate dev
 ```
 
-## Test
-
+### Run Locally
 ```bash
-# unit tests
-$ npm run test
+# Development
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Production Build & Run
+npm run build
+npm run start:prod
 ```
 
-## Support
+### Verification & Testing
+```bash
+# Run unit tests
+npm run test
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Run E2E tests
+npm run test:e2e
 
-## Stay in touch
+# Run Live Sanity Scraper tests
+npm run test:sanity
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).
+# Run Linting and Formatting checks
+npm run validate
+```
