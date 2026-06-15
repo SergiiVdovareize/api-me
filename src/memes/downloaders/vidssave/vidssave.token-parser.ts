@@ -18,7 +18,24 @@ export class VidssaveTokenParser {
       },
     });
     if (!landingRes.ok) {
-      throw new Error(`Failed to fetch vidssave landing page: ${landingRes.statusText}`);
+      let bodyText = '';
+      try {
+        bodyText = (await landingRes.text()).slice(0, 500);
+      } catch (e) {
+        bodyText = `Failed to get body: ${e.message}`;
+      }
+      const headersObj = {};
+      landingRes.headers.forEach((val, key) => {
+        headersObj[key] = val;
+      });
+      this.logger.error(
+        `Failed to fetch vidssave landing page. Status: ${landingRes.status} ${landingRes.statusText}. ` +
+          `Headers: ${JSON.stringify(headersObj)}. ` +
+          `Body (first 500 chars): ${bodyText}`
+      );
+      throw new Error(
+        `Failed to fetch vidssave landing page: ${landingRes.status} ${landingRes.statusText}`
+      );
     }
     const landingHtml = await landingRes.text();
 
@@ -44,7 +61,24 @@ export class VidssaveTokenParser {
       },
     });
     if (!jsRes.ok) {
-      throw new Error(`Failed to fetch vidssave layout script: ${jsRes.statusText}`);
+      let bodyText = '';
+      try {
+        bodyText = (await jsRes.text()).slice(0, 500);
+      } catch (e) {
+        bodyText = `Failed to get body: ${e.message}`;
+      }
+      const headersObj = {};
+      jsRes.headers.forEach((val, key) => {
+        headersObj[key] = val;
+      });
+      this.logger.error(
+        `Failed to fetch vidssave layout script. Status: ${jsRes.status} ${jsRes.statusText}. ` +
+          `Headers: ${JSON.stringify(headersObj)}. ` +
+          `Body (first 500 chars): ${bodyText}`
+      );
+      throw new Error(
+        `Failed to fetch vidssave layout script: ${jsRes.status} ${jsRes.statusText}`
+      );
     }
     const jsContent = await jsRes.text();
 

@@ -99,11 +99,14 @@ describe('VidssaveTokenParser', () => {
   it('should throw an error when landing page fetch fails', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
+      status: 503,
       statusText: 'Service Unavailable',
+      headers: new Map(),
+      text: jest.fn().mockResolvedValue('Error body'),
     });
 
     await expect(parser.parseToken()).rejects.toThrow(
-      'Failed to fetch vidssave landing page: Service Unavailable'
+      'Failed to fetch vidssave landing page: 503 Service Unavailable'
     );
   });
 
@@ -129,11 +132,14 @@ describe('VidssaveTokenParser', () => {
       })
       .mockResolvedValueOnce({
         ok: false,
+        status: 500,
         statusText: 'Internal Error',
+        headers: new Map(),
+        text: jest.fn().mockResolvedValue('Internal error body'),
       });
 
     await expect(parser.parseToken()).rejects.toThrow(
-      'Failed to fetch vidssave layout script: Internal Error'
+      'Failed to fetch vidssave layout script: 500 Internal Error'
     );
   });
 
