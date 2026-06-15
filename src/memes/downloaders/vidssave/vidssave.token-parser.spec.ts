@@ -38,11 +38,13 @@ describe('VidssaveTokenParser', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      'https://vidssave.com/youtube-video-downloader-6fu'
+      'https://vidssave.com/youtube-video-downloader-6fu',
+      expect.any(Object)
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      'https://vidssave.com/_next/static/chunks/pages/(site)/layout-abc123xyz.js'
+      'https://vidssave.com/_next/static/chunks/pages/(site)/layout-abc123xyz.js',
+      expect.any(Object)
     );
   });
 
@@ -65,7 +67,8 @@ describe('VidssaveTokenParser', () => {
     expect(token).toBe('test_auth_token_value_456');
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      'https://vidssave.com/abc/(site)/layout-abc123xyz.js'
+      'https://vidssave.com/abc/(site)/layout-abc123xyz.js',
+      expect.any(Object)
     );
   });
 
@@ -88,7 +91,8 @@ describe('VidssaveTokenParser', () => {
     expect(token).toBe('test_auth_token_value_456');
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      'https://vidssave.com/abc/(site)/layout-abc123xyz.js'
+      'https://vidssave.com/abc/(site)/layout-abc123xyz.js',
+      expect.any(Object)
     );
   });
 

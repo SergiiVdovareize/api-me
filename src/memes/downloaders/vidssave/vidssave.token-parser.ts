@@ -6,7 +6,17 @@ export class VidssaveTokenParser {
 
   async parseToken(): Promise<string> {
     this.logger.log('Fetching vidssave landing page to find layout script...');
-    const landingRes = await fetch('https://vidssave.com/youtube-video-downloader-6fu');
+    const landingRes = await fetch('https://vidssave.com/youtube-video-downloader-6fu', {
+      headers: {
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+    });
     if (!landingRes.ok) {
       throw new Error(`Failed to fetch vidssave landing page: ${landingRes.statusText}`);
     }
@@ -24,7 +34,15 @@ export class VidssaveTokenParser {
     }
 
     this.logger.log(`Fetching vidssave layout script from ${scriptUrl}...`);
-    const jsRes = await fetch(scriptUrl);
+    const jsRes = await fetch(scriptUrl, {
+      headers: {
+        Accept: '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Referer: 'https://vidssave.com/',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+    });
     if (!jsRes.ok) {
       throw new Error(`Failed to fetch vidssave layout script: ${jsRes.statusText}`);
     }
