@@ -24,6 +24,7 @@ import { BlobService } from './blob/blob.service';
 import { AnalyticsController } from './analytics/analytics.controller';
 import { GameResultsModule } from './game-results/game-results.module';
 import { AlphadateModule } from './alphadate/alphadate.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { AlphadateModule } from './alphadate/alphadate.module';
     CacheModule,
     GameResultsModule,
     AlphadateModule,
+    EmailModule,
   ],
 
   controllers: [AppController, DateController, AnalyticsController],

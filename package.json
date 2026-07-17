@@ -48,6 +48,7 @@
     "posthog-node": "^5.28.0",
     "prisma": "^6.11.1",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.17.2",
     "rxjs": "^7.8.2",
     "snapsave-adapter": "2.0.2",
     "typeorm": "^0.3.25",
