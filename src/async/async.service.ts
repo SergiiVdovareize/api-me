@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { put, del, list, ListFoldedBlobResult } from '@vercel/blob';
 import { uid } from 'uid';
-
-const SYNC_TIMEOUT = 1000;
+import { ASYNC_CONSTANTS } from './async.constants';
 
 @Injectable()
 export class AsyncService {
@@ -22,7 +21,7 @@ export class AsyncService {
         result.type = 'async';
         result.data = fileName;
         resolve(result);
-      }, SYNC_TIMEOUT);
+      }, ASYNC_CONSTANTS.SYNC_TIMEOUT);
 
       execute().then((data: JSON) => {
         if (result.type == 'async') {
@@ -67,8 +66,8 @@ export class AsyncService {
   }
 
   async findResultFileUrlWithRetry(id: string, attempt: number = 0): Promise<string | null> {
-    const maxTries = 7;
-    const retryDelay = 500;
+    const maxTries = ASYNC_CONSTANTS.MAX_TRIES;
+    const retryDelay = ASYNC_CONSTANTS.RETRY_DELAY;
     return new Promise(async resolve => {
       const url = await this.findResultFileUrl(id);
       // console.log('attempt - ', attempt, id, url)

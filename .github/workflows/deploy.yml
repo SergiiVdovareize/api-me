@@ -1,0 +1,78 @@
+name: Deploy
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Test Coverage
+        run: npm run test:cov
+
+      - name: Run Database Migrations
+        run: npx prisma migrate deploy
+        env:
+          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+          POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
+
+      - name: Run Semantic Release
+        if: github.ref == 'refs/heads/main'
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Vercel
+        run: npm run deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_ydFqVNs9ChPOZxzZiBl9eI8Z
+          VERCEL_PROJECT_ID: prj_LJ8ZoTkOH5bJWnO9o2SvqrZ4Guon
+
+      - name: Prepare Pages Directory
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p coverage_pages/coverage
+          cp -R coverage/lcov-report/* coverage_pages/coverage/
+          cp coverage/coverage-summary.json coverage_pages/coverage/
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=./coverage/"><script>window.location.replace("./coverage/")</script></head><body>Redirecting to <a href="./coverage/">coverage report</a>...</body></html>' > coverage_pages/index.html
+
+
+      - name: Upload Pages Artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage_pages/
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
+
+
+

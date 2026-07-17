@@ -28,7 +28,7 @@ import { AlphadateModule } from './alphadate/alphadate.module';
 @Module({
   imports: [
     SentryModule.forRoot(),
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
     RequestsModule,

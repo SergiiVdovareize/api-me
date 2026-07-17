@@ -1,16 +1,22 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PostHog } from 'posthog-node';
-import { env } from 'process';
 import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 @Injectable()
 export class PosthogService implements OnModuleDestroy {
   private posthog: PostHog;
 
-  constructor() {
-    this.posthog = new PostHog(env.POSTHOG_API_KEY!, {
-      host: 'https://eu.i.posthog.com',
-    });
+  constructor(private readonly configService: ConfigService) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const host = this.configService.get<string>('HOST');
+    const apiKey = this.configService.get<string>('POSTHOG_API_KEY');
+
+    if (nodeEnv !== 'test' && host !== 'local') {
+      this.posthog = new PostHog(apiKey!, {
+        host: 'https://eu.i.posthog.com',
+      });
+    }
   }
 
   /**
@@ -19,12 +25,17 @@ export class PosthogService implements OnModuleDestroy {
    * @param properties - Additional properties for the event
    */
   trackEvent(event: AnalyticsEvent, properties: Record<string, any> = {}) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const host = this.configService.get<string>('HOST');
+    if (nodeEnv === 'test' || host === 'local' || !this.posthog) {
+      return;
+    }
     this.posthog.capture({
       distinctId: properties.distinctId || 'anonymous', // Replace with user id if available
       event,
       properties: {
         ...properties,
-        env: env.HOST,
+        env: host,
       },
     });
   }
@@ -35,6 +46,11 @@ export class PosthogService implements OnModuleDestroy {
    * @param properties - Additional properties for the user
    */
   identifyUser(distinctId: string, properties: Record<string, any> = {}) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const host = this.configService.get<string>('HOST');
+    if (nodeEnv === 'test' || host === 'local' || !this.posthog) {
+      return;
+    }
     this.posthog.identify({
       distinctId,
       properties,
@@ -45,6 +61,8 @@ export class PosthogService implements OnModuleDestroy {
    * Clean up the PostHog client before shutdown.
    */
   onModuleDestroy() {
-    this.posthog.shutdown();
+    if (this.posthog) {
+      this.posthog.shutdown();
+    }
   }
 }
