@@ -48,7 +48,9 @@ model AlphadateBoard {
   key       String             @unique
   name      String?
   pin       String?
+  email     String?
   settings         Json?              @default("{}")
+  letters          Json?              @default("[]")
   partners         AlphadatePartner[]
   history          AlphadateHistory[]
   currentLetter    String?            @db.Char(1)

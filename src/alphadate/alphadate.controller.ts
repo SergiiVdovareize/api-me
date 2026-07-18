@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Get, Put, Param, BadRequestException } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 
@@ -12,6 +12,71 @@ export class AlphadateController {
     return {
       success: true,
       key: result.key,
+    };
+  }
+
+  @Get(':key')
+  async getBoardState(@Param('key') key: string) {
+    return this.alphadateService.getBoardState(key);
+  }
+
+  @Put(':key')
+  async updateBoardState(@Param('key') key: string, @Body() body: any) {
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Request body must be a JSON object');
+    }
+
+    const { letters, metadata } = body;
+
+    if (!letters || !Array.isArray(letters)) {
+      throw new BadRequestException('letters must be an array');
+    }
+
+    for (const item of letters) {
+      if (!item || typeof item !== 'object') {
+        throw new BadRequestException('Each letter state must be an object');
+      }
+      if (typeof item.letter !== 'string' || !item.letter.trim()) {
+        throw new BadRequestException('Each letter state must contain a non-empty letter string');
+      }
+      if (!['available', 'used', 'excluded', 'skipped'].includes(item.status)) {
+        throw new BadRequestException(`Status must be one of: available, used, excluded, skipped. Received: ${item.status}`);
+      }
+    }
+
+    if (!metadata || typeof metadata !== 'object') {
+      throw new BadRequestException('metadata must be a JSON object');
+    }
+
+    const { partners, pinHash } = metadata;
+
+    if (!partners || !Array.isArray(partners) || partners.length === 0) {
+      throw new BadRequestException('metadata.partners must be a non-empty array of strings');
+    }
+
+    for (const partner of partners) {
+      if (typeof partner !== 'string' || !partner.trim()) {
+        throw new BadRequestException('Each partner name must be a non-empty string');
+      }
+    }
+
+    if (pinHash !== undefined && pinHash !== null && typeof pinHash !== 'string') {
+      throw new BadRequestException('metadata.pinHash must be a string or null');
+    }
+
+    await this.alphadateService.updateBoardState(key, {
+      letters: letters.map(item => ({
+        letter: item.letter.trim(),
+        status: item.status,
+      })),
+      metadata: {
+        partners: partners.map(p => p.trim()),
+        pinHash: pinHash || null,
+      },
+    });
+
+    return {
+      success: true,
     };
   }
 }

@@ -1,4 +1,4 @@
-import { IsArray, IsString, IsNotEmpty, ArrayMinSize } from 'class-validator';
+import { IsArray, IsString, IsNotEmpty, ArrayMinSize, IsEmail } from 'class-validator';
 
 export class CreateBoardDto {
   @IsArray()
@@ -6,4 +6,9 @@ export class CreateBoardDto {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   partners: string[];
+
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
 }
