@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Put, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Put, Delete, Param, BadRequestException } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 
@@ -102,5 +102,10 @@ export class AlphadateController {
       success: true,
       currentPartnerId: result.currentPartnerId,
     };
+  }
+
+  @Delete(':key')
+  async deleteBoard(@Param('key') key: string) {
+    return this.alphadateService.deleteBoard(key);
   }
 }

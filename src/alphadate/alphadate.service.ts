@@ -253,4 +253,20 @@ export class AlphadateService {
       currentPartnerId: nextPartnerId,
     };
   }
+
+  async deleteBoard(key: string) {
+    const board = await this.prisma.alphadateBoard.findUnique({
+      where: { key },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board with key ${key} not found`);
+    }
+
+    await this.prisma.alphadateBoard.delete({
+      where: { key },
+    });
+
+    return { success: true };
+  }
 }
