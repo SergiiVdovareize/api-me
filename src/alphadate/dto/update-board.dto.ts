@@ -4,11 +4,11 @@ export interface LetterState {
 }
 
 export interface BoardMetadata {
-  partners: string[];
-  pinHash: string | null;
+  partners?: string[];
+  pinHash?: string | null;
 }
 
 export interface UpdateBoardDto {
   letters: LetterState[];
-  metadata: BoardMetadata;
+  metadata?: BoardMetadata;
 }

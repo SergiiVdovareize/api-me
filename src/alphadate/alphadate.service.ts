@@ -48,7 +48,7 @@ export class AlphadateService {
     const frontendBaseUrl = this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
     const boardLink = `${frontendBaseUrl}/#/${key}`;
 
-    const partnersText = partners.join(' та ');
+    const partnersText = partners.map(name => `<strong>${name}</strong>`).join(' та ');
     const subject = 'Ваша дошка побачень AlphaDate створена! 💖';
     const html = `
       <p>Привіт!</p>
@@ -84,8 +84,18 @@ export class AlphadateService {
 
       const partners = await Promise.all(partnerPromises);
 
+      // Randomly select one of the created partner IDs
+      const randomPartner = partners[Math.floor(Math.random() * partners.length)];
+
+      const updatedBoard = await tx.alphadateBoard.update({
+        where: { key: board.key },
+        data: {
+          currentPartnerId: randomPartner.id,
+        },
+      });
+
       return {
-        ...board,
+        ...updatedBoard,
         partners,
       };
     });
@@ -119,7 +129,11 @@ export class AlphadateService {
       success: true,
       letters,
       metadata: {
-        partners: board.partners.map(p => p.name),
+        partners: board.partners.map(p => ({
+          id: p.id,
+          name: p.name,
+        })),
+        currentPartnerId: board.currentPartnerId,
         pinHash: board.pin,
       },
     };
@@ -134,39 +148,109 @@ export class AlphadateService {
       throw new NotFoundException(`Board with key ${key} not found`);
     }
 
+    const dbLetters = (board.letters as any) || [];
+    const dbStatusMap = new Map<string, string>();
+    for (const item of dbLetters) {
+      if (item && typeof item === 'object' && item.letter) {
+        dbStatusMap.set(item.letter, item.status);
+      }
+    }
+
+    let hasChangedToUsed = false;
+    for (const item of dto.letters) {
+      const oldStatus = dbStatusMap.get(item.letter) || 'available';
+      if (item.status === 'used' && oldStatus !== 'used') {
+        hasChangedToUsed = true;
+        break;
+      }
+    }
+
+    const isFullReset = dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
+
+    let nextPartnerId: number | null = board.currentPartnerId;
+
     await this.prisma.$transaction(async tx => {
-      await tx.alphadateBoard.update({
-        where: { key },
-        data: {
-          letters: dto.letters as any,
-          pin: dto.metadata.pinHash,
-        },
-      });
-
-      await tx.alphadateBoard.update({
-        where: { key },
-        data: {
-          currentPartnerId: null,
-        },
-      });
-
-      await tx.alphadatePartner.deleteMany({
-        where: { boardId: key },
-      });
-
-      const partnerPromises = dto.metadata.partners.map((name, index) => {
-        return tx.alphadatePartner.create({
-          data: {
-            boardId: key,
-            name,
-            turnOrder: index + 1,
-          },
+      if (dto.metadata && dto.metadata.partners) {
+        const existingPartners = await tx.alphadatePartner.findMany({
+          where: { boardId: key },
+          orderBy: { turnOrder: 'asc' },
         });
+
+        const newPartners = dto.metadata.partners;
+        const minLen = Math.min(existingPartners.length, newPartners.length);
+
+        for (let i = 0; i < minLen; i++) {
+          await tx.alphadatePartner.update({
+            where: { id: existingPartners[i].id },
+            data: { name: newPartners[i] },
+          });
+        }
+
+        if (newPartners.length > existingPartners.length) {
+          for (let i = minLen; i < newPartners.length; i++) {
+            await tx.alphadatePartner.create({
+              data: {
+                boardId: key,
+                name: newPartners[i],
+                turnOrder: i + 1,
+              },
+            });
+          }
+        }
+
+        if (existingPartners.length > newPartners.length) {
+          const idsToDelete = existingPartners.slice(minLen).map(p => p.id);
+          if (board.currentPartnerId && idsToDelete.includes(board.currentPartnerId)) {
+            await tx.alphadateBoard.update({
+              where: { key },
+              data: { currentPartnerId: null },
+            });
+            nextPartnerId = null;
+          }
+
+          await tx.alphadatePartner.deleteMany({
+            where: { id: { in: idsToDelete } },
+          });
+        }
+      }
+
+      const currentPartners = await tx.alphadatePartner.findMany({
+        where: { boardId: key },
+        orderBy: { turnOrder: 'asc' },
       });
 
-      await Promise.all(partnerPromises);
+      if (currentPartners.length > 0) {
+        if (isFullReset) {
+          const randomPartner = currentPartners[Math.floor(Math.random() * currentPartners.length)];
+          nextPartnerId = randomPartner.id;
+        } else if (hasChangedToUsed) {
+          const currentIdToUse = nextPartnerId !== null ? nextPartnerId : board.currentPartnerId;
+          const currentIndex = currentPartners.findIndex(p => p.id === currentIdToUse);
+          const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % currentPartners.length;
+          nextPartnerId = currentPartners[nextIndex].id;
+        }
+      } else {
+        nextPartnerId = null;
+      }
+
+      const updateData: any = {
+        letters: dto.letters as any,
+        currentPartnerId: nextPartnerId,
+      };
+
+      if (dto.metadata && dto.metadata.pinHash !== undefined) {
+        updateData.pin = dto.metadata.pinHash;
+      }
+
+      await tx.alphadateBoard.update({
+        where: { key },
+        data: updateData,
+      });
     });
 
-    return { success: true };
+    return {
+      success: true,
+      currentPartnerId: nextPartnerId,
+    };
   }
 }

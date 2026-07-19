@@ -44,39 +44,63 @@ export class AlphadateController {
       }
     }
 
-    if (!metadata || typeof metadata !== 'object') {
-      throw new BadRequestException('metadata must be a JSON object');
-    }
+    let parsedPartners: string[] | undefined = undefined;
+    let parsedPinHash: string | null | undefined = undefined;
 
-    const { partners, pinHash } = metadata;
+    if (metadata !== undefined && metadata !== null) {
+      if (typeof metadata !== 'object') {
+        throw new BadRequestException('metadata must be a JSON object');
+      }
 
-    if (!partners || !Array.isArray(partners) || partners.length === 0) {
-      throw new BadRequestException('metadata.partners must be a non-empty array of strings');
-    }
+      const { partners, pinHash } = metadata;
 
-    for (const partner of partners) {
-      if (typeof partner !== 'string' || !partner.trim()) {
-        throw new BadRequestException('Each partner name must be a non-empty string');
+      if (partners !== undefined) {
+        if (!Array.isArray(partners) || partners.length === 0) {
+          throw new BadRequestException('metadata.partners must be a non-empty array');
+        }
+
+        parsedPartners = [];
+        for (const partner of partners) {
+          if (typeof partner === 'string' && partner.trim()) {
+            parsedPartners.push(partner.trim());
+          } else if (partner && typeof partner === 'object' && typeof partner.name === 'string' && partner.name.trim()) {
+            parsedPartners.push(partner.name.trim());
+          } else {
+            throw new BadRequestException('Each partner must be a non-empty string or an object with a non-empty name');
+          }
+        }
+      }
+
+      if (pinHash !== undefined) {
+        if (pinHash !== null && typeof pinHash !== 'string') {
+          throw new BadRequestException('metadata.pinHash must be a string or null');
+        }
+        parsedPinHash = pinHash;
       }
     }
 
-    if (pinHash !== undefined && pinHash !== null && typeof pinHash !== 'string') {
-      throw new BadRequestException('metadata.pinHash must be a string or null');
-    }
-
-    await this.alphadateService.updateBoardState(key, {
+    const updateBoardDto: any = {
       letters: letters.map(item => ({
         letter: item.letter.trim(),
         status: item.status,
       })),
-      metadata: {
-        partners: partners.map(p => p.trim()),
-        pinHash: pinHash || null,
-      },
-    });
+    };
+
+    if (parsedPartners !== undefined || parsedPinHash !== undefined) {
+      updateBoardDto.metadata = {};
+      if (parsedPartners !== undefined) {
+        updateBoardDto.metadata.partners = parsedPartners;
+      }
+      if (parsedPinHash !== undefined) {
+        updateBoardDto.metadata.pinHash = parsedPinHash;
+      }
+    }
+
+    const result = await this.alphadateService.updateBoardState(key, updateBoardDto);
 
     return {
       success: true,
+      currentPartnerId: result.currentPartnerId,
     };
   }
 }

@@ -16,16 +16,18 @@ export class EmailService {
     }
   }
 
-  async sendEmail(to: string, subject: string, html: string, from = 'onboarding@resend.dev') {
+  async sendEmail(to: string, subject: string, html: string, from?: string) {
     if (!this.resend) {
       this.logger.warn('Skipping email send as Resend is not configured.');
       return null;
     }
 
+    const sender = from || this.configService.get<string>('RESEND_FROM_EMAIL') || 'onboarding@resend.dev';
+
     try {
-      this.logger.log(`Sending email to ${to} with subject: "${subject}"`);
+      this.logger.log(`Sending email to ${to} with subject: "${subject}" from sender: "${sender}"`);
       const { data, error } = await this.resend.emails.send({
-        from,
+        from: sender,
         to,
         subject,
         html,
