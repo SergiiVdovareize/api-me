@@ -45,7 +45,8 @@ export class AlphadateService {
   }
 
   private async sendCreationEmail(email: string, partners: string[], key: string): Promise<void> {
-    const frontendBaseUrl = this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
+    const frontendBaseUrl =
+      this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
     const boardLink = `${frontendBaseUrl}/#/${key}`;
 
     const partnersText = partners.map(name => `<strong>${name}</strong>`).join(' та ');
@@ -101,7 +102,10 @@ export class AlphadateService {
     });
 
     this.sendCreationEmail(dto.email, dto.partners, key).catch(err => {
-      this.logger.error(`Failed to send creation email in background for key ${key}: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to send creation email in background for key ${key}: ${err.message}`,
+        err.stack
+      );
     });
 
     return result;
@@ -165,7 +169,8 @@ export class AlphadateService {
       }
     }
 
-    const isFullReset = dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
+    const isFullReset =
+      dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
 
     let nextPartnerId: number | null = board.currentPartnerId;
 

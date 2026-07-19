@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, Put, Delete, Param, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Put,
+  Delete,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 
@@ -40,7 +49,9 @@ export class AlphadateController {
         throw new BadRequestException('Each letter state must contain a non-empty letter string');
       }
       if (!['available', 'used', 'excluded', 'skipped'].includes(item.status)) {
-        throw new BadRequestException(`Status must be one of: available, used, excluded, skipped. Received: ${item.status}`);
+        throw new BadRequestException(
+          `Status must be one of: available, used, excluded, skipped. Received: ${item.status}`
+        );
       }
     }
 
@@ -48,7 +59,7 @@ export class AlphadateController {
     let parsedPinHash: string | null | undefined = undefined;
 
     if (metadata !== undefined && metadata !== null) {
-      if (typeof metadata !== 'object') {
+      if (typeof metadata !== 'object' || Array.isArray(metadata)) {
         throw new BadRequestException('metadata must be a JSON object');
       }
 
@@ -63,10 +74,17 @@ export class AlphadateController {
         for (const partner of partners) {
           if (typeof partner === 'string' && partner.trim()) {
             parsedPartners.push(partner.trim());
-          } else if (partner && typeof partner === 'object' && typeof partner.name === 'string' && partner.name.trim()) {
+          } else if (
+            partner &&
+            typeof partner === 'object' &&
+            typeof partner.name === 'string' &&
+            partner.name.trim()
+          ) {
             parsedPartners.push(partner.name.trim());
           } else {
-            throw new BadRequestException('Each partner must be a non-empty string or an object with a non-empty name');
+            throw new BadRequestException(
+              'Each partner must be a non-empty string or an object with a non-empty name'
+            );
           }
         }
       }
