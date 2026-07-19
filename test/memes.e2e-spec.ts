@@ -5,6 +5,8 @@ import { AppModule } from './../src/app.module';
 import * as Sentry from '@sentry/nestjs';
 import { PrismaService as PrismaService1 } from 'src/prisma.service';
 import { PrismaService as PrismaService2 } from 'src/models/prisma/prisma.service';
+import { PosthogService } from 'src/posthog/posthog.service';
+import { BlobService } from 'src/blob/blob.service';
 import {
   SnapsaveDownloader,
   MediasnapDownloader,
@@ -46,6 +48,18 @@ describe('MemesController (e2e)', () => {
         request: {
           create: jest.fn().mockResolvedValue({ id: 1 }),
         },
+      })
+      .overrideProvider(PosthogService)
+      .useValue({
+        trackEvent: jest.fn(),
+      })
+      .overrideProvider(BlobService)
+      .useValue({
+        read: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        remove: jest.fn().mockResolvedValue({}),
+        find: jest.fn().mockResolvedValue(null),
+        list: jest.fn().mockResolvedValue([]),
       })
       .compile();
 
