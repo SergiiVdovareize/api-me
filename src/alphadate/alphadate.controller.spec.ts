@@ -96,6 +96,42 @@ describe('AlphadateController', () => {
       );
     });
 
+    it('should throw BadRequestException if currentLetter is a multi-character string', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+        currentLetter: 'AB',
+      };
+      await expect(controller.updateBoardState('key', payload)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw BadRequestException if currentLetter is not a string or null', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+        currentLetter: 123,
+      };
+      await expect(controller.updateBoardState('key', payload)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should successfully update board state with valid payload including currentLetter', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+        currentLetter: 'Б',
+      };
+
+      service.updateBoardState.mockResolvedValue({ currentPartnerId: 2 } as any);
+
+      const result = await controller.updateBoardState('key', payload);
+      expect(result).toEqual({ success: true, currentPartnerId: 2 });
+      expect(service.updateBoardState).toHaveBeenCalledWith('key', {
+        letters: [{ letter: 'A', status: 'used' }],
+        currentLetter: 'Б',
+      });
+    });
+
     it('should successfully update board state with valid payload', async () => {
       const payload = {
         letters: [{ letter: 'A', status: 'used' }],

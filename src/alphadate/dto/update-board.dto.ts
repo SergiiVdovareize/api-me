@@ -11,4 +11,5 @@ export interface BoardMetadata {
 export interface UpdateBoardDto {
   letters: LetterState[];
   metadata?: BoardMetadata;
+  currentLetter?: string | null;
 }

@@ -138,6 +138,7 @@ export class AlphadateService {
           name: p.name,
         })),
         currentPartnerId: board.currentPartnerId,
+        currentLetter: board.currentLetter,
         pinHash: board.pin,
       },
     };
@@ -242,6 +243,10 @@ export class AlphadateService {
         letters: dto.letters as any,
         currentPartnerId: nextPartnerId,
       };
+
+      if (dto.currentLetter !== undefined) {
+        updateData.currentLetter = dto.currentLetter;
+      }
 
       if (dto.metadata && dto.metadata.pinHash !== undefined) {
         updateData.pin = dto.metadata.pinHash;

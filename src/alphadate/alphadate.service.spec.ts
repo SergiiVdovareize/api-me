@@ -126,6 +126,7 @@ describe('AlphadateService', () => {
         key: 'valid-key',
         letters: [{ letter: 'A', status: 'available' }],
         currentPartnerId: 10,
+        currentLetter: 'Б',
         pin: 'pin-hash',
         partners: [
           { id: 10, name: 'Alice', turnOrder: 1 },
@@ -145,6 +146,7 @@ describe('AlphadateService', () => {
             { id: 20, name: 'Bob' },
           ],
           currentPartnerId: 10,
+          currentLetter: 'Б',
           pinHash: 'pin-hash',
         },
       });
@@ -284,6 +286,29 @@ describe('AlphadateService', () => {
       expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
         where: { key: 'key' },
         data: expect.objectContaining({ pin: 'new-pin-hash' }),
+      });
+    });
+
+    it('should update currentLetter when currentLetter is provided', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [],
+        currentPartnerId: 1,
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+      mockPrismaService.alphadatePartner.findMany.mockResolvedValue([]);
+
+      const dto = {
+        letters: [],
+        currentLetter: 'Б',
+      };
+
+      const result = await service.updateBoardState('key', dto);
+      expect(result.success).toBe(true);
+      expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
+        where: { key: 'key' },
+        data: expect.objectContaining({ currentLetter: 'Б' }),
       });
     });
   });

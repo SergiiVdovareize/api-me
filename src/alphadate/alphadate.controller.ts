@@ -35,10 +35,16 @@ export class AlphadateController {
       throw new BadRequestException('Request body must be a JSON object');
     }
 
-    const { letters, metadata } = body;
+    const { letters, metadata, currentLetter } = body;
 
     if (!letters || !Array.isArray(letters)) {
       throw new BadRequestException('letters must be an array');
+    }
+
+    if (currentLetter !== undefined && currentLetter !== null) {
+      if (typeof currentLetter !== 'string' || currentLetter.length !== 1) {
+        throw new BadRequestException('currentLetter must be a single-character string or null');
+      }
     }
 
     for (const item of letters) {
@@ -103,6 +109,10 @@ export class AlphadateController {
         status: item.status,
       })),
     };
+
+    if (currentLetter !== undefined) {
+      updateBoardDto.currentLetter = currentLetter;
+    }
 
     if (parsedPartners !== undefined || parsedPinHash !== undefined) {
       updateBoardDto.metadata = {};
