@@ -71,8 +71,29 @@ describe('VidssaveDownloader', () => {
     global.fetch = originalFetch;
   });
 
-  it('should successfully steal using cached token (cache hit success)', async () => {
-    blobService.read.mockResolvedValue({ token: 'cached_token_abc' });
+  const mockFetchWithFallback = (successToken: string, successResponse: any = mockParseResponse) => {
+    global.fetch = jest.fn().mockImplementation(async (url, init) => {
+      const body = init?.body as string;
+      if (body?.includes('auth=20250901majwlqo')) {
+        return {
+          ok: true,
+          json: async () => ({ status: 0, message: 'Hardcoded token invalid' }),
+        };
+      }
+      if (body?.includes(`auth=${successToken}`)) {
+        return {
+          ok: true,
+          json: async () => successResponse,
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({ status: 0, message: 'Unexpected token' }),
+      };
+    });
+  };
+
+  it('should successfully steal using hardcoded token directly without calling blob or parser', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue(mockParseResponse),
@@ -82,15 +103,33 @@ describe('VidssaveDownloader', () => {
 
     expect(result.success).toBe(true);
     expect(result.title).toBe('Vidssave Meme');
+    expect(blobService.read).not.toHaveBeenCalled();
+    expect(tokenParser.parseToken).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    const fetchArgs = (global.fetch as jest.Mock).mock.calls[0];
+    expect(fetchArgs[1].body).toContain('auth=20250901majwlqo');
+  });
+
+  it('should successfully steal using cached token (cache hit success)', async () => {
+    blobService.read.mockResolvedValue({ token: 'cached_token_abc' });
+    mockFetchWithFallback('cached_token_abc');
+
+    const result = await downloader.steal('https://youtube.com/watch?v=123');
+
+    expect(result.success).toBe(true);
+    expect(result.title).toBe('Vidssave Meme');
     expect(blobService.read).toHaveBeenCalledWith('vidssave-auth-token.json');
     expect(tokenParser.parseToken).not.toHaveBeenCalled();
     expect(blobService.create).not.toHaveBeenCalled();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
 
-    // Verify correct authorization token used
-    const fetchArgs = (global.fetch as jest.Mock).mock.calls[0];
-    expect(fetchArgs[0]).toBe('https://api.vidssave.com/api/contentsite_api/media/parse');
-    expect(fetchArgs[1].body).toContain('auth=cached_token_abc');
+    const firstCall = (global.fetch as jest.Mock).mock.calls[0];
+    expect(firstCall[1].body).toContain('auth=20250901majwlqo');
+
+    const secondCall = (global.fetch as jest.Mock).mock.calls[1];
+    expect(secondCall[0]).toBe('https://api.vidssave.com/api/contentsite_api/media/parse');
+    expect(secondCall[1].body).toContain('auth=cached_token_abc');
   });
 
   it('should successfully parse new token, save to cache and steal on cache miss', async () => {
@@ -98,10 +137,7 @@ describe('VidssaveDownloader', () => {
     tokenParser.parseToken.mockResolvedValue('parsed_token_xyz');
     blobService.remove.mockResolvedValue({});
     blobService.create.mockResolvedValue({});
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue(mockParseResponse),
-    });
+    mockFetchWithFallback('parsed_token_xyz');
 
     const result = await downloader.steal('https://youtube.com/watch?v=123');
 
@@ -111,9 +147,13 @@ describe('VidssaveDownloader', () => {
     expect(blobService.create).toHaveBeenCalledWith('vidssave-auth-token.json', {
       token: 'parsed_token_xyz',
     });
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const fetchArgs = (global.fetch as jest.Mock).mock.calls[0];
-    expect(fetchArgs[1].body).toContain('auth=parsed_token_xyz');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    const firstCall = (global.fetch as jest.Mock).mock.calls[0];
+    expect(firstCall[1].body).toContain('auth=20250901majwlqo');
+
+    const secondCall = (global.fetch as jest.Mock).mock.calls[1];
+    expect(secondCall[1].body).toContain('auth=parsed_token_xyz');
   });
 
   it('should parse new token if reading cache throws an error', async () => {
@@ -121,10 +161,7 @@ describe('VidssaveDownloader', () => {
     tokenParser.parseToken.mockResolvedValue('parsed_token_recovery');
     blobService.remove.mockResolvedValue({});
     blobService.create.mockResolvedValue({});
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue(mockParseResponse),
-    });
+    mockFetchWithFallback('parsed_token_recovery');
 
     const result = await downloader.steal('https://youtube.com/watch?v=123');
 
@@ -133,6 +170,7 @@ describe('VidssaveDownloader', () => {
     expect(blobService.create).toHaveBeenCalledWith('vidssave-auth-token.json', {
       token: 'parsed_token_recovery',
     });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('should catch cached token invalid, remove cached token, parse new token, save it and retry successfully', async () => {
@@ -141,16 +179,19 @@ describe('VidssaveDownloader', () => {
     blobService.remove.mockResolvedValue({});
     blobService.create.mockResolvedValue({});
 
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ status: 0, message: 'Invalid token' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockParseResponse),
-      });
+    global.fetch = jest.fn().mockImplementation(async (url, init) => {
+      const body = init?.body as string;
+      if (body?.includes('auth=20250901majwlqo')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid token' }) };
+      }
+      if (body?.includes('auth=invalid_cached_token')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid token' }) };
+      }
+      if (body?.includes('auth=fresh_valid_token')) {
+        return { ok: true, json: async () => mockParseResponse };
+      }
+      return { ok: true, json: async () => ({ status: 0, message: 'Unexpected token' }) };
+    });
 
     const result = await downloader.steal('https://youtube.com/watch?v=123');
 
@@ -160,12 +201,14 @@ describe('VidssaveDownloader', () => {
     expect(blobService.create).toHaveBeenCalledWith('vidssave-auth-token.json', {
       token: 'fresh_valid_token',
     });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
 
     const firstCall = (global.fetch as jest.Mock).mock.calls[0];
     const secondCall = (global.fetch as jest.Mock).mock.calls[1];
-    expect(firstCall[1].body).toContain('auth=invalid_cached_token');
-    expect(secondCall[1].body).toContain('auth=fresh_valid_token');
+    const thirdCall = (global.fetch as jest.Mock).mock.calls[2];
+    expect(firstCall[1].body).toContain('auth=20250901majwlqo');
+    expect(secondCall[1].body).toContain('auth=invalid_cached_token');
+    expect(thirdCall[1].body).toContain('auth=fresh_valid_token');
   });
 
   it('should throw error and NOT retry if the token was NOT from cache', async () => {
@@ -173,17 +216,20 @@ describe('VidssaveDownloader', () => {
     tokenParser.parseToken.mockResolvedValue('new_token_but_invalid');
     blobService.remove.mockResolvedValue({});
     blobService.create.mockResolvedValue({});
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({ status: 0, message: 'Parse failed' }),
+
+    global.fetch = jest.fn().mockImplementation(async (url, init) => {
+      const body = init?.body as string;
+      if (body?.includes('auth=20250901majwlqo')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid hardcoded token' }) };
+      }
+      return { ok: true, json: async () => ({ status: 0, message: 'Parse failed' }) };
     });
 
     await expect(downloader.steal('https://youtube.com/watch?v=123')).rejects.toThrow(
       'Parse failed'
     );
 
-    // No retry should occur
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(tokenParser.parseToken).toHaveBeenCalledTimes(1);
   });
 
@@ -193,22 +239,22 @@ describe('VidssaveDownloader', () => {
     blobService.remove.mockResolvedValue({});
     blobService.create.mockResolvedValue({});
 
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ status: 0, message: 'Invalid cached' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ status: 0, message: 'Invalid new' }),
-      });
+    global.fetch = jest.fn().mockImplementation(async (url, init) => {
+      const body = init?.body as string;
+      if (body?.includes('auth=20250901majwlqo')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid hardcoded' }) };
+      }
+      if (body?.includes('auth=invalid_cached_token')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid cached' }) };
+      }
+      return { ok: true, json: async () => ({ status: 0, message: 'Invalid new' }) };
+    });
 
     await expect(downloader.steal('https://youtube.com/watch?v=123')).rejects.toThrow(
       'Invalid new'
     );
 
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
     expect(blobService.remove).toHaveBeenCalledTimes(1);
   });
 
@@ -260,10 +306,7 @@ describe('VidssaveDownloader', () => {
     blobService.read.mockResolvedValue(null);
     tokenParser.parseToken.mockResolvedValue('parsed_token_xyz');
     blobService.create.mockRejectedValue(new Error('Vercel Blob put error'));
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue(mockParseResponse),
-    });
+    mockFetchWithFallback('parsed_token_xyz');
 
     const result = await downloader.steal('https://youtube.com/watch?v=123');
     expect(result.success).toBe(true);
@@ -275,16 +318,19 @@ describe('VidssaveDownloader', () => {
     blobService.remove.mockRejectedValue(new Error('Vercel Blob del error'));
     blobService.create.mockRejectedValue(new Error('Vercel Blob put error'));
 
-    global.fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ status: 0, message: 'Invalid token' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockParseResponse),
-      });
+    global.fetch = jest.fn().mockImplementation(async (url, init) => {
+      const body = init?.body as string;
+      if (body?.includes('auth=20250901majwlqo')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid token' }) };
+      }
+      if (body?.includes('auth=invalid_cached_token')) {
+        return { ok: true, json: async () => ({ status: 0, message: 'Invalid token' }) };
+      }
+      if (body?.includes('auth=fresh_valid_token')) {
+        return { ok: true, json: async () => mockParseResponse };
+      }
+      return { ok: true, json: async () => ({ status: 0, message: 'Unexpected token' }) };
+    });
 
     const result = await downloader.steal('https://youtube.com/watch?v=123');
     expect(result.success).toBe(true);
