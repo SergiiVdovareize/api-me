@@ -1,19 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BlobService } from '../blob/blob.service';
+import { RedisReader } from '../common/helpers/redisReader';
 import { DATE_CONSTANTS } from './date.constants';
 
 @Injectable()
 export class DateService {
   private readonly logger = new Logger(DateService.name);
 
-  constructor(private readonly blobService: BlobService) {}
+  constructor(
+    private readonly blobService: BlobService,
+    private readonly redisReader: RedisReader
+  ) {}
 
   async getRandomDate(): Promise<string> {
     const now = new Date();
     const beginningOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const dateFileName = `date-${beginningOfToday}`;
 
-    const content = await this.blobService.read(dateFileName);
+    let content: any = null;
+    try {
+      content = await this.blobService.read(dateFileName);
+    } catch (error) {
+      this.logger.warn(`Failed to read from Blob: ${error.message}. Trying Redis fallback...`);
+      try {
+        content = await this.redisReader.read(dateFileName);
+      } catch (redisError) {
+        this.logger.error(`Failed to read from Redis fallback: ${redisError.message}`);
+      }
+    }
+
     if (content) {
       return content?.date;
     }
@@ -29,10 +44,19 @@ export class DateService {
 
     try {
       await this.blobService.create(dateFileName, { date });
+      try {
+        await this.redisReader.write(dateFileName, { date });
+      } catch (redisError) {
+        this.logger.error(`Failed to write to Redis fallback cache: ${redisError.message}`);
+      }
     } catch (error) {
-      // Log error but do not fail the request
-      this.logger.error('Error caching date blob:', error?.stack);
-      return null;
+      this.logger.error('Error caching date blob, falling back to Redis:', error?.stack);
+      try {
+        await this.redisReader.write(dateFileName, { date });
+      } catch (redisError) {
+        this.logger.error(`Error caching date in Redis fallback: ${redisError.message}`);
+        return null;
+      }
     }
 
     return date;

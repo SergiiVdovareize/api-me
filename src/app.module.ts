@@ -21,6 +21,7 @@ import { TrackModule } from './track/track.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
 import { BlobService } from './blob/blob.service';
+import { RedisReader } from './common/helpers/redisReader';
 import { AnalyticsController } from './analytics/analytics.controller';
 import { GameResultsModule } from './game-results/game-results.module';
 import { AlphadateModule } from './alphadate/alphadate.module';
@@ -55,6 +56,7 @@ import { EmailModule } from './email/email.module';
     AnalyticsService,
     DateService,
     BlobService,
+    RedisReader,
   ],
 })
 export class AppModule implements NestModule {

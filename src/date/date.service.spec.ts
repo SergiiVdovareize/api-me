@@ -2,15 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { DateService } from './date.service';
 import { BlobService } from '../blob/blob.service';
+import { RedisReader } from '../common/helpers/redisReader';
 
 describe('DateService', () => {
   let service: DateService;
   let mockBlobService: jest.Mocked<Partial<BlobService>>;
+  let mockRedisReader: jest.Mocked<Partial<RedisReader>>;
 
   beforeEach(async () => {
     mockBlobService = {
       read: jest.fn(),
       create: jest.fn(),
+    };
+
+    mockRedisReader = {
+      read: jest.fn(),
+      write: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -19,6 +26,10 @@ describe('DateService', () => {
         {
           provide: BlobService,
           useValue: mockBlobService,
+        },
+        {
+          provide: RedisReader,
+          useValue: mockRedisReader,
         },
       ],
     }).compile();
@@ -42,19 +53,31 @@ describe('DateService', () => {
 
       expect(result).toBe('12.12.2020');
       expect(mockBlobService.read).toHaveBeenCalledTimes(1);
+      expect(mockRedisReader.read).not.toHaveBeenCalled();
       expect(mockBlobService.create).not.toHaveBeenCalled();
     });
 
-    it('should generate, cache, and return a random date if no cache exists', async () => {
-      mockBlobService.read.mockResolvedValue(null);
-      mockBlobService.create.mockResolvedValue({} as any);
+    it('should fall back to Redis if BlobStorage read throws an error', async () => {
+      mockBlobService.read.mockRejectedValue(new Error('Vercel Blob Limit'));
+      mockRedisReader.read.mockResolvedValue({ date: '15.08.2022' });
 
       const result = await service.getRandomDate();
 
-      // Verify returned date matches format dd.mm.yyyy
+      expect(result).toBe('15.08.2022');
+      expect(mockBlobService.read).toHaveBeenCalledTimes(1);
+      expect(mockRedisReader.read).toHaveBeenCalledTimes(1);
+      expect(mockBlobService.create).not.toHaveBeenCalled();
+    });
+
+    it('should generate, cache to both, and return a random date if no cache exists', async () => {
+      mockBlobService.read.mockResolvedValue(null);
+      mockBlobService.create.mockResolvedValue({} as any);
+      mockRedisReader.write.mockResolvedValue({} as any);
+
+      const result = await service.getRandomDate();
+
       expect(result).toMatch(/^\d{2}\.\d{2}\.\d{4}$/);
 
-      // Verify correct ranges
       const [dd, mm, yyyy] = result.split('.').map(Number);
       const parsedDate = Date.UTC(yyyy, mm - 1, dd);
       const start = Date.UTC(2018, 7, 1);
@@ -64,15 +87,30 @@ describe('DateService', () => {
 
       expect(mockBlobService.read).toHaveBeenCalledTimes(1);
       expect(mockBlobService.create).toHaveBeenCalledTimes(1);
-      expect(mockBlobService.create).toHaveBeenCalledWith(expect.stringContaining('date-'), {
+      expect(mockRedisReader.write).toHaveBeenCalledTimes(1);
+      expect(mockRedisReader.write).toHaveBeenCalledWith(expect.stringContaining('date-'), {
         date: result,
       });
     });
 
-    it('should catch cache write errors, log them, and return null', async () => {
+    it('should fall back to Redis write if BlobStorage create throws an error but Redis write succeeds', async () => {
+      mockBlobService.read.mockResolvedValue(null);
+      mockBlobService.create.mockRejectedValue(new Error('Vercel Blob Write Limit'));
+      mockRedisReader.write.mockResolvedValue({} as any);
+
+      const result = await service.getRandomDate();
+
+      expect(result).toMatch(/^\d{2}\.\d{2}\.\d{4}$/);
+      expect(mockBlobService.read).toHaveBeenCalledTimes(1);
+      expect(mockBlobService.create).toHaveBeenCalledTimes(1);
+      expect(mockRedisReader.write).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return null if both BlobStorage and Redis cache writes throw errors', async () => {
       mockBlobService.read.mockResolvedValue(null);
       const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
-      mockBlobService.create.mockRejectedValue(new Error('Write failed'));
+      mockBlobService.create.mockRejectedValue(new Error('Vercel Blob failed'));
+      mockRedisReader.write.mockRejectedValue(new Error('Redis write failed'));
 
       const result = await service.getRandomDate();
 

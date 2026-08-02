@@ -71,7 +71,10 @@ describe('VidssaveDownloader', () => {
     global.fetch = originalFetch;
   });
 
-  const mockFetchWithFallback = (successToken: string, successResponse: any = mockParseResponse) => {
+  const mockFetchWithFallback = (
+    successToken: string,
+    successResponse: any = mockParseResponse
+  ) => {
     global.fetch = jest.fn().mockImplementation(async (url, init) => {
       const body = init?.body as string;
       if (body?.includes('auth=20250901majwlqo')) {

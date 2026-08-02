@@ -94,10 +94,9 @@ describe('BlobService', () => {
       expect(result).toEqual(mockData);
     });
 
-    it('should return null if blob is not found or has no URL', async () => {
+    it('should throw error if blob is not found or has no URL', async () => {
       jest.spyOn(service, 'find').mockResolvedValue(null);
-      const result = await service.read('file.json');
-      expect(result).toBeNull();
+      await expect(service.read('file.json')).rejects.toThrow('Blob not found: file.json');
     });
 
     it('should throw error if fetch is not ok', async () => {

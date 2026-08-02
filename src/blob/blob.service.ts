@@ -54,7 +54,7 @@ export class BlobService {
       const blob = await this.find(name);
       if (!blob || !blob.url) {
         this.logger.warn(`Cannot read blob ${name}: blob not found or no URL`);
-        return null;
+        throw new Error(`Blob not found: ${name}`);
       }
 
       const response = await fetch(blob.url);

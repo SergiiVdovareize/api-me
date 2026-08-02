@@ -19,7 +19,7 @@ export class VidssaveDownloader implements MemeDownloader {
     private readonly analyticsService: AnalyticsService,
     private readonly tokenParser: VidssaveTokenParser,
     private readonly blobService: BlobService
-  ) { }
+  ) {}
 
   async steal(url: string): Promise<DownloadResult> {
     const memeType = getMemeTypeFromUrl(url);
@@ -54,7 +54,7 @@ export class VidssaveDownloader implements MemeDownloader {
           this.logger.log('Token not found in cache, parsing a new one...');
           token = await this.tokenParser.parseToken();
           try {
-            await this.blobService.remove(this.cacheKey).catch(() => { });
+            await this.blobService.remove(this.cacheKey).catch(() => {});
             await this.blobService.create(this.cacheKey, { token });
           } catch (err) {
             this.logger.error(`Failed to cache new token: ${err.message}`);
