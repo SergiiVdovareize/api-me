@@ -35,9 +35,17 @@ export interface CheckReportItem {
   error?: string;
 }
 
+export interface SeriesCheckOptions {
+  seriesId?: string;
+  limit?: number;
+  checkAll?: boolean;
+}
+
 export interface SeriesCheckSummary {
   checkedCount: number;
+  totalActiveCount?: number;
   notifiedCount: number;
   timestamp: string;
+  nextSeriesId?: string;
   details: CheckReportItem[];
 }

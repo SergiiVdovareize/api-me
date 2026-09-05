@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleSheetsService } from './services/google-sheets.service';
 import { UakinoParserService } from './services/uakino-parser.service';
-import { CheckReportItem, SeriesCheckSummary } from './types';
+import { CheckReportItem, SeriesCheckOptions, SeriesCheckSummary, TrackedSeriesItem } from './types';
 
 @Injectable()
 export class SeriesTrackerService {
@@ -13,31 +13,95 @@ export class SeriesTrackerService {
   ) {}
 
   /**
-   * Executes a full check cycle for all active tracked series:
-   * 1. Fetches series list from Google Sheets
-   * 2. Checks UAKino for each series
-   * 3. Sends Telegram outbox row and updates sheet state if a new 1080p+ episode/season is released
+   * Executes series release checks.
+   * Defaults to incremental / round-robin mode (1 series per trigger with the oldest lastChecked)
+   * so every invocation finishes in 2-4 seconds, staying well within Vercel serverless 10-second limits.
    */
-  async checkAllSeries(): Promise<SeriesCheckSummary> {
+  async checkSeriesReleases(options?: SeriesCheckOptions): Promise<SeriesCheckSummary> {
     const cycleStartTime = Date.now();
     this.logger.log('========== STARTING SERIES RELEASE MONITORING CYCLE ==========');
 
     const seriesList = await this.googleSheetsService.getTrackedSeries();
+    const activeSeries = seriesList.filter(s => s.isActive);
     const details: CheckReportItem[] = [];
     let notifiedCount = 0;
 
-    const activeSeries = seriesList.filter(s => s.isActive);
     this.logger.log(
       `Total series in sheet: ${seriesList.length} (${activeSeries.length} active, ${seriesList.length - activeSeries.length} disabled/inactive)`
     );
 
+    if (seriesList.length === 0) {
+      this.logger.log('No series found in sheet.');
+      return {
+        checkedCount: 0,
+        totalActiveCount: 0,
+        notifiedCount: 0,
+        timestamp: new Date().toISOString(),
+        details: [],
+      };
+    }
+
+    let targetSeries: TrackedSeriesItem[] = [];
+    let nextSeriesId: string | undefined;
+
+    if (options?.seriesId) {
+      const match = seriesList.find(
+        s => s.id.toLowerCase() === options.seriesId?.trim().toLowerCase()
+      );
+      if (!match) {
+        this.logger.warn(`No series found matching ID "${options.seriesId}".`);
+        return {
+          checkedCount: 0,
+          totalActiveCount: activeSeries.length,
+          notifiedCount: 0,
+          timestamp: new Date().toISOString(),
+          details: [],
+        };
+      }
+      targetSeries = [match];
+    } else if (options?.checkAll) {
+      targetSeries = seriesList;
+    } else {
+      if (activeSeries.length === 0) {
+        this.logger.log('No active series found in sheet.');
+        return {
+          checkedCount: 0,
+          totalActiveCount: 0,
+          notifiedCount: 0,
+          timestamp: new Date().toISOString(),
+          details: [],
+        };
+      }
+
+      // Incremental / Round-robin: sort active series by lastChecked ascending.
+      // Older or missing timestamps get checked first.
+      const sorted = [...activeSeries].sort((a, b) => {
+        const timeA = a.lastChecked ? Date.parse(a.lastChecked.replace(/-/g, '/')) || 0 : 0;
+        const timeB = b.lastChecked ? Date.parse(b.lastChecked.replace(/-/g, '/')) || 0 : 0;
+        return timeA - timeB;
+      });
+
+      const limit = options?.limit && options.limit > 0 ? options.limit : 1;
+      targetSeries = sorted.slice(0, limit);
+
+      if (sorted.length > limit) {
+        nextSeriesId = sorted[limit].id;
+      } else if (sorted.length > 0) {
+        nextSeriesId = sorted[0].id;
+      }
+    }
+
+    this.logger.log(
+      `Selected ${targetSeries.length} series for check (mode: ${options?.seriesId ? `single [${options.seriesId}]` : options?.checkAll ? 'all' : `incremental limit=${targetSeries.length}`})`
+    );
+
     let index = 0;
-    for (const item of seriesList) {
+    for (const item of targetSeries) {
       index++;
 
       if (!item.isActive) {
         this.logger.log(
-          `[${index}/${seriesList.length}] SKIPPED: "${item.title}" (marked inactive in sheet)`
+          `[${index}/${targetSeries.length}] SKIPPED: "${item.title}" (marked inactive in sheet)`
         );
         details.push({
           id: item.id,
@@ -48,9 +112,8 @@ export class SeriesTrackerService {
         });
         continue;
       }
-
       this.logger.log(
-        `[${index}/${seriesList.length}] CHECKING: [${item.id}] "${item.title}" | Sheet progress: Season ${item.lastSeason}, Episode ${item.lastEpisode}`
+        `[${index}/${targetSeries.length}] CHECKING: [${item.id}] "${item.title}" | Sheet progress: Season ${item.lastSeason}, Episode ${item.lastEpisode}`
       );
 
       const itemStartTime = Date.now();
@@ -133,9 +196,11 @@ export class SeriesTrackerService {
 
     const totalDuration = Date.now() - cycleStartTime;
     const summary: SeriesCheckSummary = {
-      checkedCount: seriesList.length,
+      checkedCount: targetSeries.length,
+      totalActiveCount: activeSeries.length,
       notifiedCount,
       timestamp: new Date().toISOString(),
+      nextSeriesId,
       details,
     };
 
@@ -144,5 +209,9 @@ export class SeriesTrackerService {
     );
 
     return summary;
+  }
+
+  async checkAllSeries(): Promise<SeriesCheckSummary> {
+    return this.checkSeriesReleases({ checkAll: true });
   }
 }

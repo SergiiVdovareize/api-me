@@ -44,28 +44,48 @@ export class SeriesTrackerController {
 
   /**
    * Main entry point to trigger release check via GET.
+   * Supports incremental check (default 1 series), specific series by id, or ?all=true
    */
   @Get('check')
   async checkViaGet(
     @Query('token') token?: string,
-    @Headers('authorization') authHeader?: string
+    @Headers('authorization') authHeader?: string,
+    @Query('id') seriesId?: string,
+    @Query('limit') limitRaw?: string,
+    @Query('all') allRaw?: string
   ): Promise<SeriesCheckSummary> {
     this.logger.log('Incoming GET /series-tracker/check trigger');
     this.validateToken(token, authHeader);
-    return await this.seriesTrackerService.checkAllSeries();
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    const checkAll = allRaw === 'true' || allRaw === '1';
+    return await this.seriesTrackerService.checkSeriesReleases({
+      seriesId,
+      limit,
+      checkAll,
+    });
   }
 
   /**
    * Main entry point to trigger release check via POST.
+   * Supports incremental check (default 1 series), specific series by id, or ?all=true
    */
   @Post('check')
   async checkViaPost(
     @Query('token') token?: string,
-    @Headers('authorization') authHeader?: string
+    @Headers('authorization') authHeader?: string,
+    @Query('id') seriesId?: string,
+    @Query('limit') limitRaw?: string,
+    @Query('all') allRaw?: string
   ): Promise<SeriesCheckSummary> {
     this.logger.log('Incoming POST /series-tracker/check trigger');
     this.validateToken(token, authHeader);
-    return await this.seriesTrackerService.checkAllSeries();
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    const checkAll = allRaw === 'true' || allRaw === '1';
+    return await this.seriesTrackerService.checkSeriesReleases({
+      seriesId,
+      limit,
+      checkAll,
+    });
   }
 
   /**

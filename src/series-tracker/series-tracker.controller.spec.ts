@@ -8,13 +8,14 @@ import { SeriesCheckSummary, TrackedSeriesItem } from './types';
 
 describe('SeriesTrackerController', () => {
   let controller: SeriesTrackerController;
-  let seriesTrackerService: { checkAllSeries: jest.Mock };
+  let seriesTrackerService: { checkAllSeries: jest.Mock; checkSeriesReleases: jest.Mock };
   let googleSheetsService: { getTrackedSeries: jest.Mock };
   let configService: { get: jest.Mock };
 
   beforeEach(async () => {
     seriesTrackerService = {
       checkAllSeries: jest.fn(),
+      checkSeriesReleases: jest.fn(),
     };
 
     googleSheetsService = {
@@ -44,7 +45,7 @@ describe('SeriesTrackerController', () => {
   describe('security / validateToken', () => {
     it('should allow request if no secret is configured', async () => {
       configService.get.mockReturnValue(undefined);
-      seriesTrackerService.checkAllSeries.mockResolvedValue({
+      seriesTrackerService.checkSeriesReleases.mockResolvedValue({
         checkedCount: 0,
         notifiedCount: 0,
         timestamp: '2026-09-05T00:00:00.000Z',
@@ -60,7 +61,7 @@ describe('SeriesTrackerController', () => {
         if (key === 'CRON_SECRET') return 'my-cron-secret';
         return undefined;
       });
-      seriesTrackerService.checkAllSeries.mockResolvedValue({
+      seriesTrackerService.checkSeriesReleases.mockResolvedValue({
         checkedCount: 1,
         notifiedCount: 0,
         timestamp: '2026-09-05T00:00:00.000Z',
@@ -76,7 +77,7 @@ describe('SeriesTrackerController', () => {
         if (key === 'SERIES_TRACKER_SECRET') return 'tracker-secret-123';
         return undefined;
       });
-      seriesTrackerService.checkAllSeries.mockResolvedValue({
+      seriesTrackerService.checkSeriesReleases.mockResolvedValue({
         checkedCount: 1,
         notifiedCount: 1,
         timestamp: '2026-09-05T00:00:00.000Z',
@@ -103,36 +104,44 @@ describe('SeriesTrackerController', () => {
   });
 
   describe('checkViaGet', () => {
-    it('should call seriesTrackerService.checkAllSeries', async () => {
+    it('should call seriesTrackerService.checkSeriesReleases with parsed options', async () => {
       configService.get.mockReturnValue(undefined);
       const mockSummary: SeriesCheckSummary = {
-        checkedCount: 2,
+        checkedCount: 1,
         notifiedCount: 1,
         timestamp: '2026-09-05T12:00:00.000Z',
         details: [],
       };
-      seriesTrackerService.checkAllSeries.mockResolvedValue(mockSummary);
+      seriesTrackerService.checkSeriesReleases.mockResolvedValue(mockSummary);
 
-      const res = await controller.checkViaGet();
+      const res = await controller.checkViaGet(undefined, undefined, 'silo', '2', 'true');
       expect(res).toEqual(mockSummary);
-      expect(seriesTrackerService.checkAllSeries).toHaveBeenCalled();
+      expect(seriesTrackerService.checkSeriesReleases).toHaveBeenCalledWith({
+        seriesId: 'silo',
+        limit: 2,
+        checkAll: true,
+      });
     });
   });
 
   describe('checkViaPost', () => {
-    it('should call seriesTrackerService.checkAllSeries', async () => {
+    it('should call seriesTrackerService.checkSeriesReleases with default options', async () => {
       configService.get.mockReturnValue(undefined);
       const mockSummary: SeriesCheckSummary = {
-        checkedCount: 2,
+        checkedCount: 1,
         notifiedCount: 0,
         timestamp: '2026-09-05T12:00:00.000Z',
         details: [],
       };
-      seriesTrackerService.checkAllSeries.mockResolvedValue(mockSummary);
+      seriesTrackerService.checkSeriesReleases.mockResolvedValue(mockSummary);
 
       const res = await controller.checkViaPost();
       expect(res).toEqual(mockSummary);
-      expect(seriesTrackerService.checkAllSeries).toHaveBeenCalled();
+      expect(seriesTrackerService.checkSeriesReleases).toHaveBeenCalledWith({
+        seriesId: undefined,
+        limit: undefined,
+        checkAll: false,
+      });
     });
   });
 
