@@ -11,6 +11,7 @@ jest.mock('googleapis', () => {
         get: jest.fn(),
         update: jest.fn(),
         append: jest.fn(),
+        batchUpdate: jest.fn(),
       },
     },
   };
@@ -169,17 +170,25 @@ describe('GoogleSheetsService', () => {
   describe('updateSeriesState', () => {
     it('should update season, episode and last checked timestamp in Series tab', async () => {
       (service as any).resolvedSeriesTabName = 'Series';
-      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+      mockSheets.spreadsheets.values.batchUpdate.mockResolvedValue({});
 
       await service.updateSeriesState(2, 2, 9);
 
-      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledTimes(2);
-      expect(mockSheets.spreadsheets.values.update).toHaveBeenNthCalledWith(1, {
+      expect(mockSheets.spreadsheets.values.batchUpdate).toHaveBeenCalledTimes(1);
+      expect(mockSheets.spreadsheets.values.batchUpdate).toHaveBeenCalledWith({
         spreadsheetId: 'custom-series-sheet-id',
-        range: 'Series!D2:E2',
-        valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [[2, 9]],
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            {
+              range: 'Series!D2:E2',
+              values: [[2, 9]],
+            },
+            {
+              range: 'Series!H2',
+              values: [[expect.any(String)]],
+            },
+          ],
         },
       });
     });

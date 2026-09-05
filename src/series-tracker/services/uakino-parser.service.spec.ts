@@ -5,6 +5,7 @@ import { UakinoParserService } from './uakino-parser.service';
 describe('UakinoParserService', () => {
   let service: UakinoParserService;
   let configService: { get: jest.Mock };
+  const originalFetch = global.fetch;
 
   beforeEach(async () => {
     configService = {
@@ -16,6 +17,11 @@ describe('UakinoParserService', () => {
     }).compile();
 
     service = module.get<UakinoParserService>(UakinoParserService);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -188,7 +194,7 @@ describe('UakinoParserService', () => {
       const html = await service.fetchPage('https://uakino.best/test.html');
       expect(html).toBe('<html>Page content</html>');
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://api.scraperapi.com?api_key=scraper-key-123&url=https%3A%2F%2Fuakino.best%2Ftest.html',
+        'https://api.scraperapi.com/?api_key=scraper-key-123&url=https%3A%2F%2Fuakino.best%2Ftest.html',
         expect.any(Object)
       );
     });
@@ -215,7 +221,7 @@ describe('UakinoParserService', () => {
       });
 
       await expect(service.fetchPage('https://uakino.best/blocked.html')).rejects.toThrow(
-        'Failed to fetch https://uakino.best/blocked.html: 403 Forbidden'
+        'Failed to fetch https://uakino.best/blocked.html: HTTP 403 Forbidden'
       );
     });
   });
