@@ -1,0 +1,266 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { GoogleSheetsService } from './google-sheets.service';
+import { google } from 'googleapis';
+
+jest.mock('googleapis', () => {
+  const mSheets = {
+    spreadsheets: {
+      get: jest.fn(),
+      values: {
+        get: jest.fn(),
+        update: jest.fn(),
+        append: jest.fn(),
+      },
+    },
+  };
+  return {
+    google: {
+      auth: {
+        JWT: jest.fn().mockImplementation(() => ({})),
+      },
+      sheets: jest.fn().mockReturnValue(mSheets),
+    },
+  };
+});
+
+describe('GoogleSheetsService', () => {
+  let service: GoogleSheetsService;
+  let configService: { get: jest.Mock };
+  let mockSheets: any;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockSheets = google.sheets({ version: 'v4' });
+
+    configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'GOOGLE_SERVICE_ACCOUNT_EMAIL')
+          return 'test-sa@project.iam.gserviceaccount.com';
+        if (key === 'GOOGLE_PRIVATE_KEY')
+          return '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----';
+        if (key === 'SERIES_SPREADSHEET_ID') return 'custom-series-sheet-id';
+        if (key === 'TELEGRAM_OUTBOX_SPREADSHEET_ID') return 'custom-outbox-sheet-id';
+        return undefined;
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [GoogleSheetsService, { provide: ConfigService, useValue: configService }],
+    }).compile();
+
+    service = module.get<GoogleSheetsService>(GoogleSheetsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('extractEnglishTitle', () => {
+    it('should extract English title from multi-language slashed title', () => {
+      expect(service.extractEnglishTitle('Таємниця бункера / Бункер / Silo')).toBe('silo');
+      expect(service.extractEnglishTitle('Розрив / Поділ / Severance')).toBe('severance');
+      expect(service.extractEnglishTitle('Дім дракона / House of the Dragon')).toBe(
+        'house of the dragon'
+      );
+    });
+
+    it('should strip season parentheses from English segment', () => {
+      expect(service.extractEnglishTitle('Поділ (Сезон 2) / Severance (Season 2)')).toBe(
+        'severance'
+      );
+    });
+
+    it('should extract from parentheses if title has no slashes', () => {
+      expect(service.extractEnglishTitle('Таємниця бункера (Silo)')).toBe('silo');
+    });
+
+    it('should fallback to seriesId if title is purely Cyrillic', () => {
+      expect(service.extractEnglishTitle('Таємниця бункера', 'silo')).toBe('silo');
+      expect(service.extractEnglishTitle('Повільні коні', 'slow-horses')).toBe('slow horses');
+    });
+  });
+
+  describe('buildTolokaSearchUrl', () => {
+    it('should build valid tracker search URL with escaped english title', () => {
+      const url = service.buildTolokaSearchUrl('slow horses');
+      expect(url).toContain('nm=slow%20horses&pn=');
+      expect(url.startsWith('https://toloka.to/tracker.php?')).toBe(true);
+    });
+  });
+
+  describe('getTrackedSeries', () => {
+    it('should fetch and parse tracked series from Series tab', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'Series' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            [
+              'silo',
+              'Таємниця бункера / Silo',
+              'https://uakino.best/silo.html',
+              '2',
+              '8',
+              '1080p',
+              'Active',
+              '2026-09-05 10:00',
+            ],
+            [
+              'severance',
+              'Severance',
+              'https://uakino.best/severance.html',
+              '2',
+              '10',
+              '1080p',
+              'Inactive',
+              '',
+            ],
+            ['invalid', '', '', '', '', '', '', ''], // Should be skipped (no title or url)
+          ],
+        },
+      });
+
+      const series = await service.getTrackedSeries();
+
+      expect(series.length).toBe(2);
+      expect(series[0]).toEqual({
+        rowIndex: 2,
+        id: 'silo',
+        title: 'Таємниця бункера / Silo',
+        season1Url: 'https://uakino.best/silo.html',
+        lastSeason: 2,
+        lastEpisode: 8,
+        minQuality: '1080p',
+        isActive: true,
+        lastChecked: '2026-09-05 10:00',
+      });
+      expect(series[1].isActive).toBe(false);
+    });
+
+    it('should return empty array if spreadsheet range has no data', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'Series' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [],
+        },
+      });
+
+      const series = await service.getTrackedSeries();
+      expect(series).toEqual([]);
+    });
+
+    it('should throw error when spreadsheet API fails', async () => {
+      mockSheets.spreadsheets.get.mockRejectedValue(new Error('Permission denied'));
+
+      await expect(service.getTrackedSeries()).rejects.toThrow('Permission denied');
+    });
+  });
+
+  describe('updateSeriesState', () => {
+    it('should update season, episode and last checked timestamp in Series tab', async () => {
+      (service as any).resolvedSeriesTabName = 'Series';
+      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+
+      await service.updateSeriesState(2, 2, 9);
+
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledTimes(2);
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenNthCalledWith(1, {
+        spreadsheetId: 'custom-series-sheet-id',
+        range: 'Series!D2:E2',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[2, 9]],
+        },
+      });
+    });
+  });
+
+  describe('updateLastChecked', () => {
+    it('should update only column H for the given row index', async () => {
+      (service as any).resolvedSeriesTabName = 'Series';
+      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+
+      await service.updateLastChecked(3);
+
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spreadsheetId: 'custom-series-sheet-id',
+          range: 'Series!H3',
+        })
+      );
+    });
+  });
+
+  describe('appendTelegramOutbox', () => {
+    it('should append pending message with poster preview and Toloka link to queue tab', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'queue!A10:E10' } },
+      });
+
+      await service.appendTelegramOutbox(
+        'Таємниця бункера / Silo',
+        2,
+        10,
+        'https://uakino.best/posters/silo.jpg',
+        'silo'
+      );
+
+      expect(mockSheets.spreadsheets.values.append).toHaveBeenCalledTimes(1);
+      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+
+      expect(appendCall.spreadsheetId).toBe('custom-outbox-sheet-id');
+      expect(appendCall.range).toBe('queue!A:E');
+
+      const row = appendCall.requestBody.values[0];
+      // Row structure: [timestamp, message, chatId, parseMode, status]
+      expect(row[2]).toBe('1252877');
+      expect(row[3]).toBe('HTML');
+      expect(row[4]).toBe('PENDING');
+
+      // Message content checks
+      const message = row[1];
+      expect(message).toContain('<a href="https://uakino.best/posters/silo.jpg">&#8205;</a>');
+      expect(message).toContain('🔔 <b>Вийшла нова серія</b>');
+      expect(message).toContain('🎬 <b>Таємниця бункера / Silo</b>');
+      expect(message).toContain('📺 <b>Сезон 2, Серія 10</b>');
+      expect(message).toContain('🔗 <a href="https://toloka.to/tracker.php?');
+      expect(message).toContain('nm=silo&amp;pn=');
+    });
+
+    it('should handle missing posterUrl cleanly', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'queue!A11:E11' } },
+      });
+
+      await service.appendTelegramOutbox('Severance', 2, 10);
+
+      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+      const message = appendCall.requestBody.values[0][1];
+
+      expect(message).not.toContain('&#8205;');
+      expect(message).toContain('🔔 <b>Вийшла нова серія</b>');
+      expect(message).toContain('🎬 <b>Severance</b>');
+    });
+  });
+});

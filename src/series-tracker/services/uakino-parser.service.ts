@@ -53,7 +53,9 @@ export class UakinoParserService {
       this.logger.error(
         `Failed to fetch ${targetUrl} after ${elapsed}ms: HTTP ${response.status} ${response.statusText}`
       );
-      throw new Error(`Failed to fetch ${targetUrl}: HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch ${targetUrl}: HTTP ${response.status} ${response.statusText}`
+      );
     }
 
     const html = await response.text();
@@ -98,7 +100,9 @@ export class UakinoParserService {
       if (newest.seasonNumber > 1) {
         if (newest.url !== season1Url) {
           try {
-            this.logger.log(`Fetching page for newest Season ${newest.seasonNumber}: ${newest.url}`);
+            this.logger.log(
+              `Fetching page for newest Season ${newest.seasonNumber}: ${newest.url}`
+            );
             latestSeasonHtml = await this.fetchPage(newest.url);
           } catch (e) {
             this.logger.warn(`Failed to fetch latest season page (${newest.url}): ${e.message}`);
@@ -287,12 +291,16 @@ export class UakinoParserService {
       const html = await this.fetchPage(tolokaUrl);
       if (html.trim() === 'Invalid ID') {
         this.logger.warn(`Toloka returned 'Invalid ID' for id=${newsId}. Retrying with news_id...`);
-        return await this.fetchPage(`${origin}/engine/ajax/toloka.php?news_id=${encodeURIComponent(newsId)}`);
+        return await this.fetchPage(
+          `${origin}/engine/ajax/toloka.php?news_id=${encodeURIComponent(newsId)}`
+        );
       }
       this.logger.debug(`Toloka response received (${html.length} chars).`);
       return html;
     } catch (error) {
-      this.logger.warn(`GET toloka with id failed (${tolokaUrl}): ${error.message}. Retrying with 'news_id'...`);
+      this.logger.warn(
+        `GET toloka with id failed (${tolokaUrl}): ${error.message}. Retrying with 'news_id'...`
+      );
       const fallbackUrl = `${origin}/engine/ajax/toloka.php?news_id=${encodeURIComponent(newsId)}`;
       const html = await this.fetchPage(fallbackUrl);
       this.logger.debug(`Toloka fallback response received (${html.length} chars).`);
@@ -425,12 +433,16 @@ export class UakinoParserService {
 
       if (scheduleMaxEp > 0) {
         maxEpisode = scheduleMaxEp;
-        this.logger.log(`[FULL SEASON 1080p+ CONFIRMED]: using UAKino schedule total: ${maxEpisode} episodes`);
+        this.logger.log(
+          `[FULL SEASON 1080p+ CONFIRMED]: using UAKino schedule total: ${maxEpisode} episodes`
+        );
       } else if (seriesTitle) {
         const tvMazeTotal = await this.fetchTvMazeEpisodeCount(seriesTitle, targetSeason);
         if (tvMazeTotal > 0) {
           maxEpisode = tvMazeTotal;
-          this.logger.log(`[FULL SEASON 1080p+ CONFIRMED]: using TVMaze total: ${maxEpisode} episodes`);
+          this.logger.log(
+            `[FULL SEASON 1080p+ CONFIRMED]: using TVMaze total: ${maxEpisode} episodes`
+          );
         }
       }
     }
@@ -470,7 +482,8 @@ export class UakinoParserService {
     }
 
     // Pattern 3: (\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:серія|серії|серій|серии|серия|епізод|епізоди)/gi (e.g. "1-8 серія")
-    const rangePattern = /(\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)/gi;
+    const rangePattern =
+      /(\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)/gi;
     while ((match = rangePattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = parseInt(match[2], 10);

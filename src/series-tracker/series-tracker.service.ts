@@ -35,7 +35,7 @@ export class SeriesTrackerService {
     for (const item of seriesList) {
       index++;
 
-        if (!item.isActive) {
+      if (!item.isActive) {
         this.logger.log(
           `[${index}/${seriesList.length}] SKIPPED: "${item.title}" (marked inactive in sheet)`
         );
@@ -60,8 +60,7 @@ export class SeriesTrackerService {
 
         const hasNewSeason = result.latestSeason > item.lastSeason;
         const hasNewEpisode =
-          result.latestSeason === item.lastSeason &&
-          result.latestEpisode > item.lastEpisode;
+          result.latestSeason === item.lastSeason && result.latestEpisode > item.lastEpisode;
 
         const isNewRelease = (hasNewSeason || hasNewEpisode) && result.hasConfirmedRelease;
 
@@ -87,8 +86,7 @@ export class SeriesTrackerService {
           await this.googleSheetsService.updateSeriesState(
             item.rowIndex,
             result.latestSeason,
-            result.latestEpisode,
-            result.latestUrl
+            result.latestEpisode
           );
 
           notifiedCount++;

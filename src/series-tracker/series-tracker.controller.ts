@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Query, Headers, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Headers,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SeriesTrackerService } from './series-tracker.service';
 import { GoogleSheetsService } from './services/google-sheets.service';
@@ -24,9 +32,7 @@ export class SeriesTrackerController {
       return;
     }
 
-    const bearerToken = authHeader?.startsWith('Bearer ')
-      ? authHeader.substring(7)
-      : undefined;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
 
     const providedToken = token || bearerToken;
 
@@ -69,7 +75,7 @@ export class SeriesTrackerController {
   async listTracked(
     @Query('token') token?: string,
     @Headers('authorization') authHeader?: string
-  ): Promise<any> {
+  ): Promise<TrackedSeriesItem[] | { success: boolean; error: string }> {
     this.logger.log('Incoming GET /series-tracker/list request');
     this.validateToken(token, authHeader);
     try {

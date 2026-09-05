@@ -22,8 +22,7 @@ export class GoogleSheetsService {
    */
   private getSeriesSpreadsheetId(): string {
     const id =
-      this.configService.get<string>('SERIES_SPREADSHEET_ID') ||
-      this.defaultSeriesSpreadsheetId;
+      this.configService.get<string>('SERIES_SPREADSHEET_ID') || this.defaultSeriesSpreadsheetId;
     return id.trim();
   }
 
@@ -90,9 +89,7 @@ export class GoogleSheetsService {
 
       this.logger.debug(`Found tabs in Outbox spreadsheet: [${sheetTitles.join(', ')}]`);
 
-      const matched = sheetTitles.find(t =>
-        /telegram.*outbox|outbox|queue/i.test(t)
-      );
+      const matched = sheetTitles.find(t => /telegram.*outbox|outbox|queue/i.test(t));
 
       if (matched) {
         this.cachedOutboxSheetName = matched;
@@ -123,7 +120,8 @@ export class GoogleSheetsService {
         .map(s => s.properties?.title)
         .filter((t): t is string => Boolean(t));
 
-      let targetTab = sheetTitles.find(t => t.trim().toLowerCase() === 'series') || sheetTitles[0];
+      const targetTab =
+        sheetTitles.find(t => t.trim().toLowerCase() === 'series') || sheetTitles[0];
       this.resolvedSeriesTabName = targetTab;
 
       this.logger.log(
@@ -190,7 +188,10 @@ export class GoogleSheetsService {
 
       return seriesList;
     } catch (error) {
-      this.logger.error(`Failed to fetch tracked series from Google Sheets: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch tracked series from Google Sheets: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -201,8 +202,7 @@ export class GoogleSheetsService {
   async updateSeriesState(
     rowIndex: number,
     lastSeason: number,
-    lastEpisode: number,
-    _latestUrl?: string
+    lastEpisode: number
   ): Promise<void> {
     const sheets = this.getSheetsClient();
     const spreadsheetId = this.getSeriesSpreadsheetId();
@@ -289,11 +289,7 @@ export class GoogleSheetsService {
 
     // Check parentheses, e.g. "Таємниця бункера (Silo)"
     const parenMatch = title.match(/\(([A-Za-z0-9\s:,'’.-]+)\)/);
-    if (
-      parenMatch &&
-      /[a-zA-Z]/.test(parenMatch[1]) &&
-      !/[\u0400-\u04FF]/.test(parenMatch[1])
-    ) {
+    if (parenMatch && /[a-zA-Z]/.test(parenMatch[1]) && !/[\u0400-\u04FF]/.test(parenMatch[1])) {
       const candidate = parenMatch[1].trim();
       if (!/^(?:season\s*\d+|\d{4})$/i.test(candidate)) {
         return candidate.toLowerCase();
@@ -339,13 +335,7 @@ export class GoogleSheetsService {
       message += `\n\n🔗 <a href="${escapedTolokaUrl}">Toloka</a>`;
     }
 
-    const rowValues = [
-      timestamp,
-      message,
-      '1252877',
-      'HTML',
-      'PENDING',
-    ];
+    const rowValues = [timestamp, message, '1252877', 'HTML', 'PENDING'];
 
     this.logger.log(
       `Appending to Telegram Outbox sheet "${outboxSheetName}" (${spreadsheetId}): [Timestamp: ${timestamp}, Title: "${title}", Status: PENDING]`
@@ -397,9 +387,6 @@ export class GoogleSheetsService {
   }
 
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }
