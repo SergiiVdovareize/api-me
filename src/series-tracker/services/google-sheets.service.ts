@@ -330,7 +330,7 @@ export class GoogleSheetsService {
       // Hidden link with zero-width space displays the poster at the top in Telegram
       message += `<a href="${posterUrl}">&#8205;</a>`;
     }
-    message += `🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
+    message += `🔔 <b>Вийшла нова серія</b>\n\n🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
 
     const englishName = this.extractEnglishTitle(title, seriesId);
     if (englishName) {
