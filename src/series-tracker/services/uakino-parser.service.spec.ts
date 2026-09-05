@@ -53,9 +53,9 @@ describe('UakinoParserService', () => {
       expect(id).toBe('9876');
     });
 
-    it('should return empty string if no news ID found', () => {
+    it('should return undefined if no news ID found', () => {
       const id = service.extractNewsId('https://uakino.best/series/no-id', '<div>Nothing</div>');
-      expect(id).toBe('');
+      expect(id).toBeUndefined();
     });
   });
 
@@ -96,9 +96,9 @@ describe('UakinoParserService', () => {
       const seasons = service.parseSeasonsBlock(html, 'https://uakino.best/series/100-s1.html');
       expect(seasons.length).toBe(2);
       expect(seasons[0].seasonNumber).toBe(1);
-      expect(seasons[0].newsId).toBe('100');
+      expect(seasons[0].url).toBe('https://uakino.best/series/100-s1.html');
       expect(seasons[1].seasonNumber).toBe(2);
-      expect(seasons[1].newsId).toBe('200');
+      expect(seasons[1].url).toBe('https://uakino.best/series/200-s2.html');
     });
 
     it('should return empty array if no seasons block exists', () => {
@@ -111,16 +111,18 @@ describe('UakinoParserService', () => {
   describe('extractMaxEpisodeFromSchedule', () => {
     it('should extract max scheduled episode for target season from .epscape_tr', () => {
       const html = `
-        <tr class="epscape_tr"><td>1 сезон 10 серія</td></tr>
-        <tr class="epscape_tr"><td>2 сезон 1 серія</td></tr>
-        <tr class="epscape_tr"><td>2 сезон 10 серія</td></tr>
+        <table>
+          <tr class="epscape_tr"><td>1 сезон 10 серія</td></tr>
+          <tr class="epscape_tr"><td>2 сезон 1 серія</td></tr>
+          <tr class="epscape_tr"><td>2 сезон 10 серія</td></tr>
+        </table>
       `;
       const total = service.extractMaxEpisodeFromSchedule(html, 2);
       expect(total).toBe(10);
     });
 
     it('should return 0 if no schedule rows match target season', () => {
-      const html = '<tr class="epscape_tr"><td>1 сезон 8 серія</td></tr>';
+      const html = '<table><tr class="epscape_tr"><td>1 сезон 8 серія</td></tr></table>';
       const total = service.extractMaxEpisodeFromSchedule(html, 3);
       expect(total).toBe(0);
     });

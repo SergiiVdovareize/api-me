@@ -264,8 +264,10 @@ export class UakinoParserService {
       return String(inputNewsId);
     }
 
-    // 4. Try JS variables in script tags
-    const scriptMatch = html.match(/(?:news_id|newsid|dle_news_id)\s*[:=]\s*['"]?(\d+)['"]?/i);
+    // 4. Try JS variables in script tags or onclick handlers
+    const scriptMatch =
+      html.match(/(?:news_id|newsid|dle_news_id)\s*[:=]\s*['"]?(\d+)['"]?/i) ||
+      html.match(/show_toloka\((\d+)\)/i);
     if (scriptMatch) {
       this.logger.debug(`Extracted news ID "${scriptMatch[1]}" from script content.`);
       return scriptMatch[1];
