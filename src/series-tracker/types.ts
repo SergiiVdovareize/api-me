@@ -1,0 +1,43 @@
+export interface TrackedSeriesItem {
+  rowIndex: number;
+  id: string;
+  title: string;
+  season1Url: string;
+  lastSeason: number;
+  lastEpisode: number;
+  minQuality: string;
+  isActive: boolean;
+  lastChecked?: string;
+  latestUrl?: string;
+}
+
+export interface UakinoSeasonInfo {
+  seasonNumber: number;
+  url: string;
+  newsId?: string;
+}
+
+export interface UakinoCheckResult {
+  latestSeason: number;
+  latestEpisode: number;
+  latestUrl: string;
+  posterUrl?: string;
+  hasConfirmedRelease: boolean;
+}
+
+export interface CheckReportItem {
+  id: string;
+  title: string;
+  previous: { season: number; episode: number };
+  current: { season: number; episode: number };
+  status: 'up-to-date' | 'notified' | 'skipped' | 'error';
+  url?: string;
+  error?: string;
+}
+
+export interface SeriesCheckSummary {
+  checkedCount: number;
+  notifiedCount: number;
+  timestamp: string;
+  details: CheckReportItem[];
+}
