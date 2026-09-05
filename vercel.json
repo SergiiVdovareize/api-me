@@ -6,10 +6,7 @@
     "builds": [
       {
         "src": "dist/main.js",
-        "use": "@vercel/node",
-        "config": {
-          "maxDuration": 60
-        }
+        "use": "@vercel/node"
       }
     ],
     "routes": [
