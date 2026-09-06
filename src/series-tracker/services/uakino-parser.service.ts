@@ -477,46 +477,52 @@ export class UakinoParserService {
   parseEpisodeNumber(text: string): number {
     let maxFound = 0;
 
+    // Helper to validate reasonable episode number (< 1000 to prevent resolution numbers like 1080p, 720p, 2160p)
+    const validEp = (n: number) => n > 0 && n < 1000;
+
     // Pattern 1: S01E08 or S01E01-08
     const sPattern = /s\d+\s*e(\d+)(?:\s*-\s*e?(\d+))?/gi;
     let match: RegExpExecArray | null;
     while ((match = sPattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = match[2] ? parseInt(match[2], 10) : ep1;
-      maxFound = Math.max(maxFound, ep1, ep2);
+      if (validEp(ep1)) maxFound = Math.max(maxFound, ep1);
+      if (validEp(ep2)) maxFound = Math.max(maxFound, ep2);
     }
 
     // Pattern 2: (серії|серія|серій|серии|серия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*(\d+)(?:\s*(?:-|–|—|до)\s*(\d+))?
     // Matches both Cyrillic 'с' and Latin 'c' (e.g. Cерії 1-9)
     const epPattern =
-      /(?:[сc]ерії|[сc]ерія|[сc]ерій|[сc]ерии|[сc]ерия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*(\d+)(?:\s*(?:-|–|—|до)\s*(\d+))?/gi;
+      /(?:[сc]ерії|[сc]ерія|[сc]ерій|[сc]ерии|[сc]ерия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*\b(\d+)\b(?:\s*(?:-|–|—|до)\s*\b(\d+)\b)?/gi;
     while ((match = epPattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = match[2] ? parseInt(match[2], 10) : ep1;
-      maxFound = Math.max(maxFound, ep1, ep2);
+      if (validEp(ep1)) maxFound = Math.max(maxFound, ep1);
+      if (validEp(ep2)) maxFound = Math.max(maxFound, ep2);
     }
 
     // Pattern 3: (\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:серія|серії|серій|серии|серия|епізод|епізоди)/gi (e.g. "1-8 серія")
     const rangePattern =
-      /(\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)/gi;
+      /\b(\d+)\b\s*(?:-|–|—)\s*\b(\d+)\b\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)/gi;
     while ((match = rangePattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = parseInt(match[2], 10);
-      maxFound = Math.max(maxFound, ep1, ep2);
+      if (validEp(ep1)) maxFound = Math.max(maxFound, ep1);
+      if (validEp(ep2)) maxFound = Math.max(maxFound, ep2);
     }
 
     // Pattern 4: Single episode prefix: (\d+)\s*(?:серія|серия|епізод)\b
-    const singlePattern = /(\d+)\s*(?:[сc]ерія|[сc]ерия|епізод)\b/gi;
+    const singlePattern = /\b(\d+)\b\s*(?:[сc]ерія|[сc]ерия|епізод)\b/gi;
     while ((match = singlePattern.exec(text)) !== null) {
       const ep = parseInt(match[1], 10);
-      maxFound = Math.max(maxFound, ep);
+      if (validEp(ep)) maxFound = Math.max(maxFound, ep);
     }
 
     // Pattern 5: "(\d+)\s*з\s*(\d+)" (e.g. "Серії 1-5 з 10" or "5 з 10" -> current released is 5)
-    const outOfPattern = /(\d+)\s*з\s*\d+/gi;
+    const outOfPattern = /\b(\d+)\b\s*з\s*\b\d+\b/gi;
     while ((match = outOfPattern.exec(text)) !== null) {
       const ep = parseInt(match[1], 10);
-      maxFound = Math.max(maxFound, ep);
+      if (validEp(ep)) maxFound = Math.max(maxFound, ep);
     }
 
     return maxFound;
