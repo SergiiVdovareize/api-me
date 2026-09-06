@@ -492,8 +492,9 @@ export class UakinoParserService {
 
     // Pattern 2: (серії|серія|серій|серии|серия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*(\d+)(?:\s*(?:-|–|—|до)\s*(\d+))?
     // Matches both Cyrillic 'с' and Latin 'c' (e.g. Cерії 1-9)
+    // Negative lookahead (?![pPkK0-9]) ensures we do not match video resolutions (1080p, 720p, 2160p)
     const epPattern =
-      /(?:[сc]ерії|[сc]ерія|[сc]ерій|[сc]ерии|[сc]ерия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*\b(\d+)\b(?:\s*(?:-|–|—|до)\s*\b(\d+)\b)?/gi;
+      /(?:[сc]ерії|[сc]ерія|[сc]ерій|[сc]ерии|[сc]ерия|епізоди|епізод|episodes?|ep\.?)\s*[:#-]?\s*(?<!\d)(\d+)(?![pPkK0-9])(?:\s*(?:-|–|—|до)\s*(?<!\d)(\d+)(?![pPkK0-9]))?/gi;
     while ((match = epPattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = match[2] ? parseInt(match[2], 10) : ep1;
@@ -503,7 +504,7 @@ export class UakinoParserService {
 
     // Pattern 3: (\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:серія|серії|серій|серии|серия|епізод|епізоди)/gi (e.g. "1-8 серія")
     const rangePattern =
-      /\b(\d+)\b\s*(?:-|–|—)\s*\b(\d+)\b\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)/gi;
+      /(?<!\d)(\d+)\s*(?:-|–|—)\s*(\d+)\s*(?:[сc]ерія|[сc]ерії|[сc]ерій|[сc]ерии|[сc]ерия|епізод|епізоди)(?![а-яА-ЯіїєґІЇЄҐa-zA-Z0-9])/gi;
     while ((match = rangePattern.exec(text)) !== null) {
       const ep1 = parseInt(match[1], 10);
       const ep2 = parseInt(match[2], 10);
@@ -511,15 +512,16 @@ export class UakinoParserService {
       if (validEp(ep2)) maxFound = Math.max(maxFound, ep2);
     }
 
-    // Pattern 4: Single episode prefix: (\d+)\s*(?:серія|серия|епізод)\b
-    const singlePattern = /\b(\d+)\b\s*(?:[сc]ерія|[сc]ерия|епізод)\b/gi;
+    // Pattern 4: Single episode prefix: (\d+)\s*(?:серія|серия|епізод) (e.g. "7 серія")
+    const singlePattern =
+      /(?<!\d)(\d+)\s*(?:[сc]ерія|[сc]ерия|епізод)(?![а-яА-ЯіїєґІЇЄҐa-zA-Z0-9])/gi;
     while ((match = singlePattern.exec(text)) !== null) {
       const ep = parseInt(match[1], 10);
       if (validEp(ep)) maxFound = Math.max(maxFound, ep);
     }
 
     // Pattern 5: "(\d+)\s*з\s*(\d+)" (e.g. "Серії 1-5 з 10" or "5 з 10" -> current released is 5)
-    const outOfPattern = /\b(\d+)\b\s*з\s*\b\d+\b/gi;
+    const outOfPattern = /(?<!\d)(\d+)\s*з\s*(?<!\d)\d+(?![pPkK0-9])/gi;
     while ((match = outOfPattern.exec(text)) !== null) {
       const ep = parseInt(match[1], 10);
       if (validEp(ep)) maxFound = Math.max(maxFound, ep);
