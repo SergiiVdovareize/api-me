@@ -352,5 +352,135 @@ describe('UakinoParserService', () => {
         service.checkSeries('https://uakino.best/unknown.html', 'Unknown')
       ).rejects.toThrow('Could not determine news ID');
     });
+
+    it('should parse initial season number from URL when season pattern matches', async () => {
+      const s2Html = `
+        <html>
+          <body>
+            <input type="hidden" name="news_id" value="26298">
+          </body>
+        </html>
+      `;
+      jest.spyOn(service, 'fetchPage').mockResolvedValue(s2Html);
+      jest.spyOn(service, 'fetchTolokaDistributions').mockResolvedValue('<div>S2 Toloka</div>');
+      jest.spyOn(service, 'extractMax1080pEpisode').mockResolvedValue(5);
+
+      const result = await service.checkSeries('https://uakino.best/26298-podil-rozryv-2-sezon.html', 'Podil');
+      expect(result.latestSeason).toBe(2);
+      expect(result.latestEpisode).toBe(5);
+    });
+
+    it('should continue with initial season HTML if fetching newest season fails', async () => {
+      const s1Html = `
+        <html>
+          <body>
+            <ul class="seasons">
+              <li><a href="https://uakino.best/100-s1.html">1 сезон</a></li>
+              <li><a href="https://uakino.best/200-s2.html">2 сезон</a></li>
+            </ul>
+            <div data-news-id="100">S1 content</div>
+          </body>
+        </html>
+      `;
+
+      jest.spyOn(service, 'fetchPage').mockImplementation(async (url: string) => {
+        if (url.includes('s2.html')) throw new Error('Fetch failed 500');
+        return s1Html;
+      });
+      jest.spyOn(service, 'fetchTolokaDistributions').mockResolvedValue('<div>Toloka S1</div>');
+      jest.spyOn(service, 'extractMax1080pEpisode').mockResolvedValue(10);
+
+      const result = await service.checkSeries('https://uakino.best/100-s1.html', 'Show');
+      expect(result.latestSeason).toBe(2);
+      expect(result.latestEpisode).toBe(10);
+    });
+  });
+
+  describe('fetchPage extended branches', () => {
+    it('should mask short SCRAPERAPI_KEY with ***', async () => {
+      configService.get.mockReturnValue('12345');
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue('<html>Page</html>'),
+      });
+      global.fetch = mockFetch;
+
+      const html = await service.fetchPage('https://uakino.best/test.html');
+      expect(html).toBe('<html>Page</html>');
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('should auto-retry with .html on 404 for URLs without .html extension', async () => {
+      configService.get.mockReturnValue(undefined);
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue('<html>Retried Page</html>'),
+        });
+      global.fetch = mockFetch;
+
+      const html = await service.fetchPage('https://uakino.best/show');
+      expect(html).toBe('<html>Retried Page</html>');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(2, 'https://uakino.best/show.html', expect.any(Object));
+    });
+  });
+
+  describe('extractNewsId extended patterns', () => {
+    it('should extract news ID from meta[property="og:url"]', () => {
+      const html = '<meta property="og:url" content="https://uakino.best/9999-og-show.html">';
+      const id = service.extractNewsId('https://uakino.best/series/other', html);
+      expect(id).toBe('9999');
+    });
+
+    it('should extract news ID from [data-id] attribute', () => {
+      const html = '<div data-id="8888">Show</div>';
+      const id = service.extractNewsId('https://uakino.best/series/other', html);
+      expect(id).toBe('8888');
+    });
+
+    it('should extract news ID from JS variable dle_news_id', () => {
+      const html = '<script>var dle_news_id = "7777";</script>';
+      const id = service.extractNewsId('https://uakino.best/series/other', html);
+      expect(id).toBe('7777');
+    });
+  });
+
+  describe('fetchTolokaDistributions fallbacks', () => {
+    it('should retry with news_id if toloka returns Invalid ID', async () => {
+      jest.spyOn(service, 'fetchPage')
+        .mockResolvedValueOnce('Invalid ID')
+        .mockResolvedValueOnce('<div>Toloka content with news_id</div>');
+
+      const html = await service.fetchTolokaDistributions('https://uakino.best/show.html', '1234');
+      expect(html).toBe('<div>Toloka content with news_id</div>');
+    });
+
+    it('should catch error on toloka with id and retry with news_id', async () => {
+      jest.spyOn(service, 'fetchPage')
+        .mockRejectedValueOnce(new Error('500 Internal Error'))
+        .mockResolvedValueOnce('<div>Toloka fallback content</div>');
+
+      const html = await service.fetchTolokaDistributions('https://uakino.best/show.html', '1234');
+      expect(html).toBe('<div>Toloka fallback content</div>');
+    });
+  });
+
+  describe('parseEpisodeNumber extended patterns', () => {
+    it('should parse single episode prefix (7 серія)', () => {
+      expect(service.parseEpisodeNumber('7 серія 1080p')).toBe(7);
+    });
+
+    it('should parse "X з Y" pattern (3 з 10)', () => {
+      expect(service.parseEpisodeNumber('Епізод 3 з 10 WEB-DL 1080p')).toBe(3);
+    });
   });
 });
+

@@ -498,5 +498,119 @@ describe('SeriesTrackerService', () => {
       expect(summary.totalActiveCount).toBe(0);
       expect(summary.details).toEqual([]);
     });
+
+    it('should default limit to 1 if limit is 0 or negative', async () => {
+      const series1: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 's1',
+        title: 'Series 1',
+        seasonUrl: 'https://uakino.best/1.html',
+        lastSeason: 1,
+        lastEpisode: 1,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([series1]);
+      uakinoParserService.checkSeries.mockResolvedValue({
+        latestSeason: 1,
+        latestEpisode: 1,
+        latestUrl: 'https://uakino.best/1.html',
+        hasConfirmedRelease: true,
+      });
+
+      const summary = await service.checkSeriesReleases({ limit: -1 });
+      expect(summary.checkedCount).toBe(1);
+    });
+
+    it('should trim and case-insensitively match seriesId', async () => {
+      const item: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 'silo',
+        title: 'Silo',
+        seasonUrl: 'https://uakino.best/silo.html',
+        lastSeason: 2,
+        lastEpisode: 8,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([item]);
+      uakinoParserService.checkSeries.mockResolvedValue({
+        latestSeason: 2,
+        latestEpisode: 8,
+        latestUrl: 'https://uakino.best/silo.html',
+        hasConfirmedRelease: true,
+      });
+
+      const summary = await service.checkSeriesReleases({ seriesId: ' SILO ' });
+      expect(summary.checkedCount).toBe(1);
+      expect(summary.details[0].id).toBe('silo');
+    });
+
+    it('should treat as up-to-date if new season has no confirmed 1080p release', async () => {
+      const item: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 'silo',
+        title: 'Silo',
+        seasonUrl: 'https://uakino.best/silo.html',
+        lastSeason: 2,
+        lastEpisode: 10,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([item]);
+      uakinoParserService.checkSeries.mockResolvedValue({
+        latestSeason: 3,
+        latestEpisode: 0,
+        latestUrl: 'https://uakino.best/silo-s3.html',
+        hasConfirmedRelease: false,
+      });
+
+      const summary = await service.checkSeriesReleases();
+      expect(summary.notifiedCount).toBe(0);
+      expect(summary.details[0].status).toBe('up-to-date');
+    });
+
+    it('should handle error when item has seasonUrl defined', async () => {
+      const item: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 'silo',
+        title: 'Silo',
+        seasonUrl: 'https://uakino.best/silo.html',
+        lastSeason: 2,
+        lastEpisode: 8,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([item]);
+      uakinoParserService.checkSeries.mockRejectedValue(new Error('Parser timeout'));
+
+      const summary = await service.checkSeriesReleases();
+      expect(summary.details[0].status).toBe('error');
+      expect(summary.details[0].error).toBe('Parser timeout');
+    });
+
+    it('should handle item without seasonUrl or season1Url', async () => {
+      const item: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 'nourl',
+        title: 'No URL Show',
+        lastSeason: 1,
+        lastEpisode: 1,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([item]);
+      uakinoParserService.checkSeries.mockResolvedValue({
+        latestSeason: 1,
+        latestEpisode: 1,
+        latestUrl: '',
+        hasConfirmedRelease: true,
+      });
+
+      const summary = await service.checkSeriesReleases();
+      expect(summary.checkedCount).toBe(1);
+      expect(uakinoParserService.checkSeries).toHaveBeenCalledWith('', 'No URL Show');
+    });
   });
 });
+

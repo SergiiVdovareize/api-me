@@ -323,5 +323,179 @@ describe('GoogleSheetsService', () => {
       expect(message).toContain('🔔 <b>Вийшла нова серія</b>');
       expect(message).toContain('🎬 <b>Severance</b>');
     });
+
+    it('should use cached outbox sheet name on subsequent calls', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'queue!A12:E12' } },
+      });
+
+      // First call resolves and caches
+      await service.appendTelegramOutbox('Silo', 2, 11);
+      // Second call uses cachedOutboxSheetName without calling get again
+      await service.appendTelegramOutbox('Silo', 2, 12);
+
+      expect(mockSheets.spreadsheets.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fallback to first sheet title or default queue when no tab matches regex', async () => {
+      (service as any).cachedOutboxSheetName = null;
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'CustomTab' } }],
+        },
+      });
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'CustomTab!A1:E1' } },
+      });
+
+      await service.appendTelegramOutbox('Test Show', 1, 1);
+      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+      expect(appendCall.range).toBe('CustomTab!A:E');
+    });
+
+    it('should default to queue when resolveOutboxSheetName encounters an error', async () => {
+      (service as any).cachedOutboxSheetName = null;
+      mockSheets.spreadsheets.get.mockRejectedValue(new Error('Cannot read sheets'));
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'queue!A1:E1' } },
+      });
+
+      await service.appendTelegramOutbox('Test Show', 1, 1);
+      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+      expect(appendCall.range).toBe('queue!A:E');
+    });
+  });
+
+  describe('configuration and credential branches', () => {
+    it('should use default spreadsheet IDs when config returns undefined', () => {
+      configService.get.mockReturnValue(undefined);
+      const defaultSeriesId = (service as any).getSeriesSpreadsheetId();
+      const defaultOutboxId = (service as any).getOutboxSpreadsheetId();
+
+      expect(defaultSeriesId).toBe('1TXXFR1MpAsUqcmOVRwf-2lZTPpYE3CVzCCmYuilbOLU');
+      expect(defaultOutboxId).toBe('1zbsVKCvuaFgN4cbn9KNeRKSq3EOT5tsMq2yp6Mpd9dI');
+    });
+
+    it('should throw error when credentials are missing', () => {
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'GOOGLE_SERVICE_ACCOUNT_EMAIL') return undefined;
+        if (key === 'GOOGLE_PRIVATE_KEY') return undefined;
+        return undefined;
+      });
+
+      expect(() => (service as any).getSheetsClient()).toThrow(
+        'Google Service Account credentials missing'
+      );
+    });
+
+    it('should return cached sheets client if already created', () => {
+      const client1 = (service as any).getSheetsClient();
+      const client2 = (service as any).getSheetsClient();
+      expect(client1).toBe(client2);
+    });
+  });
+
+  describe('getTrackedSeries extended branches', () => {
+    it('should auto-rename C1 header from Download URL to Season URL and parse status flags', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'Series' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            ['ID', 'Title', 'Download URL', 'Target Season', 'Last Episode', 'Min Quality', 'Status', 'Last Checked'],
+            ['', 'Custom Show', 'https://uakino.best/show.html', '1', '2', '1080p', 'yes', '2026-09-01 12:00'],
+            ['show-2', 'Active Show', 'https://uakino.best/show2.html', '', '', '', 'true', ''],
+          ],
+        },
+      });
+      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+
+      const series = await service.getTrackedSeries();
+
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledWith({
+        spreadsheetId: 'custom-series-sheet-id',
+        range: 'Series!C1',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [['Season URL']] },
+      });
+
+      expect(series.length).toBe(2);
+      // Auto-generated ID from title when ID is empty
+      expect(series[0].id).toBe('custom-show');
+      expect(series[0].isActive).toBe(true);
+      expect(series[1].isActive).toBe(true);
+      expect(series[1].lastSeason).toBe(1);
+      expect(series[1].lastEpisode).toBe(0);
+      expect(series[1].minQuality).toBe('1080p');
+    });
+
+    it('should handle C1 rename error gracefully', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'Series' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            ['ID', 'Title', 'Download URL'],
+            ['s1', 'Show', 'https://uakino.best/show.html', '1', '1', '1080p', '+'],
+          ],
+        },
+      });
+      mockSheets.spreadsheets.values.update.mockRejectedValue(new Error('Permission denied'));
+
+      const series = await service.getTrackedSeries();
+      expect(series.length).toBe(1);
+      expect(series[0].isActive).toBe(true);
+    });
+
+    it('should fallback to first sheet tab when Series tab does not exist', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'Sheet1' } }],
+        },
+      });
+
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            ['s1', 'Show', 'https://uakino.best/show.html', '1', '1', '1080p', '1'],
+          ],
+        },
+      });
+
+      const series = await service.getTrackedSeries();
+      expect(series.length).toBe(1);
+      expect((service as any).resolvedSeriesTabName).toBe('Sheet1');
+    });
+  });
+
+  describe('updateLastChecked error handling', () => {
+    it('should catch error and log warning when updateLastChecked fails', async () => {
+      (service as any).resolvedSeriesTabName = 'Series';
+      mockSheets.spreadsheets.values.update.mockRejectedValue(new Error('Network failure'));
+
+      await expect(service.updateLastChecked(2)).resolves.not.toThrow();
+    });
+  });
+
+  describe('extractEnglishTitle extended branches', () => {
+    it('should handle titles with year in parentheses or non-Latin candidate', () => {
+      expect(service.extractEnglishTitle('Бункер (2024)', 'silo')).toBe('silo');
+      expect(service.extractEnglishTitle('Бункер', 'silo_show')).toBe('silo show');
+      expect(service.extractEnglishTitle('Повільні коні')).toBe('повільні коні');
+    });
   });
 });
+
