@@ -264,7 +264,7 @@ describe('GoogleSheetsService', () => {
   });
 
   describe('appendTelegramOutbox', () => {
-    it('should append pending message with poster preview and Toloka link to queue tab', async () => {
+    it('should append pending message with Toloka link and without poster to queue tab', async () => {
       mockSheets.spreadsheets.get.mockResolvedValue({
         data: {
           sheets: [{ properties: { title: 'queue' } }],
@@ -279,7 +279,6 @@ describe('GoogleSheetsService', () => {
         'Таємниця бункера / Silo',
         2,
         10,
-        'https://uakino.best/posters/silo.jpg',
         'silo'
       );
 
@@ -295,17 +294,17 @@ describe('GoogleSheetsService', () => {
       expect(row[3]).toBe('HTML');
       expect(row[4]).toBe('PENDING');
 
-      // Message content checks
+      // Message content checks (no poster, starts with bell announcement)
       const message = row[1];
-      expect(message).toContain('<a href="https://uakino.best/posters/silo.jpg">&#8205;</a>');
-      expect(message).toContain('🔔 <b>Вийшла нова серія</b>');
+      expect(message).not.toContain('&#8205;');
+      expect(message.startsWith('🔔 <b>Вийшла нова серія</b>')).toBe(true);
       expect(message).toContain('🎬 <b>Таємниця бункера / Silo</b>');
       expect(message).toContain('📺 <b>Сезон 2, Серія 10</b>');
       expect(message).toContain('🔗 <a href="https://toloka.to/tracker.php?');
       expect(message).toContain('nm=silo&amp;pn=');
     });
 
-    it('should handle missing posterUrl cleanly', async () => {
+    it('should format message correctly without seriesId', async () => {
       mockSheets.spreadsheets.get.mockResolvedValue({
         data: {
           sheets: [{ properties: { title: 'queue' } }],

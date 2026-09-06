@@ -368,7 +368,6 @@ export class GoogleSheetsService {
     title: string,
     season: number,
     episode: number,
-    posterUrl?: string,
     seriesId?: string
   ): Promise<void> {
     const sheets = this.getSheetsClient();
@@ -378,12 +377,7 @@ export class GoogleSheetsService {
     const timestamp = this.formatGmt3(new Date());
     const escapedTitle = this.escapeHtml(title);
 
-    let message = '';
-    if (posterUrl) {
-      // Hidden link with zero-width space displays the poster at the top in Telegram
-      message += `<a href="${posterUrl}">&#8205;</a>`;
-    }
-    message += `🔔 <b>Вийшла нова серія</b>\n\n🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
+    let message = `🔔 <b>Вийшла нова серія</b>\n\n🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
 
     const englishName = this.extractEnglishTitle(title, seriesId);
     if (englishName) {

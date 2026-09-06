@@ -105,7 +105,6 @@ describe('SeriesTrackerService', () => {
         'Silo',
         2,
         9,
-        'https://uakino.best/poster.jpg',
         'silo'
       );
       expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(
@@ -146,7 +145,6 @@ describe('SeriesTrackerService', () => {
         'Slow Horses',
         4,
         1,
-        'https://uakino.best/poster.jpg',
         'slow-horses'
       );
       expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(

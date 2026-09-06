@@ -143,7 +143,6 @@ export class SeriesTrackerService {
             item.title,
             result.latestSeason,
             result.latestEpisode,
-            result.posterUrl,
             item.id
           );
 
