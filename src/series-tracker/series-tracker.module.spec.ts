@@ -4,7 +4,6 @@ import { SeriesTrackerModule } from './series-tracker.module';
 import { SeriesTrackerService } from './series-tracker.service';
 import { GoogleSheetsService } from './services/google-sheets.service';
 import { UakinoParserService } from './services/uakino-parser.service';
-import { SeriesTrackerController } from './series-tracker.controller';
 
 describe('SeriesTrackerModule', () => {
   it('should compile the module and resolve providers', async () => {
@@ -21,6 +20,5 @@ describe('SeriesTrackerModule', () => {
     expect(module.get(SeriesTrackerService)).toBeDefined();
     expect(module.get(GoogleSheetsService)).toBeDefined();
     expect(module.get(UakinoParserService)).toBeDefined();
-    expect(module.get(SeriesTrackerController)).toBeDefined();
   });
 });

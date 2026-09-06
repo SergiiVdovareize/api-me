@@ -26,7 +26,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "validate": "npm run lint && npm run format:check",
-    "validate:fix": "npm run lint:fix && npm run format"
+    "validate:fix": "npm run lint:fix && npm run format",
+    "series:check": "ts-node -r tsconfig-paths/register scripts/check-series.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.11",
