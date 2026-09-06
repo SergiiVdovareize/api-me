@@ -133,6 +133,7 @@ describe('GoogleSheetsService', () => {
         rowIndex: 2,
         id: 'silo',
         title: 'Таємниця бункера / Silo',
+        seasonUrl: 'https://uakino.best/silo.html',
         season1Url: 'https://uakino.best/silo.html',
         lastSeason: 2,
         lastEpisode: 8,
