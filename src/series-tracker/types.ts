@@ -2,13 +2,13 @@ export interface TrackedSeriesItem {
   rowIndex: number;
   id: string;
   title: string;
-  season1Url: string;
+  seasonUrl?: string;
+  season1Url?: string;
   lastSeason: number;
   lastEpisode: number;
   minQuality: string;
   isActive: boolean;
   lastChecked?: string;
-  latestUrl?: string;
 }
 
 export interface UakinoSeasonInfo {

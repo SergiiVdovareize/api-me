@@ -192,10 +192,38 @@ describe('GoogleSheetsService', () => {
         },
       });
     });
+
+    it('should update column C Season URL when seasonUrl is provided', async () => {
+      (service as any).resolvedSeriesTabName = 'Series';
+      mockSheets.spreadsheets.values.batchUpdate.mockResolvedValue({});
+
+      await service.updateSeriesState(2, 3, 1, 'https://uakino.best/silo-s3.html');
+
+      expect(mockSheets.spreadsheets.values.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'custom-series-sheet-id',
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            {
+              range: 'Series!C2',
+              values: [['https://uakino.best/silo-s3.html']],
+            },
+            {
+              range: 'Series!D2:E2',
+              values: [[3, 1]],
+            },
+            {
+              range: 'Series!H2',
+              values: [[expect.any(String)]],
+            },
+          ],
+        },
+      });
+    });
   });
 
   describe('updateLastChecked', () => {
-    it('should update only column H for the given row index', async () => {
+    it('should update only column H for the given row index when no seasonUrl provided', async () => {
       (service as any).resolvedSeriesTabName = 'Series';
       mockSheets.spreadsheets.values.update.mockResolvedValue({});
 
@@ -207,6 +235,30 @@ describe('GoogleSheetsService', () => {
           range: 'Series!H3',
         })
       );
+    });
+
+    it('should update column C and H via batchUpdate when seasonUrl is provided', async () => {
+      (service as any).resolvedSeriesTabName = 'Series';
+      mockSheets.spreadsheets.values.batchUpdate.mockResolvedValue({});
+
+      await service.updateLastChecked(3, 'https://uakino.best/severance-s2.html');
+
+      expect(mockSheets.spreadsheets.values.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'custom-series-sheet-id',
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            {
+              range: 'Series!C3',
+              values: [['https://uakino.best/severance-s2.html']],
+            },
+            {
+              range: 'Series!H3',
+              values: [[expect.any(String)]],
+            },
+          ],
+        },
+      });
     });
   });
 

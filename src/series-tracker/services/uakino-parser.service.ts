@@ -67,26 +67,30 @@ export class UakinoParserService {
   }
 
   /**
-   * Checks a series starting from its Season 1 URL:
-   * 1. Loads Season 1 page
+   * Checks a series starting from its initial or cached recent season URL:
+   * 1. Loads season page
    * 2. Finds latest season in <ul class="seasons">
-   * 3. Loads latest season page / gets its news ID
+   * 3. Loads latest season page / gets its news ID (skips fetch if already on latest season)
    * 4. Queries /engine/ajax/toloka.php?id={newsId} for distributions
    * 5. Filters for 1080p+ quality and determines max confirmed episode
    */
-  async checkSeries(season1Url: string, seriesTitle?: string): Promise<UakinoCheckResult> {
-    this.logger.log(`========== Checking series: ${season1Url} ==========`);
+  async checkSeries(seasonUrl: string, seriesTitle?: string): Promise<UakinoCheckResult> {
+    this.logger.log(`========== Checking series: ${seasonUrl} ==========`);
 
-    const season1Html = await this.fetchPage(season1Url);
-    const seasons = this.parseSeasonsBlock(season1Html, season1Url);
+    const initialHtml = await this.fetchPage(seasonUrl);
+    const seasons = this.parseSeasonsBlock(initialHtml, seasonUrl);
+
+    // Detect initial season from URL pattern (e.g. 26298-podil-rozryv-2-sezon.html -> 2)
+    const urlSeasonMatch = seasonUrl.match(/(\d+)-sezon/i);
+    const initialSeasonNumber = urlSeasonMatch ? parseInt(urlSeasonMatch[1], 10) : 1;
 
     let latestSeason: UakinoSeasonInfo = {
-      seasonNumber: 1,
-      url: season1Url,
-      newsId: this.extractNewsId(season1Url, season1Html),
+      seasonNumber: initialSeasonNumber,
+      url: seasonUrl,
+      newsId: this.extractNewsId(seasonUrl, initialHtml),
     };
 
-    let latestSeasonHtml = season1Html;
+    let latestSeasonHtml = initialHtml;
 
     if (seasons.length > 0) {
       // Sort descending by season number to find the highest season
@@ -97,8 +101,13 @@ export class UakinoParserService {
         `Discovered ${seasons.length} season(s). Highest is Season ${newest.seasonNumber} (${newest.url})`
       );
 
-      if (newest.seasonNumber > 1) {
-        if (newest.url !== season1Url) {
+      const isSameUrl = (u1: string, u2: string) => {
+        const clean = (s: string) => s.replace(/\.html$/i, '').replace(/\/+$/, '').toLowerCase();
+        return clean(u1) === clean(u2);
+      };
+
+      if (newest.seasonNumber > latestSeason.seasonNumber || !isSameUrl(newest.url, seasonUrl)) {
+        if (!isSameUrl(newest.url, seasonUrl)) {
           try {
             this.logger.log(
               `Fetching page for newest Season ${newest.seasonNumber}: ${newest.url}`
@@ -113,9 +122,13 @@ export class UakinoParserService {
           url: newest.url,
           newsId: this.extractNewsId(newest.url, latestSeasonHtml),
         };
+      } else {
+        latestSeason.seasonNumber = newest.seasonNumber;
       }
     } else {
-      this.logger.log('No multi-season block found on page. Treating current page as Season 1.');
+      this.logger.log(
+        `No multi-season block found on page. Treating current page as Season ${latestSeason.seasonNumber}.`
+      );
     }
 
     if (!latestSeason.newsId) {

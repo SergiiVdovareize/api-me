@@ -318,6 +318,33 @@ describe('UakinoParserService', () => {
       expect(result.hasConfirmedRelease).toBe(true);
     });
 
+    it('should not re-fetch page if targetUrl is already the newest season', async () => {
+      const s2Html = `
+        <html>
+          <head>
+            <meta property="og:image" content="/uploads/s2.jpg">
+          </head>
+          <body>
+            <ul class="seasons">
+              <li><a href="https://uakino.best/100-s1.html">1 сезон</a></li>
+              <li><a href="https://uakino.best/200-s2.html">2 сезон</a></li>
+            </ul>
+            <input type="hidden" name="news_id" value="200">
+          </body>
+        </html>
+      `;
+
+      const fetchPageSpy = jest.spyOn(service, 'fetchPage').mockResolvedValue(s2Html);
+      jest.spyOn(service, 'fetchTolokaDistributions').mockResolvedValue('<div>Toloka S2</div>');
+      jest.spyOn(service, 'extractMax1080pEpisode').mockResolvedValue(8);
+
+      const result = await service.checkSeries('https://uakino.best/200-s2.html', 'Show');
+
+      expect(result.latestSeason).toBe(2);
+      expect(result.latestEpisode).toBe(8);
+      expect(fetchPageSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('should throw error if newsId cannot be determined', async () => {
       jest.spyOn(service, 'fetchPage').mockResolvedValue('<html>No ID anywhere</html>');
 

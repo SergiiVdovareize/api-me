@@ -119,7 +119,9 @@ export class SeriesTrackerService {
       const itemStartTime = Date.now();
 
       try {
-        const result = await this.uakinoParserService.checkSeries(item.season1Url, item.title);
+        const checkUrl = item.seasonUrl || item.season1Url || '';
+        this.logger.log(`Checking URL: ${checkUrl}`);
+        const result = await this.uakinoParserService.checkSeries(checkUrl, item.title);
 
         const hasNewSeason = result.latestSeason > item.lastSeason;
         const hasNewEpisode =
@@ -145,11 +147,12 @@ export class SeriesTrackerService {
             item.id
           );
 
-          // 2. Update state in Google Sheets Series tab
+          // 2. Update state in Google Sheets Series tab (updating Season URL in Column C, Season, Episode, Last Checked)
           await this.googleSheetsService.updateSeriesState(
             item.rowIndex,
             result.latestSeason,
-            result.latestEpisode
+            result.latestEpisode,
+            result.latestUrl
           );
 
           notifiedCount++;
@@ -166,8 +169,11 @@ export class SeriesTrackerService {
             `✅ UP-TO-DATE: "${item.title}" remains at S${item.lastSeason}E${item.lastEpisode} (Checked in ${Date.now() - itemStartTime}ms)`
           );
 
-          // Update Last Checked timestamp in column H
-          await this.googleSheetsService.updateLastChecked(item.rowIndex);
+          // Update Last Checked in column H, and update Season URL in column C if a newer season page was discovered
+          await this.googleSheetsService.updateLastChecked(
+            item.rowIndex,
+            result.latestUrl !== checkUrl ? result.latestUrl : undefined
+          );
 
           details.push({
             id: item.id,
@@ -180,7 +186,7 @@ export class SeriesTrackerService {
         }
       } catch (error) {
         this.logger.error(
-          `❌ ERROR checking "${item.title}" (${item.season1Url}): ${error.message}`,
+          `❌ ERROR checking "${item.title}" (${item.seasonUrl || item.season1Url}): ${error.message}`,
           error.stack
         );
         details.push({

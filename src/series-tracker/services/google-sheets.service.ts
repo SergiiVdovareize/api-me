@@ -108,7 +108,7 @@ export class GoogleSheetsService {
 
   /**
    * Reads all tracked series from the series spreadsheet
-   * Columns: A: ID, B: Title, C: Download URL, D: Target Season, E: Last Known Episode, F: Min Quality, G: Status, H: Last Checked
+   * Columns: A: ID, B: Title, C: Season URL, D: Target Season, E: Last Known Episode, F: Min Quality, G: Status, H: Last Checked
    */
   async getTrackedSeries(): Promise<TrackedSeriesItem[]> {
     const sheets = this.getSheetsClient();
@@ -125,32 +125,59 @@ export class GoogleSheetsService {
       this.resolvedSeriesTabName = targetTab;
 
       this.logger.log(
-        `Reading tracked series list from "${spreadsheetId}", tab "${targetTab}", range A2:H...`
+        `Reading tracked series list from "${spreadsheetId}", tab "${targetTab}", range A1:H...`
       );
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `${targetTab}!A2:H`,
+        range: `${targetTab}!A1:H`,
       });
 
-      const rows = response.data.values || [];
-      if (rows.length === 0) {
-        this.logger.warn(`No data rows found in tab "${targetTab}" (A2:H is empty).`);
+      const allRows = response.data.values || [];
+      if (allRows.length === 0) {
+        this.logger.warn(`No data rows found in tab "${targetTab}" (A1:H is empty).`);
         return [];
       }
 
-      this.logger.debug(`Received ${rows.length} raw row(s) from "${targetTab}".`);
+      let dataRows: any[][] = [];
+      const firstRow = allRows[0] || [];
+
+      // Check if first row is the header row
+      if (firstRow[0] && String(firstRow[0]).trim().toLowerCase() === 'id') {
+        // Auto-rename 'Download URL' to 'Season URL' in Column C if needed
+        if (firstRow[2] && String(firstRow[2]).trim().toLowerCase() === 'download url') {
+          try {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `${targetTab}!C1`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: {
+                values: [['Season URL']],
+              },
+            });
+            this.logger.log(`Renamed header in ${targetTab}!C1 to 'Season URL'`);
+          } catch (e) {
+            this.logger.debug(`Could not rename C1: ${e.message}`);
+          }
+        }
+        dataRows = allRows.slice(1);
+      } else {
+        // Direct data rows (e.g. mocked in tests)
+        dataRows = allRows;
+      }
+
+      this.logger.debug(`Received ${dataRows.length} raw row(s) from "${targetTab}".`);
 
       const seriesList: TrackedSeriesItem[] = [];
 
-      rows.forEach((row, index) => {
+      dataRows.forEach((row, index) => {
         const id = row[0] ? String(row[0]).trim() : '';
         const title = row[1] ? String(row[1]).trim() : '';
-        const season1Url = row[2] ? String(row[2]).trim() : '';
+        const seasonUrl = row[2] ? String(row[2]).trim() : '';
 
         // Skip rows without URL or title
-        if (!season1Url || !title) {
-          this.logger.debug(`Row ${index + 2}: skipped (missing title or season1Url).`);
+        if (!seasonUrl || !title) {
+          this.logger.debug(`Row ${index + 2}: skipped (missing title or seasonUrl).`);
           return;
         }
 
@@ -167,7 +194,8 @@ export class GoogleSheetsService {
           rowIndex: index + 2, // 1-indexed, starting from row 2
           id: id || title.toLowerCase().replace(/\s+/g, '-'),
           title,
-          season1Url,
+          seasonUrl,
+          season1Url: seasonUrl,
           lastSeason,
           lastEpisode,
           minQuality,
@@ -176,7 +204,7 @@ export class GoogleSheetsService {
         };
 
         this.logger.debug(
-          `Row ${item.rowIndex}: [${item.id}] "${item.title}" | Target Season: ${item.lastSeason}, Episode: ${item.lastEpisode} | Status: ${statusRaw} (Active: ${item.isActive})`
+          `Row ${item.rowIndex}: [${item.id}] "${item.title}" | Target Season: ${item.lastSeason}, Episode: ${item.lastEpisode} | Status: ${statusRaw} (Active: ${item.isActive}) | Season URL: ${item.seasonUrl}`
         );
 
         seriesList.push(item);
@@ -197,36 +225,46 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Updates state (Target Season in D, Last Known Episode in E, Last Checked in H) in the series spreadsheet
+   * Updates state (Season URL in C, Target Season in D, Last Known Episode in E, Last Checked in H)
    */
   async updateSeriesState(
     rowIndex: number,
     lastSeason: number,
-    lastEpisode: number
+    lastEpisode: number,
+    seasonUrl?: string
   ): Promise<void> {
     const sheets = this.getSheetsClient();
     const spreadsheetId = this.getSeriesSpreadsheetId();
     const lastChecked = this.formatGmt3Minutes(new Date());
 
     this.logger.log(
-      `Updating Series row ${rowIndex}: Target Season (D) = ${lastSeason}, Last Known Episode (E) = ${lastEpisode}, Last Checked (H) = ${lastChecked}`
+      `Updating Series row ${rowIndex}: ${seasonUrl ? `Season URL (C) = ${seasonUrl}, ` : ''}Target Season (D) = ${lastSeason}, Last Known Episode (E) = ${lastEpisode}, Last Checked (H) = ${lastChecked}`
     );
 
     try {
+      const data: sheets_v4.Schema$ValueRange[] = [
+        {
+          range: `${this.resolvedSeriesTabName}!D${rowIndex}:E${rowIndex}`,
+          values: [[lastSeason, lastEpisode]],
+        },
+        {
+          range: `${this.resolvedSeriesTabName}!H${rowIndex}`,
+          values: [[lastChecked]],
+        },
+      ];
+
+      if (seasonUrl) {
+        data.unshift({
+          range: `${this.resolvedSeriesTabName}!C${rowIndex}`,
+          values: [[seasonUrl]],
+        });
+      }
+
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
-          data: [
-            {
-              range: `${this.resolvedSeriesTabName}!D${rowIndex}:E${rowIndex}`,
-              values: [[lastSeason, lastEpisode]],
-            },
-            {
-              range: `${this.resolvedSeriesTabName}!H${rowIndex}`,
-              values: [[lastChecked]],
-            },
-          ],
+          data,
         },
       });
       this.logger.log(`Successfully updated Series row ${rowIndex}.`);
@@ -237,22 +275,41 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Updates only the 'Last Checked' column (H) when a series check finishes without changes
+   * Updates 'Last Checked' column (H) and optionally 'Season URL' in Column C
    */
-  async updateLastChecked(rowIndex: number): Promise<void> {
+  async updateLastChecked(rowIndex: number, seasonUrl?: string): Promise<void> {
     const sheets = this.getSheetsClient();
     const spreadsheetId = this.getSeriesSpreadsheetId();
     const lastChecked = this.formatGmt3Minutes(new Date());
 
     try {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${this.resolvedSeriesTabName}!H${rowIndex}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [[lastChecked]],
-        },
-      });
+      if (seasonUrl) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            valueInputOption: 'USER_ENTERED',
+            data: [
+              {
+                range: `${this.resolvedSeriesTabName}!C${rowIndex}`,
+                values: [[seasonUrl]],
+              },
+              {
+                range: `${this.resolvedSeriesTabName}!H${rowIndex}`,
+                values: [[lastChecked]],
+              },
+            ],
+          },
+        });
+      } else {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${this.resolvedSeriesTabName}!H${rowIndex}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [[lastChecked]],
+          },
+        });
+      }
     } catch (error) {
       this.logger.warn(`Could not update Last Checked for row ${rowIndex}: ${error.message}`);
     }

@@ -108,7 +108,12 @@ describe('SeriesTrackerService', () => {
         'https://uakino.best/poster.jpg',
         'silo'
       );
-      expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(2, 2, 9);
+      expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(
+        2,
+        2,
+        9,
+        'https://uakino.best/silo-s2.html'
+      );
     });
 
     it('should notify and update state when new season is released', async () => {
@@ -144,7 +149,12 @@ describe('SeriesTrackerService', () => {
         'https://uakino.best/poster.jpg',
         'slow-horses'
       );
-      expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(3, 4, 1);
+      expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(
+        3,
+        4,
+        1,
+        'https://uakino.best/slow-horses-s4.html'
+      );
     });
 
     it('should update lastChecked and mark up-to-date if no new episodes', async () => {
@@ -173,7 +183,10 @@ describe('SeriesTrackerService', () => {
 
       expect(summary.notifiedCount).toBe(0);
       expect(summary.details[0].status).toBe('up-to-date');
-      expect(googleSheetsService.updateLastChecked).toHaveBeenCalledWith(4);
+      expect(googleSheetsService.updateLastChecked).toHaveBeenCalledWith(
+        4,
+        'https://uakino.best/severance-s2.html'
+      );
       expect(googleSheetsService.appendTelegramOutbox).not.toHaveBeenCalled();
       expect(googleSheetsService.updateSeriesState).not.toHaveBeenCalled();
     });
@@ -203,7 +216,38 @@ describe('SeriesTrackerService', () => {
 
       expect(summary.notifiedCount).toBe(0);
       expect(summary.details[0].status).toBe('up-to-date');
-      expect(googleSheetsService.updateLastChecked).toHaveBeenCalledWith(5);
+      expect(googleSheetsService.updateLastChecked).toHaveBeenCalledWith(5, undefined);
+    });
+
+    it('should update Column C Season URL when a newer season page is discovered', async () => {
+      const item: TrackedSeriesItem = {
+        rowIndex: 2,
+        id: 'silo',
+        title: 'Silo',
+        seasonUrl: 'https://uakino.best/silo-s1.html',
+        lastSeason: 3,
+        lastEpisode: 9,
+        minQuality: '1080p',
+        isActive: true,
+      };
+      googleSheetsService.getTrackedSeries.mockResolvedValue([item]);
+      uakinoParserService.checkSeries.mockResolvedValue({
+        latestSeason: 3,
+        latestEpisode: 9,
+        latestUrl: 'https://uakino.best/silo-s3.html',
+        hasConfirmedRelease: true,
+      });
+
+      await service.checkSeriesReleases();
+
+      expect(uakinoParserService.checkSeries).toHaveBeenCalledWith(
+        'https://uakino.best/silo-s1.html',
+        'Silo'
+      );
+      expect(googleSheetsService.updateLastChecked).toHaveBeenCalledWith(
+        2,
+        'https://uakino.best/silo-s3.html'
+      );
     });
 
     it('should catch errors from uakinoParserService and record error status without breaking loop', async () => {
