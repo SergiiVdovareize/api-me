@@ -83,6 +83,11 @@ describe('UakinoParserService', () => {
     it('should return 0 when no episode number found', () => {
       expect(service.parseEpisodeNumber('Severance Season 2 WEB-DL 1080p')).toBe(0);
     });
+
+    it('should parse English episode descriptions like Episodes 1-6 and Ep. 12', () => {
+      expect(service.parseEpisodeNumber('Episodes 1-6 WEB-DL 1080p')).toBe(6);
+      expect(service.parseEpisodeNumber('Ep. 12 1080p')).toBe(12);
+    });
   });
 
   describe('parseSeasonsBlock', () => {

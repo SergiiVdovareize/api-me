@@ -80,6 +80,12 @@ describe('GoogleSheetsService', () => {
       expect(service.extractEnglishTitle('Таємниця бункера', 'silo')).toBe('silo');
       expect(service.extractEnglishTitle('Повільні коні', 'slow-horses')).toBe('slow horses');
     });
+
+    it('should extract English title with subtitles and colons', () => {
+      expect(
+        service.extractEnglishTitle('Справжній детектив / True Detective: Night Country')
+      ).toBe('true detective: night country');
+    });
   });
 
   describe('buildTolokaSearchUrl', () => {
