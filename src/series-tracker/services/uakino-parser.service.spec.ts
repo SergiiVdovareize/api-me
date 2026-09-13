@@ -370,7 +370,10 @@ describe('UakinoParserService', () => {
       jest.spyOn(service, 'fetchTolokaDistributions').mockResolvedValue('<div>S2 Toloka</div>');
       jest.spyOn(service, 'extractMax1080pEpisode').mockResolvedValue(5);
 
-      const result = await service.checkSeries('https://uakino.best/26298-podil-rozryv-2-sezon.html', 'Podil');
+      const result = await service.checkSeries(
+        'https://uakino.best/26298-podil-rozryv-2-sezon.html',
+        'Podil'
+      );
       expect(result.latestSeason).toBe(2);
       expect(result.latestEpisode).toBe(5);
     });
@@ -434,7 +437,11 @@ describe('UakinoParserService', () => {
       const html = await service.fetchPage('https://uakino.best/show');
       expect(html).toBe('<html>Retried Page</html>');
       expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(mockFetch).toHaveBeenNthCalledWith(2, 'https://uakino.best/show.html', expect.any(Object));
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://uakino.best/show.html',
+        expect.any(Object)
+      );
     });
   });
 
@@ -460,7 +467,8 @@ describe('UakinoParserService', () => {
 
   describe('fetchTolokaDistributions fallbacks', () => {
     it('should retry with news_id if toloka returns Invalid ID', async () => {
-      jest.spyOn(service, 'fetchPage')
+      jest
+        .spyOn(service, 'fetchPage')
         .mockResolvedValueOnce('Invalid ID')
         .mockResolvedValueOnce('<div>Toloka content with news_id</div>');
 
@@ -469,7 +477,8 @@ describe('UakinoParserService', () => {
     });
 
     it('should catch error on toloka with id and retry with news_id', async () => {
-      jest.spyOn(service, 'fetchPage')
+      jest
+        .spyOn(service, 'fetchPage')
         .mockRejectedValueOnce(new Error('500 Internal Error'))
         .mockResolvedValueOnce('<div>Toloka fallback content</div>');
 
@@ -488,4 +497,3 @@ describe('UakinoParserService', () => {
     });
   });
 });
-

@@ -102,7 +102,11 @@ export class UakinoParserService {
       );
 
       const isSameUrl = (u1: string, u2: string) => {
-        const clean = (s: string) => s.replace(/\.html$/i, '').replace(/\/+$/, '').toLowerCase();
+        const clean = (s: string) =>
+          s
+            .replace(/\.html$/i, '')
+            .replace(/\/+$/, '')
+            .toLowerCase();
         return clean(u1) === clean(u2);
       };
 

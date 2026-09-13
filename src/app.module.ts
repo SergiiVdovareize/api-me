@@ -27,6 +27,7 @@ import { GameResultsModule } from './game-results/game-results.module';
 import { AlphadateModule } from './alphadate/alphadate.module';
 import { EmailModule } from './email/email.module';
 import { SeriesTrackerModule } from './series-tracker/series-tracker.module';
+import { FuelModule } from './fuel/fuel.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { SeriesTrackerModule } from './series-tracker/series-tracker.module';
     AlphadateModule,
     EmailModule,
     SeriesTrackerModule,
+    FuelModule,
   ],
 
   controllers: [AppController, DateController, AnalyticsController],

@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleSheetsService } from './services/google-sheets.service';
 import { UakinoParserService } from './services/uakino-parser.service';
-import { CheckReportItem, SeriesCheckOptions, SeriesCheckSummary, TrackedSeriesItem } from './types';
+import {
+  CheckReportItem,
+  SeriesCheckOptions,
+  SeriesCheckSummary,
+  TrackedSeriesItem,
+} from './types';
 
 @Injectable()
 export class SeriesTrackerService {

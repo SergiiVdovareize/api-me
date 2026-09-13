@@ -281,12 +281,7 @@ describe('GoogleSheetsService', () => {
         data: { updates: { updatedRange: 'queue!A10:E10' } },
       });
 
-      await service.appendTelegramOutbox(
-        'Таємниця бункера / Silo',
-        2,
-        10,
-        'silo'
-      );
+      await service.appendTelegramOutbox('Таємниця бункера / Silo', 2, 10, 'silo');
 
       expect(mockSheets.spreadsheets.values.append).toHaveBeenCalledTimes(1);
       const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
@@ -417,8 +412,26 @@ describe('GoogleSheetsService', () => {
       mockSheets.spreadsheets.values.get.mockResolvedValue({
         data: {
           values: [
-            ['ID', 'Title', 'Download URL', 'Target Season', 'Last Episode', 'Min Quality', 'Status', 'Last Checked'],
-            ['', 'Custom Show', 'https://uakino.best/show.html', '1', '2', '1080p', 'yes', '2026-09-01 12:00'],
+            [
+              'ID',
+              'Title',
+              'Download URL',
+              'Target Season',
+              'Last Episode',
+              'Min Quality',
+              'Status',
+              'Last Checked',
+            ],
+            [
+              '',
+              'Custom Show',
+              'https://uakino.best/show.html',
+              '1',
+              '2',
+              '1080p',
+              'yes',
+              '2026-09-01 12:00',
+            ],
             ['show-2', 'Active Show', 'https://uakino.best/show2.html', '', '', '', 'true', ''],
           ],
         },
@@ -475,9 +488,7 @@ describe('GoogleSheetsService', () => {
 
       mockSheets.spreadsheets.values.get.mockResolvedValue({
         data: {
-          values: [
-            ['s1', 'Show', 'https://uakino.best/show.html', '1', '1', '1080p', '1'],
-          ],
+          values: [['s1', 'Show', 'https://uakino.best/show.html', '1', '1', '1080p', '1']],
         },
       });
 
@@ -504,4 +515,3 @@ describe('GoogleSheetsService', () => {
     });
   });
 });
-

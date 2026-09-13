@@ -101,12 +101,7 @@ describe('SeriesTrackerService', () => {
 
       expect(summary.notifiedCount).toBe(1);
       expect(summary.details[0].status).toBe('notified');
-      expect(googleSheetsService.appendTelegramOutbox).toHaveBeenCalledWith(
-        'Silo',
-        2,
-        9,
-        'silo'
-      );
+      expect(googleSheetsService.appendTelegramOutbox).toHaveBeenCalledWith('Silo', 2, 9, 'silo');
       expect(googleSheetsService.updateSeriesState).toHaveBeenCalledWith(
         2,
         2,
@@ -613,4 +608,3 @@ describe('SeriesTrackerService', () => {
     });
   });
 });
-
