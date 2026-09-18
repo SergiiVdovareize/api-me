@@ -14,6 +14,8 @@ async function bootstrap() {
   let location = 'Хвильового';
   let notify = true;
 
+  let force = false;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--category' && args[i + 1]) {
@@ -24,13 +26,13 @@ async function bootstrap() {
       location = args[++i];
     } else if (arg === '--no-notify') {
       notify = false;
-    } else if (arg === '--on-slots-only') {
-      notify = false; // will be passed as 'on-slots'
+    } else if (arg === '--force') {
+      force = true;
     }
   }
 
   logger.log(
-    `Starting CNAP check runner (category: "${category}", location: "${location}", notify Telegram Outbox: ${notify})...`
+    `Starting CNAP check runner (category: "${category}", location: "${location}", notify: ${notify}, force: ${force})...`
   );
 
   const app = await NestFactory.createApplicationContext(CnapModule, {
@@ -43,12 +45,13 @@ async function bootstrap() {
       category,
       service,
       location,
-      notify: args.includes('--on-slots-only') ? 'on-slots' : notify,
+      notify,
+      force,
     });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.log(
-      `Check completed in ${elapsed}s. Has slots: ${response.hasSlots}. Telegram queued: ${response.telegramQueued}.`
+      `Check completed in ${elapsed}s. Has slots: ${response.hasSlots}. Telegram queued: ${response.telegramQueued}.${response.telegramSkipReason ? ` Reason: ${response.telegramSkipReason}` : ''}`
     );
     console.log('\n--- Telegram Report Message ---');
     console.log(response.report);

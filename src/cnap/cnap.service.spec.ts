@@ -1,0 +1,480 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { CnapService } from './cnap.service';
+import { GoogleSheetsService } from '../series-tracker/services/google-sheets.service';
+import { CnapCheckResult } from './interfaces/cnap.interface';
+
+describe('CnapService', () => {
+  let service: CnapService;
+  let mockGoogleSheetsService: jest.Mocked<Partial<GoogleSheetsService>>;
+  let mockConfigService: jest.Mocked<Partial<ConfigService>>;
+
+  const originalFetch = global.fetch;
+
+  beforeEach(async () => {
+    mockGoogleSheetsService = {
+      appendMessageToOutbox: jest.fn().mockResolvedValue(undefined),
+    };
+
+    mockConfigService = {
+      get: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CnapService,
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: GoogleSheetsService, useValue: mockGoogleSheetsService },
+      ],
+    }).compile();
+
+    service = module.get<CnapService>(CnapService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    global.fetch = originalFetch;
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('getJobsByCategory', () => {
+    it('should return jobs array on success', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          isSucceeded: true,
+          result: ['Послуга 1', 'Послуга 2'],
+        }),
+      } as any);
+
+      const jobs = await service.getJobsByCategory('Паспортні послуги');
+      expect(jobs).toEqual(['Послуга 1', 'Послуга 2']);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('GetJobsByGroupName?jobGroupName=%D0%9F%D0%B0%D1%81%D0%BF%D0%BE%D1%80%D1%82%D0%BD%D1%96%20%D0%BF%D0%BE%D1%81%D0%BB%D1%83%D0%B3%D0%B8')
+      );
+    });
+
+    it('should throw error if fetch response is not ok', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+      } as any);
+
+      await expect(service.getJobsByCategory('Паспортні послуги')).rejects.toThrow(
+        'Failed to fetch jobs for "Паспортні послуги": HTTP 500'
+      );
+    });
+
+    it('should throw error if isSucceeded is false or result is not array', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          isSucceeded: false,
+          errors: ['Some error'],
+        }),
+      } as any);
+
+      await expect(service.getJobsByCategory('Паспортні послуги')).rejects.toThrow(
+        'CNAP API returned error or invalid format'
+      );
+    });
+  });
+
+  describe('getBranchesForJob', () => {
+    it('should return branches array on success', async () => {
+      const mockBranches = [{ guid: 'b1', name: 'Хвильового' }];
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          isSucceeded: true,
+          result: mockBranches,
+        }),
+      } as any);
+
+      const branches = await service.getBranchesForJob('Подати документи', 'Відстрочка');
+      expect(branches).toEqual(mockBranches);
+    });
+
+    it('should throw error if fetch response is not ok', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+      } as any);
+
+      await expect(service.getBranchesForJob('Послуга', 'Категорія')).rejects.toThrow(
+        'Failed to fetch branches for "Послуга": HTTP 404'
+      );
+    });
+
+    it('should throw error if isSucceeded is false or result is not array', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          isSucceeded: false,
+          errors: ['Error'],
+        }),
+      } as any);
+
+      await expect(service.getBranchesForJob('Послуга', 'Категорія')).rejects.toThrow(
+        'CNAP API returned error or invalid format'
+      );
+    });
+  });
+
+  describe('checkSlots', () => {
+    it('should return empty slots when category has no available jobs', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue([]);
+
+      const result = await service.checkSlots({ category: 'Невідома' });
+
+      expect(result.hasSlots).toBe(false);
+      expect(result.message).toContain('наразі відсутні доступні послуги');
+      expect(result.category).toBe('Невідома');
+      expect(result.targetLocation).toBe('Хвильового');
+    });
+
+    it('should return message when requested service is not in available jobs', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue(['Послуга А', 'Послуга Б']);
+
+      const result = await service.checkSlots({
+        category: 'Паспортні послуги',
+        service: 'Неіснуюча послуга',
+      });
+
+      expect(result.hasSlots).toBe(false);
+      expect(result.message).toContain('не знайдено серед доступних');
+    });
+
+    it('should collect available slots and format times correctly', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue(['Подати документи']);
+      jest.spyOn(service, 'getBranchesForJob').mockResolvedValue([
+        {
+          guid: 'branch-1',
+          name: 'вул. Хвильового, 14а Терпідрозділ ЦНАП',
+          address: 'вул. Хвильового, 14а',
+          freeSlots: [
+            {
+              workDaySlot: '2026-09-19T00:00:00+03:00',
+              freeTimeSlots: ['09:00:00', '09:30:00'],
+            },
+            {
+              // Case without 'T'
+              workDaySlot: '2026-09-20',
+              freeTimeSlots: ['10:00:00'],
+            },
+            {
+              // Empty time slots (should be filtered out)
+              workDaySlot: '2026-09-21',
+              freeTimeSlots: [],
+            },
+          ],
+        },
+        {
+          guid: 'branch-2',
+          name: 'вул. Виговського, 32',
+          address: 'вул. Виговського',
+          freeSlots: [],
+        },
+      ]);
+
+      const result = await service.checkSlots({
+        category: 'Оформлення відстрочки',
+        service: 'Подати документи',
+        location: 'Хвильового',
+      });
+
+      expect(result.hasSlots).toBe(true);
+      expect(result.message).toContain('Знайдено вільні слоти');
+      expect(result.services[0].branches[0].slots).toEqual([
+        { date: '2026-09-19', times: ['09:00', '09:30'] },
+        { date: '2026-09-20', times: ['10:00'] },
+      ]);
+    });
+
+    it('should handle branch without address (fallback to name) and without slots', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue(['Паспортна послуга']);
+      jest.spyOn(service, 'getBranchesForJob').mockResolvedValue([
+        {
+          guid: 'branch-1',
+          name: 'вул. Хвильового, 14а',
+          address: undefined, // test fallback to name
+          freeSlots: [
+            {
+              workDaySlot: undefined, // test fallback to 'Дата'
+              freeTimeSlots: ['09:00:00'],
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.checkSlots({
+        category: 'Паспортні послуги',
+        location: 'Хвильового',
+      });
+
+      expect(result.hasSlots).toBe(true);
+      expect(result.services[0].branches[0].address).toBe('вул. Хвильового, 14а');
+      expect(result.services[0].branches[0].slots[0].date).toBe('Дата');
+    });
+
+    it('should report no slots when freeSlots is empty for matched branch', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue(['Паспорт']);
+      jest.spyOn(service, 'getBranchesForJob').mockResolvedValue([
+        {
+          guid: 'branch-1',
+          name: 'вул. Хвильового',
+          freeSlots: [],
+        },
+      ]);
+
+      const result = await service.checkSlots({
+        location: 'Хвильового',
+      });
+
+      expect(result.hasSlots).toBe(false);
+      expect(result.message).toContain('Вільних місць для підрозділу на вул. Хвильового наразі немає');
+    });
+  });
+
+  describe('formatTelegramReport', () => {
+    it('should format message when slots are available', () => {
+      const checkResult: CnapCheckResult = {
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: true,
+        message: 'Знайдено',
+        services: [
+          {
+            serviceName: 'Паспорт ID',
+            available: true,
+            branches: [
+              {
+                guid: 'b1',
+                name: 'Хвильового',
+                address: 'Хвильового, 14а',
+                available: true,
+                slots: [{ date: '2026-09-19', times: ['09:00', '09:30'] }],
+              },
+              {
+                guid: 'b2',
+                name: 'Інший',
+                address: 'Інший',
+                available: false,
+                slots: [],
+              },
+            ],
+          },
+          {
+            serviceName: 'Недоступна послуга',
+            available: false,
+            branches: [],
+          },
+        ],
+      };
+
+      const report = service.formatTelegramReport(checkResult);
+
+      expect(report).toContain('🟢 <b>ЦНАП Львів: Є вільні місця!</b>');
+      expect(report).toContain('📂 Категорія: <b>Паспортні послуги</b>');
+      expect(report).toContain('📋 <b>Паспорт ID</b>');
+      expect(report).toContain('📅 <b>2026-09-19</b>: 09:00, 09:30');
+      expect(report).not.toContain('Недоступна послуга');
+      expect(report).toContain('🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Перейти до запису</a>');
+    });
+
+    it('should format message when slots are not available', () => {
+      const checkResult: CnapCheckResult = {
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        message: 'Місць немає',
+        services: [],
+      };
+
+      const report = service.formatTelegramReport(checkResult);
+
+      expect(report).toContain('🔴 <b>ЦНАП Львів: Вільних місць немає</b>');
+      expect(report).toContain('📂 Категорія: <b>Паспортні послуги</b>');
+      expect(report).toContain('<i>Місць немає</i>');
+      expect(report).toContain('🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Онлайн-запис ЦНАП</a>');
+    });
+  });
+
+  describe('getKyivHour', () => {
+    it('should return number between 0 and 23', () => {
+      const hour = service.getKyivHour();
+      expect(typeof hour).toBe('number');
+      expect(hour).toBeGreaterThanOrEqual(0);
+      expect(hour).toBeLessThanOrEqual(23);
+    });
+
+    it('should handle fallback when Intl throws error', () => {
+      const originalIntl = global.Intl;
+      try {
+        (global as any).Intl = {
+          DateTimeFormat: jest.fn().mockImplementation(() => {
+            throw new Error('Intl unsupported');
+          }),
+        };
+
+        const testDate = new Date('2026-09-18T10:00:00Z'); // UTC 10, UTC+3 = 13
+        const hour = service.getKyivHour(testDate);
+        expect(hour).toBe(13);
+      } finally {
+        global.Intl = originalIntl;
+      }
+    });
+  });
+
+  describe('checkAndNotify', () => {
+    it('should not notify when notify is false or "false"', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: true,
+        services: [],
+        message: 'Знайдено',
+      });
+
+      const response = await service.checkAndNotify({ notify: false });
+
+      expect(response.telegramQueued).toBe(false);
+      expect(response.telegramSkipReason).toContain('Сповіщення вимкнено');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
+
+      const responseString = await service.checkAndNotify({ notify: 'false' });
+      expect(responseString.telegramQueued).toBe(false);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('should always notify when hasSlots is true', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Відстрочка',
+        targetLocation: 'Хвильового',
+        hasSlots: true,
+        services: [],
+        message: 'Є місця',
+      });
+
+      const response = await service.checkAndNotify({ chatId: '999' });
+
+      expect(response.telegramQueued).toBe(true);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('🟢 <b>ЦНАП Львів: Є вільні місця!</b>'),
+        '999'
+      );
+    });
+
+    it('should handle error when appendMessageToOutbox throws on slots available', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Відстрочка',
+        targetLocation: 'Хвильового',
+        hasSlots: true,
+        services: [],
+        message: 'Є місця',
+      });
+
+      mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(new Error('Sheets API down'));
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(false);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+    });
+
+    it('should notify when no slots if force is true or notify is "always" or "force"', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(11); // hour 11 is not in [9, 15, 20]
+
+      const responseForce = await service.checkAndNotify({ force: true });
+      expect(responseForce.telegramQueued).toBe(true);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+
+      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
+
+      const responseAlways = await service.checkAndNotify({ notify: 'always' });
+      expect(responseAlways.telegramQueued).toBe(true);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+
+      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
+
+      const responseForceStr = await service.checkAndNotify({ force: 'true' });
+      expect(responseForceStr.telegramQueued).toBe(true);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+    });
+
+    it('should notify when no slots if Kyiv hour is in [9, 15, 20]', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+
+      // Hour 9
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
+      const res9 = await service.checkAndNotify({});
+      expect(res9.telegramQueued).toBe(true);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+
+      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
+
+      // Hour 15
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(15);
+      const res15 = await service.checkAndNotify({});
+      expect(res15.telegramQueued).toBe(true);
+
+      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
+
+      // Hour 20
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(20);
+      const res20 = await service.checkAndNotify({});
+      expect(res20.telegramQueued).toBe(true);
+    });
+
+    it('should skip notification when no slots and Kyiv hour is NOT in [9, 15, 20]', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(16); // 16:xx
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(false);
+      expect(response.telegramSkipReason).toContain('Повідомлення надсилається лише о 9, 15 та 20 годинах');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('should handle error when appendMessageToOutbox fails during empty report hour', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
+      mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(new Error('Sheet write failed'));
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(false);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
+    });
+  });
+});

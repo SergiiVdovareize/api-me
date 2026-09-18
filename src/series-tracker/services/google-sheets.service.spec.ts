@@ -372,6 +372,40 @@ describe('GoogleSheetsService', () => {
     });
   });
 
+  describe('appendMessageToOutbox', () => {
+    it('should append custom message with custom chatId', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+      mockSheets.spreadsheets.values.append.mockResolvedValue({
+        data: { updates: { updatedRange: 'queue!A15:E15' } },
+      });
+
+      await service.appendMessageToOutbox('Custom message', '987654');
+
+      expect(mockSheets.spreadsheets.values.append).toHaveBeenCalled();
+      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+      const row = appendCall.requestBody.values[0];
+      expect(row[1]).toBe('Custom message');
+      expect(row[2]).toBe('987654');
+      expect(row[3]).toBe('HTML');
+      expect(row[4]).toBe('PENDING');
+    });
+
+    it('should throw error when append fails', async () => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+      mockSheets.spreadsheets.values.append.mockRejectedValue(new Error('Append error'));
+
+      await expect(service.appendMessageToOutbox('Message')).rejects.toThrow('Append error');
+    });
+  });
+
   describe('configuration and credential branches', () => {
     it('should use default spreadsheet IDs when config returns undefined', () => {
       configService.get.mockReturnValue(undefined);

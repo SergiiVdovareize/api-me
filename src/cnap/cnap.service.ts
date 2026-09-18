@@ -202,13 +202,33 @@ export class CnapService {
   }
 
   /**
-   * Checks slots and optionally pushes a report to TELEGRAM_OUTBOX_SPREADSHEET_ID
+   * Returns the current hour (0..23) in Europe/Kyiv timezone
+   */
+  getKyivHour(date = new Date()): number {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        hour: 'numeric',
+        hour12: false,
+        timeZone: 'Europe/Kyiv',
+      }).formatToParts(date);
+      const hourPart = parts.find((p) => p.type === 'hour');
+      return hourPart ? parseInt(hourPart.value, 10) : (date.getUTCHours() + 3) % 24;
+    } catch {
+      return (date.getUTCHours() + 3) % 24;
+    }
+  }
+
+  /**
+   * Checks slots and conditionally pushes a report to TELEGRAM_OUTBOX_SPREADSHEET_ID:
+   * - If slots ARE available: ALWAYS sends notification.
+   * - If slots are NOT available: sends notification only around 9, 15, and 20 hours Kyiv time (unless forced).
    */
   async checkAndNotify(options: {
     category?: string;
     service?: string;
     location?: string;
     notify?: boolean | string;
+    force?: boolean | string;
     chatId?: string;
   }): Promise<CnapCheckResponse> {
     const result = await this.checkSlots({
@@ -219,26 +239,45 @@ export class CnapService {
 
     const report = this.formatTelegramReport(result);
     let telegramQueued = false;
+    let telegramSkipReason: string | undefined;
 
-    // Determine whether to notify:
-    // notify = true | 'true' | 'always' => always notify
-    // notify = 'on-slots' => only notify if hasSlots is true
-    // notify = false | 'false' => do not notify
     const notifyParam = options.notify ?? true;
-    const shouldNotify =
-      notifyParam === true ||
-      notifyParam === 'true' ||
-      notifyParam === 'always' ||
-      (notifyParam === 'on-slots' && result.hasSlots);
+    const isNotifyDisabled = notifyParam === false || notifyParam === 'false';
 
-    if (shouldNotify) {
+    const isForced =
+      options.force === true ||
+      options.force === 'true' ||
+      notifyParam === 'force' ||
+      notifyParam === 'always';
+
+    const EMPTY_REPORT_HOURS = [9, 15, 20];
+    const currentKyivHour = this.getKyivHour();
+
+    if (isNotifyDisabled) {
+      telegramSkipReason = 'Сповіщення вимкнено параметром notify=false.';
+    } else if (result.hasSlots) {
+      // Є вільні місця — надсилаємо повідомлення щоразу!
       try {
         await this.googleSheetsService.appendMessageToOutbox(report, options.chatId);
         telegramQueued = true;
-        this.logger.log(`Successfully queued CNAP report to Telegram Outbox.`);
+        this.logger.log(`[CNAP] 🎉 Знайдено слоти! Повідомлення додано в Telegram Outbox.`);
       } catch (error: any) {
         this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
       }
+    } else if (isForced || EMPTY_REPORT_HOURS.includes(currentKyivHour)) {
+      // Місць немає, але поточна година у списку [9, 15, 20] (або примусовий запит)
+      try {
+        await this.googleSheetsService.appendMessageToOutbox(report, options.chatId);
+        telegramQueued = true;
+        this.logger.log(
+          `[CNAP] Повідомлення про відсутність місць надіслано (година за Києвом: ${currentKyivHour}:xx).`
+        );
+      } catch (error: any) {
+        this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
+      }
+    } else {
+      telegramSkipReason = `Місць немає. Повідомлення надсилається лише о 9, 15 та 20 годинах (зараз ${currentKyivHour}:xx за Києвом).`;
+      this.logger.log(`[CNAP] ${telegramSkipReason}`);
     }
 
     return {
@@ -247,6 +286,7 @@ export class CnapService {
       category: result.category,
       targetLocation: result.targetLocation,
       telegramQueued,
+      telegramSkipReason,
       message: result.message,
       report,
       data: result,

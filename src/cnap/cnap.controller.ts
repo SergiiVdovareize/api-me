@@ -12,6 +12,7 @@ export class CnapController {
     @Query('service') service?: string,
     @Query('location') location?: string,
     @Query('notify') notify?: string,
+    @Query('force') force?: string,
     @Query('chatId') chatId?: string
   ): Promise<CnapCheckResponse> {
     return this.cnapService.checkAndNotify({
@@ -19,6 +20,7 @@ export class CnapController {
       service,
       location,
       notify,
+      force,
       chatId,
     });
   }
@@ -29,6 +31,7 @@ export class CnapController {
     @Query('service') service?: string,
     @Query('location') location?: string,
     @Query('notify') notify?: string,
+    @Query('force') force?: string,
     @Query('chatId') chatId?: string
   ): Promise<CnapCheckResponse> {
     return this.cnapService.checkAndNotify({
@@ -36,6 +39,7 @@ export class CnapController {
       service,
       location,
       notify,
+      force,
       chatId,
     });
   }

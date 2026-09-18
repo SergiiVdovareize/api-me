@@ -31,6 +31,7 @@ export interface CnapCheckResponse {
   category: string;
   targetLocation: string;
   telegramQueued: boolean;
+  telegramSkipReason?: string;
   message: string;
   report: string;
   data: CnapCheckResult;
