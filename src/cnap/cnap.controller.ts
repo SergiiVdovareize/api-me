@@ -43,4 +43,22 @@ export class CnapController {
       chatId,
     });
   }
+
+  /**
+   * Тестовий ендпоінт для перевірки роботи системи на категорії з наявними слотами
+   * (Оформлення відстрочки -> Подати документи). За замовчуванням НЕ надсилає повідомлення в Telegram.
+   */
+  @Get('test')
+  async checkTestSlots(
+    @Query('notify') notify = 'false',
+    @Query('force') force?: string
+  ): Promise<CnapCheckResponse> {
+    return this.cnapService.checkAndNotify({
+      category: 'Оформлення відстрочки',
+      service: 'Подати документи',
+      location: 'Хвильового',
+      notify,
+      force,
+    });
+  }
 }

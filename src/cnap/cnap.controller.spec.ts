@@ -123,4 +123,32 @@ describe('CnapController', () => {
       });
     });
   });
+
+  describe('checkTestSlots', () => {
+    it('should call service with test category Deferral and default notify false', async () => {
+      const result = await controller.checkTestSlots();
+
+      expect(result).toEqual(mockResponse);
+      expect(mockCnapService.checkAndNotify).toHaveBeenCalledWith({
+        category: 'Оформлення відстрочки',
+        service: 'Подати документи',
+        location: 'Хвильового',
+        notify: 'false',
+        force: undefined,
+      });
+    });
+
+    it('should pass custom notify and force to service', async () => {
+      const result = await controller.checkTestSlots('true', 'true');
+
+      expect(result).toEqual(mockResponse);
+      expect(mockCnapService.checkAndNotify).toHaveBeenCalledWith({
+        category: 'Оформлення відстрочки',
+        service: 'Подати документи',
+        location: 'Хвильового',
+        notify: 'true',
+        force: 'true',
+      });
+    });
+  });
 });
