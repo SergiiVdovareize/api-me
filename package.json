@@ -27,7 +27,9 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "validate": "npm run lint && npm run format:check",
     "validate:fix": "npm run lint:fix && npm run format",
-    "series:check": "ts-node -r tsconfig-paths/register scripts/check-series.ts"
+    "series:check": "ts-node -r tsconfig-paths/register scripts/check-series.ts",
+    "cnap:check": "ts-node -r tsconfig-paths/register scripts/check-cnap.ts",
+    "cnap:browser": "ts-node -r tsconfig-paths/register scripts/check-cnap-slots.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.11",
@@ -71,6 +73,7 @@
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.5.1",
     "jest": "^30.0.4",
+    "playwright": "^1.63.0",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.5",
     "source-map-support": "^0.5.21",

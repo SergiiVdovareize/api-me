@@ -28,6 +28,7 @@ import { AlphadateModule } from './alphadate/alphadate.module';
 import { EmailModule } from './email/email.module';
 import { SeriesTrackerModule } from './series-tracker/series-tracker.module';
 import { FuelModule } from './fuel/fuel.module';
+import { CnapModule } from './cnap/cnap.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { FuelModule } from './fuel/fuel.module';
     EmailModule,
     SeriesTrackerModule,
     FuelModule,
+    CnapModule,
   ],
 
   controllers: [AppController, DateController, AnalyticsController],

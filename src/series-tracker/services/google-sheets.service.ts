@@ -362,34 +362,18 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Appends a new pending message to the Telegram Outbox queue spreadsheet
+   * Appends an arbitrary pending HTML message to the Telegram Outbox spreadsheet
    */
-  async appendTelegramOutbox(
-    title: string,
-    season: number,
-    episode: number,
-    seriesId?: string
-  ): Promise<void> {
+  async appendMessageToOutbox(message: string, chatId = '1252877'): Promise<void> {
     const sheets = this.getSheetsClient();
     const spreadsheetId = this.getOutboxSpreadsheetId();
     const outboxSheetName = await this.resolveOutboxSheetName();
 
     const timestamp = this.formatGmt3(new Date());
-    const escapedTitle = this.escapeHtml(title);
-
-    let message = `🔔 <b>Вийшла нова серія</b>\n\n🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
-
-    const englishName = this.extractEnglishTitle(title, seriesId);
-    if (englishName) {
-      const tolokaUrl = this.buildTolokaSearchUrl(englishName);
-      const escapedTolokaUrl = this.escapeHtml(tolokaUrl);
-      message += `\n\n🔗 <a href="${escapedTolokaUrl}">Toloka</a>`;
-    }
-
-    const rowValues = [timestamp, message, '1252877', 'HTML', 'PENDING'];
+    const rowValues = [timestamp, message, chatId, 'HTML', 'PENDING'];
 
     this.logger.log(
-      `Appending to Telegram Outbox sheet "${outboxSheetName}" (${spreadsheetId}): [Timestamp: ${timestamp}, Title: "${title}", Status: PENDING]`
+      `Appending to Telegram Outbox sheet "${outboxSheetName}" (${spreadsheetId}): [Timestamp: ${timestamp}, Chat: ${chatId}, Status: PENDING]`
     );
 
     try {
@@ -402,12 +386,35 @@ export class GoogleSheetsService {
         },
       });
       this.logger.log(
-        `Successfully appended Telegram Outbox row for "${title}" S${season}E${episode}. Range: ${result.data.updates?.updatedRange}`
+        `Successfully appended Telegram Outbox row. Range: ${result.data.updates?.updatedRange}`
       );
     } catch (error) {
       this.logger.error(`Failed to append to Telegram Outbox: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  /**
+   * Appends a new pending message to the Telegram Outbox queue spreadsheet
+   */
+  async appendTelegramOutbox(
+    title: string,
+    season: number,
+    episode: number,
+    seriesId?: string
+  ): Promise<void> {
+    const escapedTitle = this.escapeHtml(title);
+
+    let message = `🔔 <b>Вийшла нова серія</b>\n\n🎬 <b>${escapedTitle}</b>\n\n📺 <b>Сезон ${season}, Серія ${episode}</b>`;
+
+    const englishName = this.extractEnglishTitle(title, seriesId);
+    if (englishName) {
+      const tolokaUrl = this.buildTolokaSearchUrl(englishName);
+      const escapedTolokaUrl = this.escapeHtml(tolokaUrl);
+      message += `\n\n🔗 <a href="${escapedTolokaUrl}">Toloka</a>`;
+    }
+
+    await this.appendMessageToOutbox(message);
   }
 
   /**
