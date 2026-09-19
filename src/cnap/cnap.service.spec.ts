@@ -53,7 +53,9 @@ describe('CnapService', () => {
       const jobs = await service.getJobsByCategory('Паспортні послуги');
       expect(jobs).toEqual(['Послуга 1', 'Послуга 2']);
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('GetJobsByGroupName?jobGroupName=%D0%9F%D0%B0%D1%81%D0%BF%D0%BE%D1%80%D1%82%D0%BD%D1%96%20%D0%BF%D0%BE%D1%81%D0%BB%D1%83%D0%B3%D0%B8')
+        expect.stringContaining(
+          'GetJobsByGroupName?jobGroupName=%D0%9F%D0%B0%D1%81%D0%BF%D0%BE%D1%80%D1%82%D0%BD%D1%96%20%D0%BF%D0%BE%D1%81%D0%BB%D1%83%D0%B3%D0%B8'
+        )
       );
     });
 
@@ -235,7 +237,9 @@ describe('CnapService', () => {
       });
 
       expect(result.hasSlots).toBe(false);
-      expect(result.message).toContain('Вільних місць для підрозділу на вул. Хвильового наразі немає');
+      expect(result.message).toContain(
+        'Вільних місць для підрозділу на вул. Хвильового наразі немає'
+      );
     });
   });
 
@@ -282,7 +286,9 @@ describe('CnapService', () => {
       expect(report).toContain('📋 <b>Паспорт ID</b>');
       expect(report).toContain('📅 <b>2026-09-19</b>: 09:00, 09:30');
       expect(report).not.toContain('Недоступна послуга');
-      expect(report).toContain('🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Перейти до запису</a>');
+      expect(report).toContain(
+        '🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Перейти до запису</a>'
+      );
     });
 
     it('should format message when slots are not available', () => {
@@ -299,7 +305,9 @@ describe('CnapService', () => {
       expect(report).toContain('🔴 <b>ЦНАП Львів: Вільних місць немає</b>');
       expect(report).toContain('📂 Категорія: <b>Паспортні послуги</b>');
       expect(report).toContain('<i>Місць немає</i>');
-      expect(report).toContain('🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Онлайн-запис ЦНАП</a>');
+      expect(report).toContain(
+        '🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Онлайн-запис ЦНАП</a>'
+      );
     });
   });
 
@@ -456,7 +464,9 @@ describe('CnapService', () => {
       const response = await service.checkAndNotify({});
 
       expect(response.telegramQueued).toBe(false);
-      expect(response.telegramSkipReason).toContain('Повідомлення надсилається лише о 9, 15 та 20 годинах');
+      expect(response.telegramSkipReason).toContain(
+        'Повідомлення надсилається лише о 9, 15 та 20 годинах'
+      );
       expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
     });
 
@@ -469,7 +479,9 @@ describe('CnapService', () => {
         message: 'Немає місць',
       });
       jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
-      mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(new Error('Sheet write failed'));
+      mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(
+        new Error('Sheet write failed')
+      );
 
       const response = await service.checkAndNotify({});
 

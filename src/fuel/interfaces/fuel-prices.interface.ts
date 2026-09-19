@@ -16,3 +16,18 @@ export interface FuelPricesResponse {
   prices: FuelPrices;
   source: string;
 }
+
+export interface FuelHistoryItem {
+  date: string;
+  prices: FuelPrices;
+}
+
+export interface FuelHistoryResponse {
+  startDate: string;
+  endDate: string;
+  days: number;
+  currency: string;
+  unit: string;
+  items: FuelHistoryItem[];
+  source: string;
+}

@@ -211,7 +211,7 @@ export class CnapService {
         hour12: false,
         timeZone: 'Europe/Kyiv',
       }).formatToParts(date);
-      const hourPart = parts.find((p) => p.type === 'hour');
+      const hourPart = parts.find(p => p.type === 'hour');
       return hourPart ? parseInt(hourPart.value, 10) : (date.getUTCHours() + 3) % 24;
     } catch {
       return (date.getUTCHours() + 3) % 24;

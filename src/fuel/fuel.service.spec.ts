@@ -211,4 +211,218 @@ describe('FuelService', () => {
       expect(result.unit).toBe('грн/л');
     });
   });
+
+  describe('getHistory', () => {
+    it('should fetch history with default parameters (today and 30 days)', async () => {
+      jest.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('2026-09')) {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => sampleHtmlSeptember,
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () => sampleHtmlAugust,
+        } as Response;
+      });
+
+      const result = await service.getHistory();
+
+      expect(result).toBeDefined();
+      expect(result.days).toBe(30);
+      expect(result.currency).toBe('UAH');
+      expect(result.unit).toBe('грн/л');
+      expect(result.source).toBe('https://index.minfin.com.ua/ua/markets/fuel/');
+      expect(Array.isArray(result.items)).toBe(true);
+    });
+
+    it('should fetch history for explicit endDate and days within single month', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => sampleHtmlSeptember,
+      } as Response);
+
+      const result = await service.getHistory({
+        endDate: '2026-09-07',
+        days: 7,
+      });
+
+      expect(result.startDate).toBe('2026-09-01');
+      expect(result.endDate).toBe('2026-09-07');
+      expect(result.days).toBe(7);
+      expect(result.items).toHaveLength(3);
+      expect(result.items[0].date).toBe('2026-09-01');
+      expect(result.items[1].date).toBe('2026-09-04');
+      expect(result.items[2].date).toBe('2026-09-07');
+      expect(result.items[0].prices.a95).toBe(80.32);
+    });
+
+    it('should fetch history spanning across two months and sort items chronologically', async () => {
+      jest.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('2026-09')) {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => sampleHtmlSeptember,
+          } as Response;
+        }
+        if (urlStr.includes('2026-08')) {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => sampleHtmlAugust,
+          } as Response;
+        }
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response;
+      });
+
+      const result = await service.getHistory({
+        startDate: '2026-08-30',
+        endDate: '2026-09-04',
+      });
+
+      expect(result.startDate).toBe('2026-08-30');
+      expect(result.endDate).toBe('2026-09-04');
+      expect(result.days).toBe(6);
+      expect(result.items).toHaveLength(3);
+      expect(result.items[0].date).toBe('2026-08-31');
+      expect(result.items[1].date).toBe('2026-09-01');
+      expect(result.items[2].date).toBe('2026-09-04');
+    });
+
+    it('should reject if days exceeds 30', async () => {
+      await expect(
+        service.getHistory({
+          endDate: '2026-09-10',
+          days: 31,
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject if days is less than 1 or not an integer', async () => {
+      await expect(
+        service.getHistory({
+          endDate: '2026-09-10',
+          days: 0,
+        })
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.getHistory({
+          endDate: '2026-09-10',
+          days: 'abc',
+        })
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.getHistory({
+          endDate: '2026-09-10',
+          days: 5.5,
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject if interval between startDate and endDate exceeds 30 days', async () => {
+      await expect(
+        service.getHistory({
+          startDate: '2026-08-01',
+          endDate: '2026-09-05',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject if startDate is after endDate', async () => {
+      await expect(
+        service.getHistory({
+          startDate: '2026-09-15',
+          endDate: '2026-09-10',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject invalid startDate or endDate format', async () => {
+      await expect(
+        service.getHistory({
+          startDate: 'invalid-date',
+          endDate: '2026-09-10',
+        })
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.getHistory({
+          startDate: '2026-09-01',
+          endDate: 'invalid-date',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject future startDate or endDate', async () => {
+      await expect(
+        service.getHistory({
+          endDate: '2099-01-01',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject startDate before June 2015', async () => {
+      await expect(
+        service.getHistory({
+          startDate: '2015-05-30',
+          endDate: '2015-06-05',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle 404 for a month gracefully by treating it as empty', async () => {
+      jest.spyOn(global, 'fetch').mockImplementation(async (url: string) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('2026-09')) {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => sampleHtmlSeptember,
+          } as Response;
+        }
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response;
+      });
+
+      const result = await service.getHistory({
+        startDate: '2026-08-30',
+        endDate: '2026-09-04',
+      });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0].date).toBe('2026-09-01');
+      expect(result.items[1].date).toBe('2026-09-04');
+    });
+
+    it('should rethrow non-404 fetch errors', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Server Error',
+      } as Response);
+
+      await expect(
+        service.getHistory({
+          startDate: '2026-09-01',
+          endDate: '2026-09-05',
+        })
+      ).rejects.toThrow('Failed to fetch data from Minfin');
+    });
+  });
 });

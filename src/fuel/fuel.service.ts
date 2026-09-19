@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { FuelPrices, FuelPricesResponse } from './interfaces/fuel-prices.interface';
+import {
+  FuelHistoryItem,
+  FuelHistoryResponse,
+  FuelPrices,
+  FuelPricesResponse,
+} from './interfaces/fuel-prices.interface';
 
 interface DailyFuelEntry {
   date: string; // YYYY-MM-DD
@@ -77,6 +82,90 @@ export class FuelService {
     }
 
     throw new NotFoundException(`Fuel price data not found for ${targetDate}`);
+  }
+
+  async getHistory(
+    options: {
+      endDate?: string;
+      days?: number | string;
+      startDate?: string;
+    } = {}
+  ): Promise<FuelHistoryResponse> {
+    const today = this.getTodayDateKyiv();
+    const endDate = options.endDate || today;
+    this.validateDate(endDate, 'endDate');
+
+    let startDate: string;
+    let days: number;
+
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const endUtc = this.parseUtcDate(endDate);
+
+    if (options.days !== undefined) {
+      const parsedDays = Number(options.days);
+      if (!Number.isInteger(parsedDays) || parsedDays < 1 || parsedDays > 30) {
+        throw new BadRequestException('days must be an integer between 1 and 30');
+      }
+      days = parsedDays;
+    } else {
+      days = 30;
+    }
+
+    if (options.startDate) {
+      this.validateDate(options.startDate, 'startDate');
+      const startUtc = this.parseUtcDate(options.startDate);
+      const diffDays = Math.round((endUtc.getTime() - startUtc.getTime()) / msPerDay);
+
+      if (diffDays < 0) {
+        throw new BadRequestException('startDate cannot be after endDate');
+      }
+
+      if (diffDays > 30) {
+        throw new BadRequestException('Date interval (endDate - startDate) cannot exceed 30 days');
+      }
+
+      startDate = options.startDate;
+      days = diffDays + 1;
+    } else {
+      const startUtc = new Date(endUtc.getTime() - (days - 1) * msPerDay);
+      startDate = this.formatUtcDate(startUtc);
+      this.validateDate(startDate, 'startDate');
+    }
+
+    const months = this.getMonthsInRange(startDate, endDate);
+    const monthEntriesArrays = await Promise.all(
+      months.map(m =>
+        this.fetchMonthEntries(m.year, m.month).catch(err => {
+          if (err instanceof NotFoundException) {
+            return [] as DailyFuelEntry[];
+          }
+          throw err;
+        })
+      )
+    );
+
+    const dateMap = new Map<string, FuelPrices>();
+    for (const entries of monthEntriesArrays) {
+      for (const entry of entries) {
+        if (entry.date >= startDate && entry.date <= endDate) {
+          dateMap.set(entry.date, entry.prices);
+        }
+      }
+    }
+
+    const items: FuelHistoryItem[] = Array.from(dateMap.entries())
+      .map(([date, prices]) => ({ date, prices }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      startDate,
+      endDate,
+      days,
+      currency: 'UAH',
+      unit: 'грн/л',
+      items,
+      source: this.baseUrl,
+    };
   }
 
   private async fetchMonthEntries(year: string, month: string): Promise<DailyFuelEntry[]> {
@@ -172,10 +261,12 @@ export class FuelService {
     return entries;
   }
 
-  private validateDate(dateStr: string): void {
+  private validateDate(dateStr: string, fieldName = 'date'): void {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      throw new BadRequestException('date must be in YYYY-MM-DD format (e.g. 2026-09-13)');
+      throw new BadRequestException(`${fieldName} must be in YYYY-MM-DD format (e.g. 2026-09-13)`);
     }
+
+    this.parseUtcDate(dateStr);
 
     const minDate = '2015-06-01';
     if (dateStr < minDate) {
@@ -188,6 +279,52 @@ export class FuelService {
     if (dateStr > today) {
       throw new BadRequestException(`Date cannot be in the future. Today is ${today}`);
     }
+  }
+
+  private parseUtcDate(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      throw new BadRequestException(`Invalid date: ${dateStr}`);
+    }
+    return date;
+  }
+
+  private formatUtcDate(date: Date): string {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  private getMonthsInRange(
+    startDate: string,
+    endDate: string
+  ): Array<{ year: string; month: string }> {
+    const months: Array<{ year: string; month: string }> = [];
+    const [startYear, startMonth] = startDate.split('-').map(Number);
+    const [endYear, endMonth] = endDate.split('-').map(Number);
+
+    let curYear = startYear;
+    let curMonth = startMonth;
+
+    while (curYear < endYear || (curYear === endYear && curMonth <= endMonth)) {
+      months.push({
+        year: curYear.toString(),
+        month: curMonth.toString().padStart(2, '0'),
+      });
+      curMonth++;
+      if (curMonth > 12) {
+        curMonth = 1;
+        curYear++;
+      }
+    }
+
+    return months;
   }
 
   private getTodayDateKyiv(): string {
