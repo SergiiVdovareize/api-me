@@ -6,6 +6,7 @@ import {
   FuelPrices,
   FuelPricesResponse,
 } from './interfaces/fuel-prices.interface';
+import { RedisReader } from '../common/helpers/redisReader';
 
 interface DailyFuelEntry {
   date: string; // YYYY-MM-DD
@@ -17,10 +18,23 @@ export class FuelService {
   private readonly logger = new Logger(FuelService.name);
   private readonly baseUrl = 'https://index.minfin.com.ua/ua/markets/fuel/';
 
+  constructor(private readonly redisReader: RedisReader) {}
+
   async getPrices(requestedDate?: string): Promise<FuelPricesResponse> {
-    const targetDate = requestedDate || this.getTodayDateKyiv();
+    const today = this.getTodayDateKyiv();
+    const targetDate = requestedDate || today;
 
     this.validateDate(targetDate);
+
+    const cacheKey = `fuel-prices-${targetDate}`;
+    try {
+      const cached = await this.redisReader.read(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to read cache for ${cacheKey}: ${err.message}`);
+    }
 
     const [year, month] = targetDate.split('-');
     const monthEntries = await this.fetchMonthEntries(year, month);
@@ -28,15 +42,20 @@ export class FuelService {
     // Exact match for the target date
     const exactMatch = monthEntries.find(entry => entry.date === targetDate);
     if (exactMatch) {
-      return {
+      const prevEntry = await this.getPreviousDailyEntry(exactMatch.date, monthEntries);
+      const delta = this.calculateDelta(exactMatch.prices, prevEntry?.prices);
+      const response: FuelPricesResponse = {
         requestedDate: targetDate,
         effectiveDate: exactMatch.date,
         isFallback: false,
         currency: 'UAH',
         unit: 'грн/л',
         prices: exactMatch.prices,
+        delta,
         source: `${this.baseUrl}${year}-${month}/`,
       };
+      await this.safeCacheWrite(cacheKey, response);
+      return response;
     }
 
     // Look for previous available day in the same month
@@ -46,15 +65,22 @@ export class FuelService {
 
     if (previousInMonth.length > 0) {
       const fallback = previousInMonth[previousInMonth.length - 1];
-      return {
+      const prevEntry = await this.getPreviousDailyEntry(fallback.date, monthEntries);
+      const delta = this.calculateDelta(fallback.prices, prevEntry?.prices);
+      const response: FuelPricesResponse = {
         requestedDate: targetDate,
         effectiveDate: fallback.date,
         isFallback: true,
         currency: 'UAH',
         unit: 'грн/л',
         prices: fallback.prices,
+        delta,
         source: `${this.baseUrl}${year}-${month}/`,
       };
+      if (targetDate !== today) {
+        await this.safeCacheWrite(cacheKey, response);
+      }
+      return response;
     }
 
     // If target date is earlier than the first available date in this month (e.g. 1st or 2nd is weekend),
@@ -65,16 +91,24 @@ export class FuelService {
       try {
         const prevMonthEntries = await this.fetchMonthEntries(prevYear, prevM);
         if (prevMonthEntries.length > 0) {
+          prevMonthEntries.sort((a, b) => a.date.localeCompare(b.date));
           const fallback = prevMonthEntries[prevMonthEntries.length - 1];
-          return {
+          const prevEntry = await this.getPreviousDailyEntry(fallback.date, prevMonthEntries);
+          const delta = this.calculateDelta(fallback.prices, prevEntry?.prices);
+          const response: FuelPricesResponse = {
             requestedDate: targetDate,
             effectiveDate: fallback.date,
             isFallback: true,
             currency: 'UAH',
             unit: 'грн/л',
             prices: fallback.prices,
+            delta,
             source: `${this.baseUrl}${prevYear}-${prevM}/`,
           };
+          if (targetDate !== today) {
+            await this.safeCacheWrite(cacheKey, response);
+          }
+          return response;
         }
       } catch (err) {
         this.logger.warn(`Could not fetch previous month ${prevMonthStr}: ${err.message}`);
@@ -132,6 +166,16 @@ export class FuelService {
       this.validateDate(startDate, 'startDate');
     }
 
+    const cacheKey = `fuel-history-${startDate}-${endDate}`;
+    try {
+      const cached = await this.redisReader.read(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to read cache for ${cacheKey}: ${err.message}`);
+    }
+
     const months = this.getMonthsInRange(startDate, endDate);
     const monthEntriesArrays = await Promise.all(
       months.map(m =>
@@ -144,20 +188,36 @@ export class FuelService {
       )
     );
 
+    const allMonthEntries: DailyFuelEntry[] = monthEntriesArrays.flat();
+    allMonthEntries.sort((a, b) => a.date.localeCompare(b.date));
+
     const dateMap = new Map<string, FuelPrices>();
-    for (const entries of monthEntriesArrays) {
-      for (const entry of entries) {
-        if (entry.date >= startDate && entry.date <= endDate) {
-          dateMap.set(entry.date, entry.prices);
-        }
+    for (const entry of allMonthEntries) {
+      if (entry.date >= startDate && entry.date <= endDate) {
+        dateMap.set(entry.date, entry.prices);
       }
     }
 
-    const items: FuelHistoryItem[] = Array.from(dateMap.entries())
-      .map(([date, prices]) => ({ date, prices }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const sortedDates = Array.from(dateMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-    return {
+    const items: FuelHistoryItem[] = await Promise.all(
+      sortedDates.map(async ([date, prices]) => {
+        const earlier = allMonthEntries.filter(e => e.date < date);
+        const prevEntry =
+          earlier.length > 0
+            ? earlier[earlier.length - 1]
+            : await this.getPreviousDailyEntry(date, allMonthEntries);
+
+        const delta = this.calculateDelta(prices, prevEntry?.prices);
+        return {
+          date,
+          prices,
+          delta,
+        };
+      })
+    );
+
+    const response: FuelHistoryResponse = {
       startDate,
       endDate,
       days,
@@ -166,6 +226,79 @@ export class FuelService {
       items,
       source: this.baseUrl,
     };
+
+    const hasTodayEntry = items.some(item => item.date === today);
+    if (endDate !== today || hasTodayEntry) {
+      await this.safeCacheWrite(cacheKey, response);
+    }
+
+    return response;
+  }
+
+  private calculateDelta(current: FuelPrices, prev?: FuelPrices): FuelPrices | undefined {
+    if (!prev) return undefined;
+    const delta: FuelPrices = {};
+    let hasAny = false;
+
+    const keys: Array<keyof FuelPrices> = [
+      'a95Premium',
+      'a95',
+      'a92',
+      'diesel',
+      'dieselPremium',
+      'gas',
+    ];
+
+    for (const key of keys) {
+      const currVal = current[key];
+      const prevVal = prev[key];
+      if (typeof currVal === 'number' && typeof prevVal === 'number') {
+        delta[key] = Math.round((currVal - prevVal) * 100) / 100;
+        hasAny = true;
+      }
+    }
+
+    return hasAny ? delta : undefined;
+  }
+
+  private async getPreviousDailyEntry(
+    entryDate: string,
+    entries: DailyFuelEntry[]
+  ): Promise<DailyFuelEntry | undefined> {
+    const earlierInEntries = entries
+      .filter(e => e.date < entryDate)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (earlierInEntries.length > 0) {
+      return earlierInEntries[earlierInEntries.length - 1];
+    }
+
+    const [year, month] = entryDate.split('-');
+    const prevMonthStr = this.getPreviousMonth(year, month);
+    if (prevMonthStr) {
+      const [prevYear, prevM] = prevMonthStr.split('-');
+      try {
+        const prevMonthEntries = await this.fetchMonthEntries(prevYear, prevM);
+        if (prevMonthEntries.length > 0) {
+          prevMonthEntries.sort((a, b) => a.date.localeCompare(b.date));
+          return prevMonthEntries[prevMonthEntries.length - 1];
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Could not fetch previous month ${prevMonthStr} for delta: ${err.message}`
+        );
+      }
+    }
+
+    return undefined;
+  }
+
+  private async safeCacheWrite(key: string, value: any): Promise<void> {
+    try {
+      await this.redisReader.write(key, value);
+    } catch (err) {
+      this.logger.warn(`Failed to write cache for ${key}: ${err.message}`);
+    }
   }
 
   private async fetchMonthEntries(year: string, month: string): Promise<DailyFuelEntry[]> {

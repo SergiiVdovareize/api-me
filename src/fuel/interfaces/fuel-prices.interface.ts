@@ -14,12 +14,14 @@ export interface FuelPricesResponse {
   currency: string;
   unit: string;
   prices: FuelPrices;
+  delta?: FuelPrices;
   source: string;
 }
 
 export interface FuelHistoryItem {
   date: string;
   prices: FuelPrices;
+  delta?: FuelPrices;
 }
 
 export interface FuelHistoryResponse {

@@ -20,6 +20,13 @@ describe('FuelController', () => {
       diesel: 94.63,
       gas: 43.44,
     },
+    delta: {
+      a95Premium: 0.12,
+      a95: 0.15,
+      a92: 0.1,
+      diesel: 0.2,
+      gas: 0.05,
+    },
     source: 'https://index.minfin.com.ua/ua/markets/fuel/2026-09/',
   };
 
@@ -38,6 +45,13 @@ describe('FuelController', () => {
           a92: 79.69,
           diesel: 94.63,
           gas: 43.44,
+        },
+        delta: {
+          a95Premium: 0.12,
+          a95: 0.15,
+          a92: 0.1,
+          diesel: 0.2,
+          gas: 0.05,
         },
       },
     ],

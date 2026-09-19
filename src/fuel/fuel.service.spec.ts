@@ -1,9 +1,11 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FuelService } from './fuel.service';
+import { RedisReader } from '../common/helpers/redisReader';
 
 describe('FuelService', () => {
   let service: FuelService;
+  let mockRedisReader: jest.Mocked<Partial<RedisReader>>;
 
   const sampleHtmlSeptember = `
     <html>
@@ -76,8 +78,19 @@ describe('FuelService', () => {
   `;
 
   beforeEach(async () => {
+    mockRedisReader = {
+      read: jest.fn().mockResolvedValue(null),
+      write: jest.fn().mockResolvedValue({} as any),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [FuelService],
+      providers: [
+        FuelService,
+        {
+          provide: RedisReader,
+          useValue: mockRedisReader,
+        },
+      ],
     }).compile();
 
     service = module.get<FuelService>(FuelService);
@@ -113,6 +126,13 @@ describe('FuelService', () => {
           a92: 77.86,
           diesel: 92.4,
           gas: 43.38,
+        },
+        delta: {
+          a95Premium: 1.14,
+          a95: 1.68,
+          a92: 0.99,
+          diesel: 0.99,
+          gas: 0.32,
         },
         source: 'https://index.minfin.com.ua/ua/markets/fuel/2026-09/',
       });
@@ -210,6 +230,44 @@ describe('FuelService', () => {
       expect(result.currency).toBe('UAH');
       expect(result.unit).toBe('грн/л');
     });
+
+    it('should return cached prices if available in Redis without calling fetch', async () => {
+      const cachedData = {
+        requestedDate: '2026-09-04',
+        effectiveDate: '2026-09-04',
+        isFallback: false,
+        currency: 'UAH',
+        unit: 'грн/л',
+        prices: { a95: 82.0 },
+        source: 'https://index.minfin.com.ua/ua/markets/fuel/2026-09/',
+      };
+      mockRedisReader.read.mockResolvedValueOnce(cachedData);
+      const fetchSpy = jest.spyOn(global, 'fetch');
+
+      const result = await service.getPrices('2026-09-04');
+
+      expect(result).toEqual(cachedData);
+      expect(mockRedisReader.read).toHaveBeenCalledWith('fuel-prices-2026-09-04');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should save fetched prices to Redis cache', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => sampleHtmlSeptember,
+      } as Response);
+
+      await service.getPrices('2026-09-04');
+
+      expect(mockRedisReader.write).toHaveBeenCalledWith(
+        'fuel-prices-2026-09-04',
+        expect.objectContaining({
+          requestedDate: '2026-09-04',
+          effectiveDate: '2026-09-04',
+        })
+      );
+    });
   });
 
   describe('getHistory', () => {
@@ -260,6 +318,13 @@ describe('FuelService', () => {
       expect(result.items[1].date).toBe('2026-09-04');
       expect(result.items[2].date).toBe('2026-09-07');
       expect(result.items[0].prices.a95).toBe(80.32);
+      expect(result.items[1].delta).toEqual({
+        a95Premium: 1.14,
+        a95: 1.68,
+        a92: 0.99,
+        diesel: 0.99,
+        gas: 0.32,
+      });
     });
 
     it('should fetch history spanning across two months and sort items chronologically', async () => {
@@ -298,6 +363,13 @@ describe('FuelService', () => {
       expect(result.items[0].date).toBe('2026-08-31');
       expect(result.items[1].date).toBe('2026-09-01');
       expect(result.items[2].date).toBe('2026-09-04');
+      expect(result.items[1].delta).toEqual({
+        a95Premium: 0.18,
+        a95: 0.25,
+        a92: -0.03,
+        diesel: -0.12,
+        gas: -0.01,
+      });
     });
 
     it('should reject if days exceeds 30', async () => {
@@ -423,6 +495,51 @@ describe('FuelService', () => {
           endDate: '2026-09-05',
         })
       ).rejects.toThrow('Failed to fetch data from Minfin');
+    });
+
+    it('should return cached history if available in Redis without calling fetch', async () => {
+      const cachedHistory = {
+        startDate: '2026-09-01',
+        endDate: '2026-09-04',
+        days: 4,
+        currency: 'UAH',
+        unit: 'грн/л',
+        items: [{ date: '2026-09-01', prices: { a95: 80.32 } }],
+        source: 'https://index.minfin.com.ua/ua/markets/fuel/',
+      };
+      mockRedisReader.read.mockResolvedValueOnce(cachedHistory);
+      const fetchSpy = jest.spyOn(global, 'fetch');
+
+      const result = await service.getHistory({
+        startDate: '2026-09-01',
+        endDate: '2026-09-04',
+      });
+
+      expect(result).toEqual(cachedHistory);
+      expect(mockRedisReader.read).toHaveBeenCalledWith('fuel-history-2026-09-01-2026-09-04');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should save computed history to Redis cache for completed periods', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => sampleHtmlSeptember,
+      } as Response);
+
+      await service.getHistory({
+        startDate: '2026-09-01',
+        endDate: '2026-09-04',
+      });
+
+      expect(mockRedisReader.write).toHaveBeenCalledWith(
+        'fuel-history-2026-09-01-2026-09-04',
+        expect.objectContaining({
+          startDate: '2026-09-01',
+          endDate: '2026-09-04',
+          days: 4,
+        })
+      );
     });
   });
 });
