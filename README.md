@@ -71,7 +71,14 @@ Maintains score leaderboards for mini-games (e.g., Stroop color matching game).
   * `GET /game-results`: Returns all game records.
   * `GET /game-results/leaders?type=...`: Returns descending highscore leaders grouped by `GameType`.
 
+### 6. Fuel (Fuel Prices & History) — `src/fuel`
+Scrapes and parses average retail fuel prices in Ukraine from Minfin.
+* **Routes**:
+  * `GET /fuel` (alias `GET /fuel/prices`): Fetches fuel prices for a given date (defaults to today) with fallback to earlier available days.
+  * `GET /fuel/history`: Fetches fuel price history up to 30 days inclusive (`endDate`, `days`, `startDate`). Full documentation in [docs/api/fuel-history.md](docs/api/fuel-history.md).
+
 ---
+
 
 ## 🗄️ Database Schema (Prisma)
 
