@@ -1,5 +1,5 @@
-import fs from 'fs';
-import dotenv from 'dotenv';
+import { existsSync } from 'fs';
+import * as dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { Logger } from '@nestjs/common';
 import { GenderizeService } from '../src/alphadate/genderize.service';
@@ -17,7 +17,7 @@ async function run() {
         ? '.env.production.local'
         : '.env';
 
-  if (fs.existsSync(envPath)) {
+  if (existsSync(envPath)) {
     dotenv.config({ path: envPath, override: true });
   } else {
     dotenv.config();
