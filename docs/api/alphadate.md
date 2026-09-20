@@ -80,6 +80,7 @@ Retrieves the current state of a board by its unique 5-character key.
       "letter": "Б",
       "partnerId": 1,
       "partnerName": "Олена",
+      "playerId": 2,
       "status": "used",
       "note": "Боулінг та піца",
       "selectedAt": "2026-09-18T18:00:00.000Z",
@@ -92,6 +93,7 @@ Retrieves the current state of a board by its unique 5-character key.
       { "id": 2, "name": "Андрій", "playerId": 1 }
     ],
     "currentPartnerId": 2,
+    "currentPartnerPlayerId": 1,
     "currentLetter": "А",
     "currentLetterSelectedAt": "2026-09-20T10:00:00.000Z",
     "pinHash": null
@@ -109,6 +111,7 @@ Retrieves the current state of a board by its unique 5-character key.
 * `letter`: The completed letter.
 * `partnerId`: ID of the partner who completed the date.
 * `partnerName`: Name of the partner.
+* `playerId`: Board-scoped unique player ID of the partner who completed the date (odd for males, even for females, null if unclassified).
 * `status`: Always `"used"`.
 * `note`: Optional comment/description of the date.
 * `selectedAt`: Timestamp when the letter was originally picked.
@@ -120,6 +123,7 @@ Retrieves the current state of a board by its unique 5-character key.
   * `name`: Partner name.
   * `playerId`: Board-scoped unique player ID serving as a hidden gender marker (males receive odd numbers `1, 3, 5...`, females receive even numbers `2, 4, 6...`, unclassified names receive `null`). Used for partner color coding on frontend.
 * `currentPartnerId`: ID of the partner whose turn it is to plan the date.
+* `currentPartnerPlayerId`: Player ID of the currently active partner (`1, 2, 3...` or `null`).
 * `currentLetter`: Currently active single-character letter, or `null`.
 * `currentLetterSelectedAt`: ISO timestamp when `currentLetter` was selected (used for countdowns).
 * `pinHash`: Hashed PIN code if protection is configured, otherwise `null`.
@@ -170,6 +174,11 @@ Updates letters, active selected letter, notes, partners, or security settings.
 {
   "success": true,
   "currentPartnerId": 2,
+  "currentPartnerPlayerId": 1,
+  "partners": [
+    { "id": 1, "name": "Олена", "playerId": 2 },
+    { "id": 2, "name": "Андрій", "playerId": 1 }
+  ],
   "currentLetterSelectedAt": "2026-09-20T12:20:00.000Z"
 }
 ```

@@ -153,6 +153,35 @@ describe('AlphadateController', () => {
         },
       });
     });
+
+    it('should include player IDs and partners in updateBoardState response when provided', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+      };
+
+      const selectedAt = new Date('2026-09-20T12:00:00.000Z');
+      service.updateBoardState.mockResolvedValue({
+        currentPartnerId: 2,
+        currentPartnerPlayerId: 1,
+        partners: [
+          { id: 1, name: 'Alice', playerId: 2 },
+          { id: 2, name: 'Bob', playerId: 1 },
+        ],
+        currentLetterSelectedAt: selectedAt,
+      } as any);
+
+      const result = await controller.updateBoardState('key', payload);
+      expect(result).toEqual({
+        success: true,
+        currentPartnerId: 2,
+        currentPartnerPlayerId: 1,
+        partners: [
+          { id: 1, name: 'Alice', playerId: 2 },
+          { id: 2, name: 'Bob', playerId: 1 },
+        ],
+        currentLetterSelectedAt: selectedAt,
+      });
+    });
   });
 
   describe('deleteBoard', () => {

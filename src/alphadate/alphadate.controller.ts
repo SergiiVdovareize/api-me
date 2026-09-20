@@ -135,6 +135,12 @@ export class AlphadateController {
     return {
       success: true,
       currentPartnerId: result.currentPartnerId,
+      ...(result.currentPartnerPlayerId !== undefined && {
+        currentPartnerPlayerId: result.currentPartnerPlayerId,
+      }),
+      ...(result.partners !== undefined && {
+        partners: result.partners,
+      }),
       ...(result.currentLetterSelectedAt !== undefined && {
         currentLetterSelectedAt: result.currentLetterSelectedAt,
       }),

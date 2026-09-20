@@ -154,7 +154,7 @@ describe('AlphadateService', () => {
           {
             letter: 'A',
             partnerId: 10,
-            partner: { name: 'Alice' },
+            partner: { name: 'Alice', playerId: 2 },
             status: 'used',
             note: 'Cinema date',
             selectedAt: selectedAt,
@@ -174,6 +174,7 @@ describe('AlphadateService', () => {
             letter: 'A',
             partnerId: 10,
             partnerName: 'Alice',
+            playerId: 2,
             status: 'used',
             note: 'Cinema date',
             selectedAt: selectedAt,
@@ -186,6 +187,7 @@ describe('AlphadateService', () => {
             { id: 20, name: 'Bob', playerId: 1 },
           ],
           currentPartnerId: 10,
+          currentPartnerPlayerId: 2,
           currentLetter: 'Б',
           currentLetterSelectedAt: selectedAt,
           pinHash: 'pin-hash',
@@ -214,8 +216,8 @@ describe('AlphadateService', () => {
       };
 
       const partnersList = [
-        { id: 1, name: 'Alice', turnOrder: 1 },
-        { id: 2, name: 'Bob', turnOrder: 2 },
+        { id: 1, name: 'Alice', turnOrder: 1, playerId: 2 },
+        { id: 2, name: 'Bob', turnOrder: 2, playerId: 1 },
       ];
 
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
@@ -231,6 +233,11 @@ describe('AlphadateService', () => {
       const result = await service.updateBoardState('key', dto);
       expect(result.success).toBe(true);
       expect(result.currentPartnerId).toBe(2); // Turn transitioned from Alice (1) to Bob (2)
+      expect(result.currentPartnerPlayerId).toBe(1);
+      expect(result.partners).toEqual([
+        { id: 1, name: 'Alice', playerId: 2 },
+        { id: 2, name: 'Bob', playerId: 1 },
+      ]);
       expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
         where: { key: 'key' },
         data: expect.objectContaining({

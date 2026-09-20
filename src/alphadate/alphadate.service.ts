@@ -146,11 +146,14 @@ export class AlphadateService {
       letter: h.letter,
       partnerId: h.partnerId,
       partnerName: h.partner ? h.partner.name : null,
+      playerId: h.partner ? h.partner.playerId : null,
       status: h.status,
       note: h.note,
       selectedAt: h.selectedAt,
       completedAt: h.completedAt,
     }));
+
+    const currentPartner = board.partners.find(p => p.id === board.currentPartnerId);
 
     return {
       success: true,
@@ -163,6 +166,7 @@ export class AlphadateService {
           playerId: p.playerId,
         })),
         currentPartnerId: board.currentPartnerId,
+        currentPartnerPlayerId: currentPartner ? currentPartner.playerId : null,
         currentLetter: board.currentLetter,
         currentLetterSelectedAt: board.currentLetterSelectedAt,
         pinHash: board.pin,
@@ -221,6 +225,7 @@ export class AlphadateService {
 
     let nextPartnerId: number | null = board.currentPartnerId;
     let nextLetterSelectedAt: Date | null | undefined = undefined;
+    let updatedPartners: any[] = [];
 
     await this.prisma.$transaction(async tx => {
       if (dto.metadata && dto.metadata.partners) {
@@ -277,6 +282,7 @@ export class AlphadateService {
         where: { boardId: key },
         orderBy: { turnOrder: 'asc' },
       });
+      updatedPartners = currentPartners;
 
       if (currentPartners.length > 0) {
         if (isFullReset) {
@@ -371,9 +377,17 @@ export class AlphadateService {
       });
     });
 
+    const nextPartner = updatedPartners.find(p => p.id === nextPartnerId);
+
     return {
       success: true,
       currentPartnerId: nextPartnerId,
+      currentPartnerPlayerId: nextPartner ? nextPartner.playerId : null,
+      partners: updatedPartners.map(p => ({
+        id: p.id,
+        name: p.name,
+        playerId: p.playerId,
+      })),
       ...(nextLetterSelectedAt !== undefined && {
         currentLetterSelectedAt: nextLetterSelectedAt,
       }),
