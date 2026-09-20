@@ -120,6 +120,14 @@ export class AlphadateService {
             turnOrder: 'asc',
           },
         },
+        history: {
+          include: {
+            partner: true,
+          },
+          orderBy: {
+            completedAt: 'asc',
+          },
+        },
       },
     });
 
@@ -128,10 +136,20 @@ export class AlphadateService {
     }
 
     const letters = (board.letters as any) || [];
+    const history = (board.history || []).map(h => ({
+      letter: h.letter,
+      partnerId: h.partnerId,
+      partnerName: h.partner ? h.partner.name : null,
+      status: h.status,
+      note: h.note,
+      selectedAt: h.selectedAt,
+      completedAt: h.completedAt,
+    }));
 
     return {
       success: true,
       letters,
+      history,
       metadata: {
         partners: board.partners.map(p => ({
           id: p.id,
@@ -156,20 +174,40 @@ export class AlphadateService {
 
     const dbLetters = (board.letters as any) || [];
     const dbStatusMap = new Map<string, string>();
+    const dbNoteMap = new Map<string, string | null>();
     for (const item of dbLetters) {
       if (item && typeof item === 'object' && item.letter) {
         dbStatusMap.set(item.letter, item.status);
+        dbNoteMap.set(item.letter, item.note ?? null);
       }
     }
 
-    let hasChangedToUsed = false;
+    const newlyUsedLetters: { letter: string; note?: string | null }[] = [];
+    const updatedNoteLetters: { letter: string; note: string | null }[] = [];
+    const noLongerUsedLetters: string[] = [];
+
     for (const item of dto.letters) {
       const oldStatus = dbStatusMap.get(item.letter) || 'available';
+      const oldNote = dbNoteMap.get(item.letter);
+
       if (item.status === 'used' && oldStatus !== 'used') {
-        hasChangedToUsed = true;
-        break;
+        newlyUsedLetters.push({
+          letter: item.letter,
+          note: item.note,
+        });
+      } else if (item.status === 'used' && oldStatus === 'used') {
+        if (item.note !== undefined && item.note !== oldNote) {
+          updatedNoteLetters.push({
+            letter: item.letter,
+            note: item.note ?? null,
+          });
+        }
+      } else if (oldStatus === 'used' && item.status !== 'used') {
+        noLongerUsedLetters.push(item.letter);
       }
     }
+
+    const hasChangedToUsed = newlyUsedLetters.length > 0;
 
     const isFullReset =
       dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
@@ -258,6 +296,60 @@ export class AlphadateService {
 
       if (dto.metadata && dto.metadata.pinHash !== undefined) {
         updateData.pin = dto.metadata.pinHash;
+      }
+
+      if (isFullReset) {
+        await tx.alphadateHistory.deleteMany({
+          where: { boardId: key },
+        });
+      } else {
+        for (const item of newlyUsedLetters) {
+          await tx.alphadateHistory.upsert({
+            where: {
+              boardId_letter: {
+                boardId: key,
+                letter: item.letter,
+              },
+            },
+            create: {
+              boardId: key,
+              letter: item.letter,
+              partnerId: board.currentPartnerId,
+              status: 'used',
+              note: item.note || null,
+              selectedAt: board.currentLetterSelectedAt,
+              completedAt: new Date(),
+            },
+            update: {
+              partnerId: board.currentPartnerId,
+              status: 'used',
+              note: item.note || null,
+              selectedAt: board.currentLetterSelectedAt,
+              completedAt: new Date(),
+            },
+          });
+        }
+
+        for (const item of updatedNoteLetters) {
+          await tx.alphadateHistory.updateMany({
+            where: {
+              boardId: key,
+              letter: item.letter,
+            },
+            data: {
+              note: item.note,
+            },
+          });
+        }
+
+        for (const letter of noLongerUsedLetters) {
+          await tx.alphadateHistory.deleteMany({
+            where: {
+              boardId: key,
+              letter,
+            },
+          });
+        }
       }
 
       await tx.alphadateBoard.update({

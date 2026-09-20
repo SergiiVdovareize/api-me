@@ -28,6 +28,11 @@ describe('AlphadateService', () => {
         update: jest.fn(),
         deleteMany: jest.fn(),
       },
+      alphadateHistory: {
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
     };
 
     mockEmailService = {
@@ -134,6 +139,17 @@ describe('AlphadateService', () => {
           { id: 10, name: 'Alice', turnOrder: 1 },
           { id: 20, name: 'Bob', turnOrder: 2 },
         ],
+        history: [
+          {
+            letter: 'A',
+            partnerId: 10,
+            partner: { name: 'Alice' },
+            status: 'used',
+            note: 'Cinema date',
+            selectedAt: selectedAt,
+            completedAt: selectedAt,
+          },
+        ],
       };
 
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
@@ -142,6 +158,17 @@ describe('AlphadateService', () => {
       expect(result).toEqual({
         success: true,
         letters: dbBoard.letters,
+        history: [
+          {
+            letter: 'A',
+            partnerId: 10,
+            partnerName: 'Alice',
+            status: 'used',
+            note: 'Cinema date',
+            selectedAt: selectedAt,
+            completedAt: selectedAt,
+          },
+        ],
         metadata: {
           partners: [
             { id: 10, name: 'Alice' },

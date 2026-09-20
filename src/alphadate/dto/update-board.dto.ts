@@ -1,6 +1,7 @@
 export interface LetterState {
   letter: string;
   status: 'available' | 'used' | 'excluded' | 'skipped';
+  note?: string | null;
 }
 
 export interface BoardMetadata {

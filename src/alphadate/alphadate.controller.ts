@@ -59,6 +59,9 @@ export class AlphadateController {
           `Status must be one of: available, used, excluded, skipped. Received: ${item.status}`
         );
       }
+      if (item.note !== undefined && item.note !== null && typeof item.note !== 'string') {
+        throw new BadRequestException('Letter note must be a string or null');
+      }
     }
 
     let parsedPartners: string[] | undefined = undefined;
@@ -107,6 +110,9 @@ export class AlphadateController {
       letters: letters.map(item => ({
         letter: item.letter.trim(),
         status: item.status,
+        ...(item.note !== undefined && {
+          note: typeof item.note === 'string' ? item.note.trim() : null,
+        }),
       })),
     };
 

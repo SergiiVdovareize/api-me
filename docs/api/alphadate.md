@@ -75,12 +75,23 @@ Retrieves the current state of a board by its unique 5-character key.
       "status": "skipped"
     }
   ],
+  "history": [
+    {
+      "letter": "Б",
+      "partnerId": 1,
+      "partnerName": "Олена",
+      "status": "used",
+      "note": "Боулінг та піца",
+      "selectedAt": "2026-09-18T18:00:00.000Z",
+      "completedAt": "2026-09-20T11:30:00.000Z"
+    }
+  ],
   "metadata": {
     "partners": [
       { "id": 1, "name": "Олена" },
       { "id": 2, "name": "Андрій" }
     ],
-    "currentPartnerId": 1,
+    "currentPartnerId": 2,
     "currentLetter": "А",
     "currentLetterSelectedAt": "2026-09-20T10:00:00.000Z",
     "pinHash": null
@@ -90,9 +101,18 @@ Retrieves the current state of a board by its unique 5-character key.
 
 #### Letter Statuses
 * `available`: Ready to be selected for a date.
-* `used`: Successfully completed date.
-* `skipped`: Skipped for now.
-* `excluded`: Removed from the current game cycle.
+* `used`: Successfully completed date (automatically assigned to the partner whose turn it was in `history`).
+* `skipped`: Skipped for now (not assigned to partner history).
+* `excluded`: Removed from the current game cycle (not assigned to partner history).
+
+#### History Fields
+* `letter`: The completed letter.
+* `partnerId`: ID of the partner who completed the date.
+* `partnerName`: Name of the partner.
+* `status`: Always `"used"`.
+* `note`: Optional comment/description of the date.
+* `selectedAt`: Timestamp when the letter was originally picked.
+* `completedAt`: Timestamp when the date was completed.
 
 #### Metadata Fields
 * `partners`: List of partners with `id` and `name` ordered by `turnOrder`.
