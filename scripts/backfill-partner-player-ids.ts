@@ -1,3 +1,4 @@
+import fs from 'fs';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { Logger } from '@nestjs/common';
@@ -16,18 +17,22 @@ async function run() {
         ? '.env.production.local'
         : '.env';
 
-  dotenv.config({ path: envPath, override: true });
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: true });
+  } else {
+    dotenv.config();
+  }
 
   const logger = new Logger('BackfillPartnerPlayerIds');
   const prisma = new PrismaClient();
   const genderizeService = new GenderizeService();
 
   const overwriteAll = args.includes('--all');
-  const dbUrl = process.env.DATABASE_URL || '';
+  const dbUrl = process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL || '';
   const maskedDbUrl = dbUrl.replace(/:[^:@]+@/, ':***@');
 
   logger.log(
-    `Starting partner playerId backfill script via Genderize.io (env: ${envPath}, db: ${maskedDbUrl || 'default'}, mode: ${overwriteAll ? 'overwrite all' : 'only missing playerIds'})...`
+    `Starting partner playerId backfill script via Genderize.io (env: ${fs.existsSync(envPath) ? envPath : 'environment variables'}, db: ${maskedDbUrl || 'default'}, mode: ${overwriteAll ? 'overwrite all' : 'only missing playerIds'})...`
   );
 
   try {

@@ -1,0 +1,40 @@
+name: AlphaDate Backfill Partner Player IDs
+
+on:
+  workflow_dispatch:
+    inputs:
+      overwrite_all:
+        description: 'Overwrite all partner player IDs (if unchecked, only backfills missing IDs)'
+        type: boolean
+        default: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Partner Player ID Backfill
+        env:
+          POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
+          POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
+        run: |
+          if [ "${{ github.event.inputs.overwrite_all }}" = "true" ]; then
+            npm run alphadate:backfill-players -- --all
+          else
+            npm run alphadate:backfill-players
+          fi
