@@ -53,17 +53,18 @@ model AlphadateBoard {
   letters          Json?              @default("[]")
   partners         AlphadatePartner[]
   history          AlphadateHistory[]
-  currentLetter    String?            @db.Char(1)
-  currentPartnerId Int?
-  currentPartner   AlphadatePartner?  @relation("CurrentPartner", fields: [currentPartnerId], references: [id])
+  currentLetter           String?            @db.Char(1)
+  currentLetterSelectedAt DateTime?
+  currentPartnerId        Int?
+  currentPartner          AlphadatePartner?  @relation("CurrentPartner", fields: [currentPartnerId], references: [id])
 }
 
 
 model AlphadatePartner {
-  id        Int                @id @default(autoincrement())
-  boardId   String
-  board     AlphadateBoard     @relation(fields: [boardId], references: [key], onDelete: Cascade)
-  name      String
+  id             Int                @id @default(autoincrement())
+  boardId        String
+  board          AlphadateBoard     @relation(fields: [boardId], references: [key], onDelete: Cascade)
+  name           String
   turnOrder      Int                @db.SmallInt
   history        AlphadateHistory[]
   currentInBoard AlphadateBoard[]   @relation("CurrentPartner")
@@ -72,17 +73,21 @@ model AlphadatePartner {
 }
 
 model AlphadateHistory {
-  id        Int              @id @default(autoincrement())
-  boardId   String
-  board     AlphadateBoard   @relation(fields: [boardId], references: [key], onDelete: Cascade)
-  partnerId Int
-  partner   AlphadatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
-  letter    String           @db.Char(1)
-  status    LetterStatus
-  createdAt DateTime         @default(now())
+  id          Int               @id @default(autoincrement())
+  boardId     String
+  board       AlphadateBoard    @relation(fields: [boardId], references: [key], onDelete: Cascade)
+  partnerId   Int?
+  partner     AlphadatePartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  letter      String            @db.Char(1)
+  status      LetterStatus
+  note        String?           @db.Text
+  selectedAt  DateTime?
+  completedAt DateTime?
+  createdAt   DateTime          @default(now())
 
   @@unique([boardId, letter])
 }
+
 
 enum LetterStatus {
   used

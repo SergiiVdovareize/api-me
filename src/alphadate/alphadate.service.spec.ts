@@ -122,11 +122,13 @@ describe('AlphadateService', () => {
     });
 
     it('should return board state successfully', async () => {
+      const selectedAt = new Date('2026-09-20T10:00:00.000Z');
       const dbBoard = {
         key: 'valid-key',
         letters: [{ letter: 'A', status: 'available' }],
         currentPartnerId: 10,
         currentLetter: 'Б',
+        currentLetterSelectedAt: selectedAt,
         pin: 'pin-hash',
         partners: [
           { id: 10, name: 'Alice', turnOrder: 1 },
@@ -147,6 +149,7 @@ describe('AlphadateService', () => {
           ],
           currentPartnerId: 10,
           currentLetter: 'Б',
+          currentLetterSelectedAt: selectedAt,
           pinHash: 'pin-hash',
         },
       });

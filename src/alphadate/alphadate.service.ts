@@ -139,6 +139,7 @@ export class AlphadateService {
         })),
         currentPartnerId: board.currentPartnerId,
         currentLetter: board.currentLetter,
+        currentLetterSelectedAt: board.currentLetterSelectedAt,
         pinHash: board.pin,
       },
     };
@@ -174,6 +175,7 @@ export class AlphadateService {
       dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
 
     let nextPartnerId: number | null = board.currentPartnerId;
+    let nextLetterSelectedAt: Date | null | undefined = undefined;
 
     await this.prisma.$transaction(async tx => {
       if (dto.metadata && dto.metadata.partners) {
@@ -246,6 +248,12 @@ export class AlphadateService {
 
       if (dto.currentLetter !== undefined) {
         updateData.currentLetter = dto.currentLetter;
+        if (dto.currentLetter !== board.currentLetter) {
+          nextLetterSelectedAt = dto.currentLetter ? new Date() : null;
+          updateData.currentLetterSelectedAt = nextLetterSelectedAt;
+        } else {
+          nextLetterSelectedAt = board.currentLetterSelectedAt;
+        }
       }
 
       if (dto.metadata && dto.metadata.pinHash !== undefined) {
@@ -261,6 +269,9 @@ export class AlphadateService {
     return {
       success: true,
       currentPartnerId: nextPartnerId,
+      ...(nextLetterSelectedAt !== undefined && {
+        currentLetterSelectedAt: nextLetterSelectedAt,
+      }),
     };
   }
 

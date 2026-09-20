@@ -129,6 +129,9 @@ export class AlphadateController {
     return {
       success: true,
       currentPartnerId: result.currentPartnerId,
+      ...(result.currentLetterSelectedAt !== undefined && {
+        currentLetterSelectedAt: result.currentLetterSelectedAt,
+      }),
     };
   }
 
