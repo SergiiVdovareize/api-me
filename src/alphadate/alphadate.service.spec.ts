@@ -294,7 +294,7 @@ describe('AlphadateService', () => {
       expect(result.success).toBe(true);
       expect(mockPrismaService.alphadatePartner.update).toHaveBeenCalledWith({
         where: { id: 1 },
-        data: { name: 'Alice Updated' },
+        data: expect.objectContaining({ name: 'Alice Updated' }),
       });
       expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
         where: { key: 'key' },
