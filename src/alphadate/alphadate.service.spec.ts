@@ -4,12 +4,14 @@ import { AlphadateService } from './alphadate.service';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { GenderizeService } from './genderize.service';
 
 describe('AlphadateService', () => {
   let service: AlphadateService;
   let mockPrismaService: any;
   let mockEmailService: any;
   let mockConfigService: any;
+  let mockGenderizeService: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -43,6 +45,11 @@ describe('AlphadateService', () => {
       get: jest.fn().mockReturnValue('http://localhost:3000'),
     };
 
+    mockGenderizeService = {
+      detectGenders: jest.fn().mockResolvedValue(['female', 'male']),
+      assignPlayerIds: jest.fn().mockReturnValue([2, 1]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlphadateService,
@@ -57,6 +64,10 @@ describe('AlphadateService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: GenderizeService,
+          useValue: mockGenderizeService,
         },
       ],
     }).compile();
@@ -136,8 +147,8 @@ describe('AlphadateService', () => {
         currentLetterSelectedAt: selectedAt,
         pin: 'pin-hash',
         partners: [
-          { id: 10, name: 'Alice', turnOrder: 1 },
-          { id: 20, name: 'Bob', turnOrder: 2 },
+          { id: 10, name: 'Alice', turnOrder: 1, playerId: 2 },
+          { id: 20, name: 'Bob', turnOrder: 2, playerId: 1 },
         ],
         history: [
           {
@@ -171,8 +182,8 @@ describe('AlphadateService', () => {
         ],
         metadata: {
           partners: [
-            { id: 10, name: 'Alice' },
-            { id: 20, name: 'Bob' },
+            { id: 10, name: 'Alice', playerId: 2 },
+            { id: 20, name: 'Bob', playerId: 1 },
           ],
           currentPartnerId: 10,
           currentLetter: 'Б',

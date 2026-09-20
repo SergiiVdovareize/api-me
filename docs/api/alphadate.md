@@ -88,8 +88,8 @@ Retrieves the current state of a board by its unique 5-character key.
   ],
   "metadata": {
     "partners": [
-      { "id": 1, "name": "Олена" },
-      { "id": 2, "name": "Андрій" }
+      { "id": 1, "name": "Олена", "playerId": 2 },
+      { "id": 2, "name": "Андрій", "playerId": 1 }
     ],
     "currentPartnerId": 2,
     "currentLetter": "А",
@@ -115,7 +115,10 @@ Retrieves the current state of a board by its unique 5-character key.
 * `completedAt`: Timestamp when the date was completed.
 
 #### Metadata Fields
-* `partners`: List of partners with `id` and `name` ordered by `turnOrder`.
+* `partners`: List of partners with:
+  * `id`: Internal partner ID.
+  * `name`: Partner name.
+  * `playerId`: Board-scoped unique player ID serving as a hidden gender marker (males receive odd numbers `1, 3, 5...`, females receive even numbers `2, 4, 6...`, unclassified names receive `null`). Used for partner color coding on frontend.
 * `currentPartnerId`: ID of the partner whose turn it is to plan the date.
 * `currentLetter`: Currently active single-character letter, or `null`.
 * `currentLetterSelectedAt`: ISO timestamp when `currentLetter` was selected (used for countdowns).

@@ -4,6 +4,7 @@ import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { GenderizeService } from './genderize.service';
 
 @Injectable()
 export class AlphadateService {
@@ -12,7 +13,8 @@ export class AlphadateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly genderizeService: GenderizeService
   ) {}
 
   private generateRandomKey(length: number): string {
@@ -64,6 +66,9 @@ export class AlphadateService {
   async create(dto: CreateBoardDto) {
     const key = await this.generateUniqueKey(5);
 
+    const genders = await this.genderizeService.detectGenders(dto.partners);
+    const playerIds = this.genderizeService.assignPlayerIds(genders);
+
     const result = await this.prisma.$transaction(async tx => {
       const board = await tx.alphadateBoard.create({
         data: {
@@ -79,6 +84,7 @@ export class AlphadateService {
             boardId: board.key,
             name,
             turnOrder: index + 1,
+            playerId: playerIds[index],
           },
         });
       });
@@ -154,6 +160,7 @@ export class AlphadateService {
         partners: board.partners.map(p => ({
           id: p.id,
           name: p.name,
+          playerId: p.playerId,
         })),
         currentPartnerId: board.currentPartnerId,
         currentLetter: board.currentLetter,
@@ -223,12 +230,17 @@ export class AlphadateService {
         });
 
         const newPartners = dto.metadata.partners;
+        const genders = await this.genderizeService.detectGenders(newPartners);
+        const playerIds = this.genderizeService.assignPlayerIds(genders);
         const minLen = Math.min(existingPartners.length, newPartners.length);
 
         for (let i = 0; i < minLen; i++) {
           await tx.alphadatePartner.update({
             where: { id: existingPartners[i].id },
-            data: { name: newPartners[i] },
+            data: {
+              name: newPartners[i],
+              playerId: playerIds[i],
+            },
           });
         }
 
@@ -239,6 +251,7 @@ export class AlphadateService {
                 boardId: key,
                 name: newPartners[i],
                 turnOrder: i + 1,
+                playerId: playerIds[i],
               },
             });
           }

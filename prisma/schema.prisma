@@ -66,6 +66,7 @@ model AlphadatePartner {
   board          AlphadateBoard     @relation(fields: [boardId], references: [key], onDelete: Cascade)
   name           String
   turnOrder      Int                @db.SmallInt
+  playerId       Int?               @db.SmallInt
   history        AlphadateHistory[]
   currentInBoard AlphadateBoard[]   @relation("CurrentPartner")
 

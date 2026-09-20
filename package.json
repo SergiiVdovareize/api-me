@@ -29,7 +29,8 @@
     "validate:fix": "npm run lint:fix && npm run format",
     "series:check": "ts-node -r tsconfig-paths/register scripts/check-series.ts",
     "cnap:check": "ts-node -r tsconfig-paths/register scripts/check-cnap.ts",
-    "cnap:browser": "ts-node -r tsconfig-paths/register scripts/check-cnap-slots.ts"
+    "cnap:browser": "ts-node -r tsconfig-paths/register scripts/check-cnap-slots.ts",
+    "alphadate:backfill-players": "ts-node -r tsconfig-paths/register scripts/backfill-partner-player-ids.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.11",
