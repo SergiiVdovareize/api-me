@@ -32,7 +32,7 @@ async function run() {
   const maskedDbUrl = dbUrl.replace(/:[^:@]+@/, ':***@');
 
   logger.log(
-    `Starting partner playerId backfill script via Genderize.io (env: ${fs.existsSync(envPath) ? envPath : 'environment variables'}, db: ${maskedDbUrl || 'default'}, mode: ${overwriteAll ? 'overwrite all' : 'only missing playerIds'})...`
+    `Starting partner playerId backfill script via Genderize.io (env: ${existsSync(envPath) ? envPath : 'environment variables'}, db: ${maskedDbUrl || 'default'}, mode: ${overwriteAll ? 'overwrite all' : 'only missing playerIds'})...`
   );
 
   try {
