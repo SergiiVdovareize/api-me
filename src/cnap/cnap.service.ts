@@ -194,19 +194,17 @@ export class CnapService {
       return report.trim();
     }
 
-    // No slots
-    let report = isHeartbeat
-      ? `ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>\n\n`
-      : `🔴 <b>ЦНАП Львів: Вільних місць немає</b>\n\n`;
+    // No slots - Heartbeat check-in
+    if (isHeartbeat) {
+      return `ℹ️ <b>ЦНАП Львів: Моніторинг працює</b>\n\nПеревірка виконана успішно. Автоматичний моніторинг активний.`;
+    }
 
+    // No slots - Forced or manual check report
+    let report = `🔴 <b>ЦНАП Львів: Вільних місць немає</b>\n\n`;
     report += `📂 Категорія: <b>${this.escapeHtml(result.category)}</b>\n`;
     report += `🏢 Підрозділ: <b>вул. ${this.escapeHtml(result.targetLocation)}</b>\n\n`;
     report += `<i>${this.escapeHtml(result.message)}</i>\n`;
-    if (isHeartbeat) {
-      report += `<i>Автоматичний моніторинг продовжує працювати в штатному режимі. Попередній запис відкривається щодня о 07:00.</i>\n\n`;
-    } else {
-      report += `<i>Попередній запис відкривається щодня о 07:00.</i>\n\n`;
-    }
+    report += `<i>Попередній запис відкривається щодня о 07:00.</i>\n\n`;
     report += `🔗 <a href="${bookingUrl}">Онлайн-запис ЦНАП</a>`;
     return report.trim();
   }

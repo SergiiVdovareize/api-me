@@ -470,12 +470,11 @@ describe('CnapService', () => {
       const response = await service.checkAndNotify({});
 
       expect(response.telegramQueued).toBe(true);
-      expect(response.report).toContain('ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>');
-      expect(response.report).toContain(
-        'Автоматичний моніторинг продовжує працювати в штатному режимі.'
+      expect(response.report).toBe(
+        'ℹ️ <b>ЦНАП Львів: Моніторинг працює</b>\n\nПеревірка виконана успішно. Автоматичний моніторинг активний.'
       );
       expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
-        expect.stringContaining('ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>'),
+        'ℹ️ <b>ЦНАП Львів: Моніторинг працює</b>\n\nПеревірка виконана успішно. Автоматичний моніторинг активний.',
         undefined
       );
       expect(mockRedisReader.write).toHaveBeenCalledWith('cnap:last_heartbeat_date', '2026-09-23');
