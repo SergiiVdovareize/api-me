@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleSheetsService } from '../series-tracker/services/google-sheets.service';
+import { RedisReader } from '../common/helpers/redisReader';
 import {
   CnapCheckResponse,
   CnapCheckResult,
@@ -14,10 +15,12 @@ const CNAP_API_BASE = 'https://cnap_lviv.qsolutions.com.ua:2651/prelim';
 @Injectable()
 export class CnapService {
   private readonly logger = new Logger(CnapService.name);
+  private inMemoryHeartbeatDate: string | null = null;
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly googleSheetsService: GoogleSheetsService
+    private readonly googleSheetsService: GoogleSheetsService,
+    @Optional() private readonly redisReader?: RedisReader
   ) {}
 
   /**
@@ -164,7 +167,7 @@ export class CnapService {
   /**
    * Generates formatted HTML message for Telegram
    */
-  formatTelegramReport(result: CnapCheckResult): string {
+  formatTelegramReport(result: CnapCheckResult, isHeartbeat = false): string {
     const bookingUrl = 'https://cnap-lviv.qsolutions.com.ua:2657/booking';
 
     if (result.hasSlots) {
@@ -192,11 +195,18 @@ export class CnapService {
     }
 
     // No slots
-    let report = `🔴 <b>ЦНАП Львів: Вільних місць немає</b>\n\n`;
+    let report = isHeartbeat
+      ? `ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>\n\n`
+      : `🔴 <b>ЦНАП Львів: Вільних місць немає</b>\n\n`;
+
     report += `📂 Категорія: <b>${this.escapeHtml(result.category)}</b>\n`;
     report += `🏢 Підрозділ: <b>вул. ${this.escapeHtml(result.targetLocation)}</b>\n\n`;
     report += `<i>${this.escapeHtml(result.message)}</i>\n`;
-    report += `<i>Попередній запис відкривається щодня о 07:00.</i>\n\n`;
+    if (isHeartbeat) {
+      report += `<i>Автоматичний моніторинг продовжує працювати в штатному режимі. Попередній запис відкривається щодня о 07:00.</i>\n\n`;
+    } else {
+      report += `<i>Попередній запис відкривається щодня о 07:00.</i>\n\n`;
+    }
     report += `🔗 <a href="${bookingUrl}">Онлайн-запис ЦНАП</a>`;
     return report.trim();
   }
@@ -219,9 +229,54 @@ export class CnapService {
   }
 
   /**
+   * Returns the current date (YYYY-MM-DD) in Europe/Kyiv timezone
+   */
+  getKyivDateString(date = new Date()): string {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Kyiv',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date);
+    } catch {
+      return date.toISOString().split('T')[0];
+    }
+  }
+
+  async getLastHeartbeatDate(): Promise<string | null> {
+    if (this.redisReader) {
+      try {
+        const val = await this.redisReader.read('cnap:last_heartbeat_date');
+        if (val && typeof val === 'string') {
+          return val;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to read heartbeat date from Redis: ${err.message}`);
+      }
+    }
+    return this.inMemoryHeartbeatDate;
+  }
+
+  async setLastHeartbeatDate(dateStr: string): Promise<void> {
+    this.inMemoryHeartbeatDate = dateStr;
+    if (this.redisReader) {
+      try {
+        await this.redisReader.write('cnap:last_heartbeat_date', dateStr);
+      } catch (err: any) {
+        this.logger.warn(`Failed to write heartbeat date to Redis: ${err.message}`);
+      }
+    }
+  }
+
+  resetLastHeartbeatDate(): void {
+    this.inMemoryHeartbeatDate = null;
+  }
+
+  /**
    * Checks slots and conditionally pushes a report to TELEGRAM_OUTBOX_SPREADSHEET_ID:
    * - If slots ARE available: ALWAYS sends notification.
-   * - If slots are NOT available: skips notification (unless forced).
+   * - If slots are NOT available: sends a heartbeat notification once per day on the first search after 9am Kyiv time (or when forced).
    */
   async checkAndNotify(options: {
     category?: string;
@@ -237,10 +292,6 @@ export class CnapService {
       location: options.location,
     });
 
-    const report = this.formatTelegramReport(result);
-    let telegramQueued = false;
-    let telegramSkipReason: string | undefined;
-
     const notifyParam = options.notify ?? true;
     const isNotifyDisabled = notifyParam === false || notifyParam === 'false';
 
@@ -250,6 +301,23 @@ export class CnapService {
       notifyParam === 'force' ||
       notifyParam === 'always';
 
+    const currentKyivHour = this.getKyivHour();
+    const currentKyivDate = this.getKyivDateString();
+    const isAfter9Am = currentKyivHour >= 9;
+
+    let isFirstSearchAfter9Am = false;
+    if (isAfter9Am && !isNotifyDisabled) {
+      const lastHeartbeat = await this.getLastHeartbeatDate();
+      if (lastHeartbeat !== currentKyivDate) {
+        isFirstSearchAfter9Am = true;
+      }
+    }
+
+    const isHeartbeat = !result.hasSlots && !isForced && isFirstSearchAfter9Am;
+    const report = this.formatTelegramReport(result, isHeartbeat);
+    let telegramQueued = false;
+    let telegramSkipReason: string | undefined;
+
     if (isNotifyDisabled) {
       telegramSkipReason = 'Сповіщення вимкнено параметром notify=false.';
     } else if (result.hasSlots) {
@@ -258,6 +326,9 @@ export class CnapService {
         await this.googleSheetsService.appendMessageToOutbox(report, options.chatId);
         telegramQueued = true;
         this.logger.log(`[CNAP] 🎉 Знайдено слоти! Повідомлення додано в Telegram Outbox.`);
+        if (isAfter9Am) {
+          await this.setLastHeartbeatDate(currentKyivDate);
+        }
       } catch (error: any) {
         this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
       }
@@ -269,6 +340,21 @@ export class CnapService {
         this.logger.log(`[CNAP] Примусове повідомлення про стан слотів надіслано.`);
       } catch (error: any) {
         this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
+      }
+    } else if (isFirstSearchAfter9Am) {
+      // Перший пошук після 09:00 — надсилаємо повідомлення про активність моніторингу
+      try {
+        await this.googleSheetsService.appendMessageToOutbox(report, options.chatId);
+        telegramQueued = true;
+        await this.setLastHeartbeatDate(currentKyivDate);
+        this.logger.log(
+          `[CNAP] Перший пошук після 09:00 — надіслано повідомлення про активність моніторингу.`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to queue CNAP heartbeat to Telegram: ${error.message}`,
+          error.stack
+        );
       }
     } else {
       telegramSkipReason = 'Вільних місць немає. Сповіщення не надсилається.';

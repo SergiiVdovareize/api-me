@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { CnapService } from './cnap.service';
 import { GoogleSheetsService } from '../series-tracker/services/google-sheets.service';
+import { RedisReader } from '../common/helpers/redisReader';
 import { CnapCheckResult } from './interfaces/cnap.interface';
 
 describe('CnapService', () => {
   let service: CnapService;
   let mockGoogleSheetsService: jest.Mocked<Partial<GoogleSheetsService>>;
   let mockConfigService: jest.Mocked<Partial<ConfigService>>;
+  let mockRedisReader: jest.Mocked<Partial<RedisReader>>;
 
   const originalFetch = global.fetch;
 
@@ -20,11 +22,17 @@ describe('CnapService', () => {
       get: jest.fn(),
     };
 
+    mockRedisReader = {
+      read: jest.fn().mockResolvedValue(null),
+      write: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CnapService,
         { provide: ConfigService, useValue: mockConfigService },
         { provide: GoogleSheetsService, useValue: mockGoogleSheetsService },
+        { provide: RedisReader, useValue: mockRedisReader },
       ],
     }).compile();
 
@@ -337,6 +345,30 @@ describe('CnapService', () => {
     });
   });
 
+  describe('getKyivDateString', () => {
+    it('should return date string in YYYY-MM-DD format', () => {
+      const dateStr = service.getKyivDateString();
+      expect(dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('should handle fallback when Intl throws error', () => {
+      const originalIntl = global.Intl;
+      try {
+        (global as any).Intl = {
+          DateTimeFormat: jest.fn().mockImplementation(() => {
+            throw new Error('Intl unsupported');
+          }),
+        };
+
+        const testDate = new Date('2026-09-18T10:00:00Z');
+        const dateStr = service.getKyivDateString(testDate);
+        expect(dateStr).toBe('2026-09-18');
+      } finally {
+        global.Intl = originalIntl;
+      }
+    });
+  });
+
   describe('checkAndNotify', () => {
     it('should not notify when notify is false or "false"', async () => {
       jest.spyOn(service, 'checkSlots').mockResolvedValue({
@@ -366,6 +398,8 @@ describe('CnapService', () => {
         services: [],
         message: 'Є місця',
       });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
+      jest.spyOn(service, 'getKyivDateString').mockReturnValue('2026-09-23');
 
       const response = await service.checkAndNotify({ chatId: '999' });
 
@@ -374,6 +408,7 @@ describe('CnapService', () => {
         expect.stringContaining('🟢 <b>ЦНАП Львів: Є вільні місця!</b>'),
         '999'
       );
+      expect(mockRedisReader.write).toHaveBeenCalledWith('cnap:last_heartbeat_date', '2026-09-23');
     });
 
     it('should handle error when appendMessageToOutbox throws on slots available', async () => {
@@ -401,6 +436,7 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(8); // before 9am
 
       const responseForce = await service.checkAndNotify({ force: true });
       expect(responseForce.telegramQueued).toBe(true);
@@ -419,7 +455,7 @@ describe('CnapService', () => {
       expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
     });
 
-    it('should skip notification when no slots', async () => {
+    it('should send heartbeat notification on first search after 9am when no slots', async () => {
       jest.spyOn(service, 'checkSlots').mockResolvedValue({
         category: 'Паспортні послуги',
         targetLocation: 'Хвильового',
@@ -427,12 +463,81 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
+      jest.spyOn(service, 'getKyivDateString').mockReturnValue('2026-09-23');
+      mockRedisReader.read.mockResolvedValue(null);
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(true);
+      expect(response.report).toContain('ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>');
+      expect(response.report).toContain(
+        'Автоматичний моніторинг продовжує працювати в штатному режимі.'
+      );
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('ℹ️ <b>ЦНАП Львів: Моніторинг активний</b>'),
+        undefined
+      );
+      expect(mockRedisReader.write).toHaveBeenCalledWith('cnap:last_heartbeat_date', '2026-09-23');
+    });
+
+    it('should skip notification on second search after 9am on same day when no slots', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(11);
+      jest.spyOn(service, 'getKyivDateString').mockReturnValue('2026-09-23');
+      mockRedisReader.read.mockResolvedValue('2026-09-23');
 
       const response = await service.checkAndNotify({});
 
       expect(response.telegramQueued).toBe(false);
       expect(response.telegramSkipReason).toBe('Вільних місць немає. Сповіщення не надсилається.');
       expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('should skip notification when search is before 9am and no slots', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(8);
+      jest.spyOn(service, 'getKyivDateString').mockReturnValue('2026-09-23');
+      mockRedisReader.read.mockResolvedValue(null);
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(false);
+      expect(response.telegramSkipReason).toBe('Вільних місць немає. Сповіщення не надсилається.');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
+    });
+
+    it('should handle error when appendMessageToOutbox fails during heartbeat notification', async () => {
+      jest.spyOn(service, 'checkSlots').mockResolvedValue({
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового',
+        hasSlots: false,
+        services: [],
+        message: 'Немає місць',
+      });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
+      jest.spyOn(service, 'getKyivDateString').mockReturnValue('2026-09-23');
+      mockRedisReader.read.mockResolvedValue(null);
+      mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(
+        new Error('Sheet write failed')
+      );
+
+      const response = await service.checkAndNotify({});
+
+      expect(response.telegramQueued).toBe(false);
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
     });
 
     it('should handle error when appendMessageToOutbox fails during force notification', async () => {
@@ -443,6 +548,7 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
+      jest.spyOn(service, 'getKyivHour').mockReturnValue(8);
       mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(
         new Error('Sheet write failed')
       );
