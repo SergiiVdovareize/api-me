@@ -401,7 +401,6 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(11); // hour 11 is not in [9, 15, 20]
 
       const responseForce = await service.checkAndNotify({ force: true });
       expect(responseForce.telegramQueued).toBe(true);
@@ -420,7 +419,7 @@ describe('CnapService', () => {
       expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
     });
 
-    it('should notify when no slots if Kyiv hour is in [9, 15, 20]', async () => {
+    it('should skip notification when no slots', async () => {
       jest.spyOn(service, 'checkSlots').mockResolvedValue({
         category: 'Паспортні послуги',
         targetLocation: 'Хвильового',
@@ -428,49 +427,15 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
-
-      // Hour 9
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
-      const res9 = await service.checkAndNotify({});
-      expect(res9.telegramQueued).toBe(true);
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();
-
-      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
-
-      // Hour 15
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(15);
-      const res15 = await service.checkAndNotify({});
-      expect(res15.telegramQueued).toBe(true);
-
-      mockGoogleSheetsService.appendMessageToOutbox.mockClear();
-
-      // Hour 20
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(20);
-      const res20 = await service.checkAndNotify({});
-      expect(res20.telegramQueued).toBe(true);
-    });
-
-    it('should skip notification when no slots and Kyiv hour is NOT in [9, 15, 20]', async () => {
-      jest.spyOn(service, 'checkSlots').mockResolvedValue({
-        category: 'Паспортні послуги',
-        targetLocation: 'Хвильового',
-        hasSlots: false,
-        services: [],
-        message: 'Немає місць',
-      });
-
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(16); // 16:xx
 
       const response = await service.checkAndNotify({});
 
       expect(response.telegramQueued).toBe(false);
-      expect(response.telegramSkipReason).toContain(
-        'Повідомлення надсилається лише о 9, 15 та 20 годинах'
-      );
+      expect(response.telegramSkipReason).toBe('Вільних місць немає. Сповіщення не надсилається.');
       expect(mockGoogleSheetsService.appendMessageToOutbox).not.toHaveBeenCalled();
     });
 
-    it('should handle error when appendMessageToOutbox fails during empty report hour', async () => {
+    it('should handle error when appendMessageToOutbox fails during force notification', async () => {
       jest.spyOn(service, 'checkSlots').mockResolvedValue({
         category: 'Паспортні послуги',
         targetLocation: 'Хвильового',
@@ -478,12 +443,11 @@ describe('CnapService', () => {
         services: [],
         message: 'Немає місць',
       });
-      jest.spyOn(service, 'getKyivHour').mockReturnValue(9);
       mockGoogleSheetsService.appendMessageToOutbox.mockRejectedValue(
         new Error('Sheet write failed')
       );
 
-      const response = await service.checkAndNotify({});
+      const response = await service.checkAndNotify({ force: true });
 
       expect(response.telegramQueued).toBe(false);
       expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalled();

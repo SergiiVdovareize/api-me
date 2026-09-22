@@ -221,7 +221,7 @@ export class CnapService {
   /**
    * Checks slots and conditionally pushes a report to TELEGRAM_OUTBOX_SPREADSHEET_ID:
    * - If slots ARE available: ALWAYS sends notification.
-   * - If slots are NOT available: sends notification only around 9, 15, and 20 hours Kyiv time (unless forced).
+   * - If slots are NOT available: skips notification (unless forced).
    */
   async checkAndNotify(options: {
     category?: string;
@@ -250,9 +250,6 @@ export class CnapService {
       notifyParam === 'force' ||
       notifyParam === 'always';
 
-    const EMPTY_REPORT_HOURS = [9, 15, 20];
-    const currentKyivHour = this.getKyivHour();
-
     if (isNotifyDisabled) {
       telegramSkipReason = 'Сповіщення вимкнено параметром notify=false.';
     } else if (result.hasSlots) {
@@ -264,19 +261,17 @@ export class CnapService {
       } catch (error: any) {
         this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
       }
-    } else if (isForced || EMPTY_REPORT_HOURS.includes(currentKyivHour)) {
-      // Місць немає, але поточна година у списку [9, 15, 20] (або примусовий запит)
+    } else if (isForced) {
+      // Примусовий запит (force=true) — надсилаємо навіть якщо місць немає
       try {
         await this.googleSheetsService.appendMessageToOutbox(report, options.chatId);
         telegramQueued = true;
-        this.logger.log(
-          `[CNAP] Повідомлення про відсутність місць надіслано (година за Києвом: ${currentKyivHour}:xx).`
-        );
+        this.logger.log(`[CNAP] Примусове повідомлення про стан слотів надіслано.`);
       } catch (error: any) {
         this.logger.error(`Failed to queue CNAP report to Telegram: ${error.message}`, error.stack);
       }
     } else {
-      telegramSkipReason = `Місць немає. Повідомлення надсилається лише о 9, 15 та 20 годинах (зараз ${currentKyivHour}:xx за Києвом).`;
+      telegramSkipReason = 'Вільних місць немає. Сповіщення не надсилається.';
       this.logger.log(`[CNAP] ${telegramSkipReason}`);
     }
 
