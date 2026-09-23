@@ -12,6 +12,13 @@ import {
 
 const CNAP_API_BASE = 'https://cnap_lviv.qsolutions.com.ua:2651/prelim';
 
+export const DEFAULT_CNAP_LOCATIONS = [
+  'Хвильового',
+  'пл. Ринок',
+  'Брюховичі',
+  'Липинського',
+];
+
 @Injectable()
 export class CnapService {
   private readonly logger = new Logger(CnapService.name);
@@ -22,6 +29,45 @@ export class CnapService {
     private readonly googleSheetsService: GoogleSheetsService,
     @Optional() private readonly redisReader?: RedisReader
   ) {}
+
+  /**
+   * Splits comma-separated locations or returns default target locations
+   */
+  parseLocations(location?: string): string[] {
+    if (!location || !location.trim()) {
+      return DEFAULT_CNAP_LOCATIONS;
+    }
+    const list = location
+      .split(',')
+      .map(l => l.trim())
+      .filter(Boolean);
+    return list.length > 0 ? list : DEFAULT_CNAP_LOCATIONS;
+  }
+
+  /**
+   * Checks if a CNAP branch matches any of the target locations
+   */
+  matchesTargetLocation(branchName: string, targetLocations: string[]): boolean {
+    if (!branchName) return false;
+    const bLower = branchName.toLowerCase();
+    const bCompact = bLower.replace(/[^a-zа-яіїєґ0-9]/gi, '');
+
+    return targetLocations.some(loc => {
+      const locLower = loc.toLowerCase().trim();
+      if (!locLower) return false;
+
+      if (bLower.includes(locLower)) return true;
+
+      const locCompact = locLower.replace(/[^a-zа-яіїєґ0-9]/gi, '');
+      if (locCompact && bCompact.includes(locCompact)) return true;
+
+      // Stem matching for inflected forms (e.g. "Брюховичах" -> "брюхович")
+      const locStem = locCompact.replace(/(ах|ами|ам|ів|і|я|е|у|ою|и)$/u, '');
+      if (locStem.length >= 4 && bCompact.includes(locStem)) return true;
+
+      return false;
+    });
+  }
 
   /**
    * Fetches available jobs (services) for the given job group (category)
@@ -72,18 +118,19 @@ export class CnapService {
     location?: string;
   }): Promise<CnapCheckResult> {
     const category = (options.category || 'Паспортні послуги').trim();
-    const targetLocation = (options.location || 'Хвильового').trim();
+    const targetLocations = this.parseLocations(options.location);
+    const targetLocationDisplay = targetLocations.join(', ');
     const serviceFilter = options.service?.trim();
 
     this.logger.log(
-      `Checking CNAP slots: category="${category}", location="${targetLocation}", service="${serviceFilter || 'ALL'}"`
+      `Checking CNAP slots: category="${category}", locations="${targetLocationDisplay}", service="${serviceFilter || 'ALL'}"`
     );
 
     const availableJobs = await this.getJobsByCategory(category);
     if (availableJobs.length === 0) {
       return {
         category,
-        targetLocation,
+        targetLocation: targetLocationDisplay,
         hasSlots: false,
         services: [],
         message: `Для категорії "${category}" наразі відсутні доступні послуги або онлайн-запис закритий.`,
@@ -97,7 +144,7 @@ export class CnapService {
     if (jobsToCheck.length === 0) {
       return {
         category,
-        targetLocation,
+        targetLocation: targetLocationDisplay,
         hasSlots: false,
         services: [],
         message: `Послугу "${serviceFilter}" не знайдено серед доступних: ${availableJobs.join(', ')}`,
@@ -110,9 +157,9 @@ export class CnapService {
     for (const jobName of jobsToCheck) {
       const rawBranches = await this.getBranchesForJob(jobName, category);
 
-      // Filter branches by target location (e.g. "Хвильового")
+      // Filter branches by target locations (e.g. "Хвильового", "пл. Ринок", "Брюховичі")
       const matchedBranches = rawBranches.filter(b =>
-        b.name?.toLowerCase().includes(targetLocation.toLowerCase())
+        this.matchesTargetLocation(b.name, targetLocations)
       );
 
       const branchResults: CnapBranchResult[] = matchedBranches.map(b => {
@@ -149,15 +196,22 @@ export class CnapService {
     }
 
     let summaryMessage = '';
+    const isSingleKhvylyovoho =
+      targetLocations.length === 1 && targetLocations[0] === 'Хвильового';
+
     if (overallHasSlots) {
-      summaryMessage = `Знайдено вільні слоти для підрозділу на вул. ${targetLocation}!`;
+      summaryMessage = isSingleKhvylyovoho
+        ? `Знайдено вільні слоти для підрозділу на вул. Хвильового!`
+        : `Знайдено вільні слоти для: ${targetLocationDisplay}!`;
     } else {
-      summaryMessage = `Вільних місць для підрозділу на вул. ${targetLocation} наразі немає.`;
+      summaryMessage = isSingleKhvylyovoho
+        ? `Вільних місць для підрозділу на вул. Хвильового наразі немає.`
+        : `Вільних місць для: ${targetLocationDisplay} наразі немає.`;
     }
 
     return {
       category,
-      targetLocation,
+      targetLocation: targetLocationDisplay,
       hasSlots: overallHasSlots,
       services: servicesResult,
       message: summaryMessage,
@@ -173,7 +227,10 @@ export class CnapService {
     if (result.hasSlots) {
       let report = `🟢 <b>ЦНАП Львів: Є вільні місця!</b>\n\n`;
       report += `📂 Категорія: <b>${this.escapeHtml(result.category)}</b>\n`;
-      report += `🏢 Підрозділ: <b>вул. ${this.escapeHtml(result.targetLocation)}</b>\n\n`;
+      const isSingleKhvylyovoho = result.targetLocation === 'Хвильового';
+      const locationLabel = result.targetLocation.includes(',') ? 'Локації' : 'Підрозділ';
+      const locationPrefix = isSingleKhvylyovoho ? 'вул. ' : '';
+      report += `🏢 ${locationLabel}: <b>${locationPrefix}${this.escapeHtml(result.targetLocation)}</b>\n\n`;
 
       for (const service of result.services) {
         if (!service.available) continue;
@@ -182,6 +239,8 @@ export class CnapService {
 
         for (const branch of service.branches) {
           if (!branch.available) continue;
+
+          report += `🏢 <b>${this.escapeHtml(branch.name.trim())}</b>\n`;
 
           for (const slot of branch.slots) {
             report += `📅 <b>${slot.date}</b>: ${slot.times.join(', ')}\n`;
@@ -202,7 +261,10 @@ export class CnapService {
     // No slots - Forced or manual check report
     let report = `🔴 <b>ЦНАП Львів: Вільних місць немає</b>\n\n`;
     report += `📂 Категорія: <b>${this.escapeHtml(result.category)}</b>\n`;
-    report += `🏢 Підрозділ: <b>вул. ${this.escapeHtml(result.targetLocation)}</b>\n\n`;
+    const isSingleKhvylyovoho = result.targetLocation === 'Хвильового';
+    const locationLabel = result.targetLocation.includes(',') ? 'Локації' : 'Підрозділ';
+    const locationPrefix = isSingleKhvylyovoho ? 'вул. ' : '';
+    report += `🏢 ${locationLabel}: <b>${locationPrefix}${this.escapeHtml(result.targetLocation)}</b>\n\n`;
     report += `<i>${this.escapeHtml(result.message)}</i>\n`;
     report += `<i>Попередній запис відкривається щодня о 07:00.</i>\n\n`;
     report += `🔗 <a href="${bookingUrl}">Онлайн-запис ЦНАП</a>`;

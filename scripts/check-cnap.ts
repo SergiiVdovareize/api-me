@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { CnapModule } from '../src/cnap/cnap.module';
-import { CnapService } from '../src/cnap/cnap.service';
+import { CnapService, DEFAULT_CNAP_LOCATIONS } from '../src/cnap/cnap.service';
 
 async function bootstrap() {
   const logger = new Logger('CnapRunner');
@@ -11,7 +11,7 @@ async function bootstrap() {
   const args = process.argv.slice(2);
   let category = 'Паспортні послуги';
   let service: string | undefined;
-  let location = 'Хвильового';
+  let location = DEFAULT_CNAP_LOCATIONS.join(', ');
   let notify = true;
 
   let force = false;

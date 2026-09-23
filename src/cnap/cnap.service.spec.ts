@@ -134,6 +134,75 @@ describe('CnapService', () => {
     });
   });
 
+  describe('parseLocations', () => {
+    it('should return default locations when no location is provided', () => {
+      expect(service.parseLocations()).toEqual([
+        'Хвильового',
+        'пл. Ринок',
+        'Брюховичі',
+        'Липинського',
+      ]);
+      expect(service.parseLocations('')).toEqual([
+        'Хвильового',
+        'пл. Ринок',
+        'Брюховичі',
+        'Липинського',
+      ]);
+      expect(service.parseLocations('   ')).toEqual([
+        'Хвильового',
+        'пл. Ринок',
+        'Брюховичі',
+        'Липинського',
+      ]);
+    });
+
+    it('should split comma-separated locations and trim them', () => {
+      expect(service.parseLocations('Хвильового, пл. Ринок , Брюховичі, Липинського')).toEqual([
+        'Хвильового',
+        'пл. Ринок',
+        'Брюховичі',
+        'Липинського',
+      ]);
+      expect(service.parseLocations('Хвильового')).toEqual(['Хвильового']);
+    });
+  });
+
+  describe('matchesTargetLocation', () => {
+    const targets = ['Хвильового', 'пл. Ринок', 'Брюховичі', 'Липинського'];
+
+    it('should match exact and case-insensitive branch names', () => {
+      expect(
+        service.matchesTargetLocation('вул. Хвильового, 14а Терпідрозділ ЦНАП', targets)
+      ).toBe(true);
+      expect(
+        service.matchesTargetLocation('с-ще Брюховичі, вул. Івасюка 2а Терпідрозділ ЦНАП', targets)
+      ).toBe(true);
+      expect(
+        service.matchesTargetLocation(' вул. Липинського, 11 Терпідрозділ ЦНАП', targets)
+      ).toBe(true);
+    });
+
+    it('should match "ЦНАП на пл.Ринок,1" without space after dot', () => {
+      expect(service.matchesTargetLocation('ЦНАП на пл.Ринок,1', targets)).toBe(true);
+    });
+
+    it('should match inflected Ukrainian words like Брюховичах', () => {
+      expect(
+        service.matchesTargetLocation('с-ще Брюховичі, вул. Івасюка 2а', ['Брюховичах'])
+      ).toBe(true);
+    });
+
+    it('should not match unrelated branches', () => {
+      expect(service.matchesTargetLocation('вул. Виговського, 32', targets)).toBe(false);
+      expect(service.matchesTargetLocation('с-ще Рудно вул. Грушевського, 55', targets)).toBe(false);
+    });
+
+    it('should handle empty or invalid inputs', () => {
+      expect(service.matchesTargetLocation('', targets)).toBe(false);
+      expect(service.matchesTargetLocation('Хвильового', [''])).toBe(false);
+    });
+  });
+
   describe('checkSlots', () => {
     it('should return empty slots when category has no available jobs', async () => {
       jest.spyOn(service, 'getJobsByCategory').mockResolvedValue([]);
@@ -143,7 +212,7 @@ describe('CnapService', () => {
       expect(result.hasSlots).toBe(false);
       expect(result.message).toContain('наразі відсутні доступні послуги');
       expect(result.category).toBe('Невідома');
-      expect(result.targetLocation).toBe('Хвильового');
+      expect(result.targetLocation).toBe('Хвильового, пл. Ринок, Брюховичі, Липинського');
     });
 
     it('should return message when requested service is not in available jobs', async () => {
@@ -156,6 +225,80 @@ describe('CnapService', () => {
 
       expect(result.hasSlots).toBe(false);
       expect(result.message).toContain('не знайдено серед доступних');
+    });
+
+    it('should collect available slots across multiple configured branches', async () => {
+      jest.spyOn(service, 'getJobsByCategory').mockResolvedValue(['Паспортні послуги']);
+      jest.spyOn(service, 'getBranchesForJob').mockResolvedValue([
+        {
+          guid: 'b-khv',
+          name: 'вул. Хвильового, 14а Терпідрозділ ЦНАП',
+          address: 'вул. Хвильового, 14а',
+          freeSlots: [
+            {
+              workDaySlot: '2026-09-25T00:00:00+03:00',
+              freeTimeSlots: ['09:00:00'],
+            },
+          ],
+        },
+        {
+          guid: 'b-rynok',
+          name: 'ЦНАП на пл.Ринок,1',
+          address: 'пл. Ринок, 1',
+          freeSlots: [
+            {
+              workDaySlot: '2026-09-26T00:00:00+03:00',
+              freeTimeSlots: ['11:00:00', '11:30:00'],
+            },
+          ],
+        },
+        {
+          guid: 'b-bryukh',
+          name: 'с-ще Брюховичі, вул. Івасюка 2а Терпідрозділ ЦНАП',
+          address: 'вул. Івасюка, 2а',
+          freeSlots: [],
+        },
+        {
+          guid: 'b-lyp',
+          name: ' вул. Липинського, 11 Терпідрозділ ЦНАП',
+          address: 'вул. Липинського, 11',
+          freeSlots: [
+            {
+              workDaySlot: '2026-09-27T00:00:00+03:00',
+              freeTimeSlots: ['15:00:00'],
+            },
+          ],
+        },
+        {
+          guid: 'b-rudno',
+          name: 'с-ще Рудно вул. Грушевського, 55',
+          address: 'вул. Грушевського, 55',
+          freeSlots: [
+            {
+              workDaySlot: '2026-09-25T00:00:00+03:00',
+              freeTimeSlots: ['14:00:00'],
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.checkSlots({});
+
+      expect(result.hasSlots).toBe(true);
+      expect(result.targetLocation).toBe('Хвильового, пл. Ринок, Брюховичі, Липинського');
+      // Should include Khvylyovoho, Rynok, Briukhovychi, Lypynskoho, but NOT Rudno
+      const branches = result.services[0].branches;
+      expect(branches).toHaveLength(4);
+      expect(branches.map(b => b.name)).toEqual([
+        'вул. Хвильового, 14а Терпідрозділ ЦНАП',
+        'ЦНАП на пл.Ринок,1',
+        'с-ще Брюховичі, вул. Івасюка 2а Терпідрозділ ЦНАП',
+        ' вул. Липинського, 11 Терпідрозділ ЦНАП',
+      ]);
+      expect(branches[0].available).toBe(true);
+      expect(branches[1].available).toBe(true);
+      expect(branches[2].available).toBe(false);
+      expect(branches[3].available).toBe(true);
     });
 
     it('should collect available slots and format times correctly', async () => {
@@ -292,11 +435,42 @@ describe('CnapService', () => {
       expect(report).toContain('🟢 <b>ЦНАП Львів: Є вільні місця!</b>');
       expect(report).toContain('📂 Категорія: <b>Паспортні послуги</b>');
       expect(report).toContain('📋 <b>Паспорт ID</b>');
+      expect(report).toContain('🏢 <b>Хвильового</b>');
       expect(report).toContain('📅 <b>2026-09-19</b>: 09:00, 09:30');
       expect(report).not.toContain('Недоступна послуга');
       expect(report).toContain(
         '🔗 <a href="https://cnap-lviv.qsolutions.com.ua:2657/booking">Перейти до запису</a>'
       );
+    });
+
+    it('should format message with multiple locations and multiple branches', () => {
+      const checkResult: CnapCheckResult = {
+        category: 'Паспортні послуги',
+        targetLocation: 'Хвильового, пл. Ринок, Брюховичі',
+        hasSlots: true,
+        message: 'Знайдено',
+        services: [
+          {
+            serviceName: 'Паспорт громадянина України',
+            available: true,
+            branches: [
+              {
+                guid: 'b1',
+                name: 'ЦНАП на пл.Ринок,1',
+                address: 'пл. Ринок, 1',
+                available: true,
+                slots: [{ date: '2026-09-24', times: ['14:00'] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const report = service.formatTelegramReport(checkResult);
+
+      expect(report).toContain('🏢 Локації: <b>Хвильового, пл. Ринок, Брюховичі</b>');
+      expect(report).toContain('🏢 <b>ЦНАП на пл.Ринок,1</b>');
+      expect(report).toContain('📅 <b>2026-09-24</b>: 14:00');
     });
 
     it('should format message when slots are not available', () => {
