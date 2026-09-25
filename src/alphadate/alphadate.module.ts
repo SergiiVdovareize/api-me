@@ -4,9 +4,10 @@ import { AlphadateController } from './alphadate.controller';
 import { PrismaModule } from '../models/prisma/prisma.module';
 import { EmailModule } from '../email/email.module';
 import { GenderizeService } from './genderize.service';
+import { LlmModule } from '../llm/llm.module';
 
 @Module({
-  imports: [PrismaModule, EmailModule],
+  imports: [PrismaModule, EmailModule, LlmModule],
   controllers: [AlphadateController],
   providers: [AlphadateService, GenderizeService],
   exports: [AlphadateService, GenderizeService],

@@ -13,6 +13,7 @@ API for creating, managing, and synchronizing shared romantic alphabet date boar
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/alphadate` | Create a new date board and invite partners via email |
+| `GET` | `/alphadate/suggestions` | Generate AI date ideas for a specific letter (`?letter=А`) |
 | `GET` | `/alphadate/:key` | Retrieve the current board state, letters, and metadata |
 | `PUT` | `/alphadate/:key` | Update board state (letters, active letter, turn, partners, PIN) |
 | `DELETE` | `/alphadate/:key` | Delete a board by its unique key |
@@ -48,7 +49,44 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 
 ---
 
-### 2. Get Board State (`GET /alphadate/:key`)
+### 2. Get Date Suggestions (`GET /alphadate/suggestions`)
+
+Generates creative romantic date ideas starting with a required single-character letter of the alphabet using the AI LLM rotator. Also accessible via `GET /alphadate/suggestions/:letter`.
+
+#### Query Parameters
+* `letter` (`string`, **Required**): Single character representing the target letter (e.g. `А`, `Б`, `A`, `B`).
+* `lang` (`string`, *Optional*): Target language code (e.g. `uk` for Ukrainian, `en` for English). Defaults to `uk`.
+
+#### Example Request
+```bash
+curl "https://api.vdovareize.me/alphadate/suggestions?letter=А&lang=uk"
+```
+
+#### Response (`200 OK`)
+```json
+{
+  "success": true,
+  "letter": "А",
+  "suggestions": [
+    {
+      "title": "Астрономічна обсерваторія",
+      "description": "Романтичний вечір під зорями з телескопом та затишною атмосферою.",
+      "category": "romantic",
+      "estimatedCost": "budget"
+    },
+    {
+      "title": "Аквапарк",
+      "description": "Веселий та енергійний день на водних атракціонах.",
+      "category": "active",
+      "estimatedCost": "moderate"
+    }
+  ]
+}
+```
+
+---
+
+### 3. Get Board State (`GET /alphadate/:key`)
 
 Retrieves the current state of a board by its unique 5-character key.
 

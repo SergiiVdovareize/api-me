@@ -13,6 +13,7 @@ describe('AlphadateController', () => {
       getBoardState: jest.fn(),
       updateBoardState: jest.fn(),
       deleteBoard: jest.fn(),
+      getSuggestions: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -191,6 +192,54 @@ describe('AlphadateController', () => {
       const result = await controller.deleteBoard('key');
       expect(result).toEqual({ success: true });
       expect(service.deleteBoard).toHaveBeenCalledWith('key');
+    });
+  });
+
+  describe('getSuggestions', () => {
+    it('should throw BadRequestException if letter query param is missing or empty', async () => {
+      await expect(controller.getSuggestions(undefined as any)).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions('')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions('   ')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if letter query param is longer than 1 character', async () => {
+      await expect(controller.getSuggestions('AB')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should call service.getSuggestions and return result when letter is valid', async () => {
+      const mockResult = {
+        success: true,
+        letter: 'А',
+        suggestions: [
+          {
+            title: 'Аквапарк',
+            description: 'Веселий день',
+            category: 'active',
+            estimatedCost: 'moderate',
+          },
+        ],
+      };
+      service.getSuggestions.mockResolvedValue(mockResult as any);
+
+      const result = await controller.getSuggestions('А', 'uk');
+      expect(result).toEqual(mockResult);
+      expect(service.getSuggestions).toHaveBeenCalledWith('А', 'uk');
+    });
+  });
+
+  describe('getSuggestionsByParam', () => {
+    it('should throw BadRequestException if letter path param is invalid', async () => {
+      await expect(controller.getSuggestionsByParam('')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestionsByParam('LONG')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should call service.getSuggestions with path param letter', async () => {
+      const mockResult = { success: true, letter: 'Б', suggestions: [] };
+      service.getSuggestions.mockResolvedValue(mockResult as any);
+
+      const result = await controller.getSuggestionsByParam('Б', undefined);
+      expect(result).toEqual(mockResult);
+      expect(service.getSuggestions).toHaveBeenCalledWith('Б', undefined);
     });
   });
 });

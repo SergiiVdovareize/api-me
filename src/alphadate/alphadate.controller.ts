@@ -6,6 +6,7 @@ import {
   Put,
   Delete,
   Param,
+  Query,
   BadRequestException,
 } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
@@ -22,6 +23,34 @@ export class AlphadateController {
       success: true,
       key: result.key,
     };
+  }
+
+  @Get('suggestions')
+  async getSuggestions(
+    @Query('letter') letter: string,
+    @Query('lang') lang?: string
+  ) {
+    if (!letter || typeof letter !== 'string' || !letter.trim()) {
+      throw new BadRequestException('Query parameter "letter" is required');
+    }
+    if (letter.trim().length !== 1) {
+      throw new BadRequestException('Query parameter "letter" must be a single character');
+    }
+    return this.alphadateService.getSuggestions(letter, lang);
+  }
+
+  @Get('suggestions/:letter')
+  async getSuggestionsByParam(
+    @Param('letter') letter: string,
+    @Query('lang') lang?: string
+  ) {
+    if (!letter || typeof letter !== 'string' || !letter.trim()) {
+      throw new BadRequestException('Parameter "letter" is required');
+    }
+    if (letter.trim().length !== 1) {
+      throw new BadRequestException('Parameter "letter" must be a single character');
+    }
+    return this.alphadateService.getSuggestions(letter, lang);
   }
 
   @Get(':key')

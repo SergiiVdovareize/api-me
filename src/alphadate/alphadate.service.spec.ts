@@ -1,10 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
+import { LlmService } from '../llm/llm.service';
 
 describe('AlphadateService', () => {
   let service: AlphadateService;
@@ -12,6 +13,7 @@ describe('AlphadateService', () => {
   let mockEmailService: any;
   let mockConfigService: any;
   let mockGenderizeService: any;
+  let mockLlmService: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -50,6 +52,10 @@ describe('AlphadateService', () => {
       assignPlayerIds: jest.fn().mockReturnValue([2, 1]),
     };
 
+    mockLlmService = {
+      callAndParseJSON: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlphadateService,
@@ -68,6 +74,10 @@ describe('AlphadateService', () => {
         {
           provide: GenderizeService,
           useValue: mockGenderizeService,
+        },
+        {
+          provide: LlmService,
+          useValue: mockLlmService,
         },
       ],
     }).compile();
@@ -377,6 +387,79 @@ describe('AlphadateService', () => {
       expect(mockPrismaService.alphadateBoard.delete).toHaveBeenCalledWith({
         where: { key: 'to-delete' },
       });
+    });
+  });
+
+  describe('getSuggestions', () => {
+    it('should throw BadRequestException if letter is missing or empty', async () => {
+      await expect(service.getSuggestions('')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('   ')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions(undefined as any)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if letter length is not 1', async () => {
+      await expect(service.getSuggestions('AB')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should call llmService and return sanitized suggestions', async () => {
+      mockLlmService.callAndParseJSON.mockResolvedValue({
+        letter: 'А',
+        suggestions: [
+          {
+            title: 'Аквапарк',
+            description: 'Водні гірки та розваги',
+            category: 'active',
+            estimatedCost: 'moderate',
+          },
+        ],
+      });
+
+      const result = await service.getSuggestions('а', 'uk');
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('А');
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0].title).toBe('Аквапарк');
+      expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
+        expect.stringContaining('AlphaDate'),
+        expect.stringContaining('Літера: "А"')
+      );
+    });
+
+    it('should throw ServiceUnavailableException if AI returns empty suggestions', async () => {
+      mockLlmService.callAndParseJSON.mockResolvedValue({
+        letter: 'Б',
+        suggestions: [],
+      });
+
+      await expect(service.getSuggestions('Б')).rejects.toThrow(
+        'Штучний інтелект не зміг згенерувати валідні ідеї'
+      );
+    });
+
+    it('should throw HttpException with status 429 if AI fails due to rate limit', async () => {
+      mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Mistral 429 rate limit exceeded'));
+
+      await expect(service.getSuggestions('В')).rejects.toMatchObject({
+        status: 429,
+        message: expect.stringContaining('Перевищено ліміт запитів до сервісу штучного інтелекту'),
+      });
+    });
+
+    it('should throw ServiceUnavailableException if AI fails due to timeout', async () => {
+      mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Request timed out after 30000ms'));
+
+      await expect(service.getSuggestions('Г')).rejects.toThrow(
+        'Час очікування відповіді від сервісу AI вичерпано'
+      );
+    });
+
+    it('should throw ServiceUnavailableException if AI fails due to general error', async () => {
+      mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Network connection failed'));
+
+      await expect(service.getSuggestions('Д')).rejects.toThrow(
+        'Не вдалося отримати відповідь від AI через вичерпання лімітів або тимчасову недоступність сервісу'
+      );
     });
   });
 });

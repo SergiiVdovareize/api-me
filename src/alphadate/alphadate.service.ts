@@ -1,10 +1,26 @@
-import { Injectable, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
+import { LlmService } from '../llm/llm.service';
+import {
+  DateSuggestionsResponse,
+  DateSuggestion,
+} from './interfaces/date-suggestion.interface';
+import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 
 @Injectable()
 export class AlphadateService {
@@ -14,7 +30,8 @@ export class AlphadateService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-    private readonly genderizeService: GenderizeService
+    private readonly genderizeService: GenderizeService,
+    @Optional() private readonly llmService?: LlmService
   ) {}
 
   private generateRandomKey(length: number): string {
@@ -409,4 +426,87 @@ export class AlphadateService {
 
     return { success: true };
   }
+
+  /**
+   * Generates date ideas for a given letter of the alphabet using AI rotator
+   */
+  async getSuggestions(letter: string, lang = 'uk'): Promise<DateSuggestionsResponse> {
+    if (!letter || typeof letter !== 'string' || !letter.trim()) {
+      throw new BadRequestException('Query parameter "letter" is required');
+    }
+
+    const trimmed = letter.trim();
+    if (trimmed.length !== 1) {
+      throw new BadRequestException('Query parameter "letter" must be a single character');
+    }
+
+    const normalizedLetter = trimmed.toUpperCase();
+
+    if (!this.llmService) {
+      throw new ServiceUnavailableException('Сервіс генерації ідей наразі недоступний');
+    }
+
+    let data: { letter?: string; suggestions?: DateSuggestion[] };
+    try {
+      const { systemPrompt, userPrompt } = buildDateSuggestionsPrompt(normalizedLetter, lang);
+      data = await this.llmService.callAndParseJSON<{
+        letter?: string;
+        suggestions?: DateSuggestion[];
+      }>(systemPrompt, userPrompt);
+    } catch (error: any) {
+      const errMsg = (error?.message || '').toLowerCase();
+      this.logger.error(
+        `Failed to generate date suggestions for letter "${normalizedLetter}": ${error.message}`,
+        error.stack
+      );
+
+      const isRateLimit =
+        errMsg.includes('429') ||
+        errMsg.includes('rate limit') ||
+        errMsg.includes('rate-limited') ||
+        errMsg.includes('quota') ||
+        errMsg.includes('cooldown') ||
+        errMsg.includes('limit');
+
+      if (isRateLimit) {
+        throw new HttpException(
+          'Перевищено ліміт запитів до сервісу штучного інтелекту. Будь ласка, зачекайте кілька хвилин та спробуйте знову.',
+          HttpStatus.TOO_MANY_REQUESTS
+        );
+      }
+
+      if (errMsg.includes('timed out') || errMsg.includes('timeout')) {
+        throw new ServiceUnavailableException(
+          'Час очікування відповіді від сервісу AI вичерпано. Будь ласка, спробуйте ще раз.'
+        );
+      }
+
+      throw new ServiceUnavailableException(
+        'Не вдалося отримати відповідь від AI через вичерпання лімітів або тимчасову недоступність сервісу. Будь ласка, спробуйте пізніше.'
+      );
+    }
+
+    const rawSuggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+    const sanitized: DateSuggestion[] = rawSuggestions
+      .filter(s => s && typeof s === 'object' && typeof s.title === 'string' && s.title.trim())
+      .map(s => ({
+        title: s.title.trim(),
+        description: typeof s.description === 'string' ? s.description.trim() : '',
+        category: s.category || 'romantic',
+        estimatedCost: s.estimatedCost || 'moderate',
+      }));
+
+    if (sanitized.length === 0) {
+      throw new ServiceUnavailableException(
+        `Штучний інтелект не зміг згенерувати валідні ідеї на літеру "${normalizedLetter}". Будь ласка, спробуйте ще раз.`
+      );
+    }
+
+    return {
+      success: true,
+      letter: normalizedLetter,
+      suggestions: sanitized,
+    };
+  }
 }
+
