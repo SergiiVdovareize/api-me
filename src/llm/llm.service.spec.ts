@@ -100,9 +100,9 @@ describe('LlmService', () => {
     it('should throw error when all retries fail to produce valid JSON', async () => {
       mockProvider.call.mockResolvedValue('Still not a valid JSON');
 
-      await expect(
-        service.callAndParseJSON('System', 'User', undefined, 1)
-      ).rejects.toThrow('Call to AI failed to return valid JSON after 2 attempts');
+      await expect(service.callAndParseJSON('System', 'User', undefined, 1)).rejects.toThrow(
+        'Call to AI failed to return valid JSON after 2 attempts'
+      );
     });
   });
 });

@@ -80,9 +80,7 @@ export class LLMRouterProvider implements LLMProvider {
   private logActiveStatus(): void {
     if (this.providers.length === 0) return;
 
-    const readyNames = this.providers
-      .filter(p => !this.isCoolingDown(p.name))
-      .map(p => p.name);
+    const readyNames = this.providers.filter(p => !this.isCoolingDown(p.name)).map(p => p.name);
     const coolingInfo = this.providers
       .filter(p => this.isCoolingDown(p.name))
       .map(p => {

@@ -12,12 +12,7 @@ import {
 
 const CNAP_API_BASE = 'https://cnap_lviv.qsolutions.com.ua:2651/prelim';
 
-export const DEFAULT_CNAP_LOCATIONS = [
-  'Хвильового',
-  'пл. Ринок',
-  'Брюховичі',
-  'Липинського',
-];
+export const DEFAULT_CNAP_LOCATIONS = ['Хвильового', 'пл. Ринок', 'Брюховичі', 'Липинського'];
 
 @Injectable()
 export class CnapService {
@@ -196,8 +191,7 @@ export class CnapService {
     }
 
     let summaryMessage = '';
-    const isSingleKhvylyovoho =
-      targetLocations.length === 1 && targetLocations[0] === 'Хвильового';
+    const isSingleKhvylyovoho = targetLocations.length === 1 && targetLocations[0] === 'Хвильового';
 
     if (overallHasSlots) {
       summaryMessage = isSingleKhvylyovoho

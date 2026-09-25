@@ -197,7 +197,9 @@ describe('AlphadateController', () => {
 
   describe('getSuggestions', () => {
     it('should throw BadRequestException if letter query param is missing or empty', async () => {
-      await expect(controller.getSuggestions(undefined as any)).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions(undefined as any)).rejects.toThrow(
+        BadRequestException
+      );
       await expect(controller.getSuggestions('')).rejects.toThrow(BadRequestException);
       await expect(controller.getSuggestions('   ')).rejects.toThrow(BadRequestException);
     });

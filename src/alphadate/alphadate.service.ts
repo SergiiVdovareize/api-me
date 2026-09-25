@@ -16,10 +16,7 @@ import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
 import { LlmService } from '../llm/llm.service';
-import {
-  DateSuggestionsResponse,
-  DateSuggestion,
-} from './interfaces/date-suggestion.interface';
+import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-suggestion.interface';
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 
 @Injectable()
@@ -509,4 +506,3 @@ export class AlphadateService {
     };
   }
 }
-

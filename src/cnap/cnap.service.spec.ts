@@ -171,9 +171,9 @@ describe('CnapService', () => {
     const targets = ['Хвильового', 'пл. Ринок', 'Брюховичі', 'Липинського'];
 
     it('should match exact and case-insensitive branch names', () => {
-      expect(
-        service.matchesTargetLocation('вул. Хвильового, 14а Терпідрозділ ЦНАП', targets)
-      ).toBe(true);
+      expect(service.matchesTargetLocation('вул. Хвильового, 14а Терпідрозділ ЦНАП', targets)).toBe(
+        true
+      );
       expect(
         service.matchesTargetLocation('с-ще Брюховичі, вул. Івасюка 2а Терпідрозділ ЦНАП', targets)
       ).toBe(true);
@@ -187,14 +187,16 @@ describe('CnapService', () => {
     });
 
     it('should match inflected Ukrainian words like Брюховичах', () => {
-      expect(
-        service.matchesTargetLocation('с-ще Брюховичі, вул. Івасюка 2а', ['Брюховичах'])
-      ).toBe(true);
+      expect(service.matchesTargetLocation('с-ще Брюховичі, вул. Івасюка 2а', ['Брюховичах'])).toBe(
+        true
+      );
     });
 
     it('should not match unrelated branches', () => {
       expect(service.matchesTargetLocation('вул. Виговського, 32', targets)).toBe(false);
-      expect(service.matchesTargetLocation('с-ще Рудно вул. Грушевського, 55', targets)).toBe(false);
+      expect(service.matchesTargetLocation('с-ще Рудно вул. Грушевського, 55', targets)).toBe(
+        false
+      );
     });
 
     it('should handle empty or invalid inputs', () => {

@@ -438,7 +438,9 @@ describe('AlphadateService', () => {
     });
 
     it('should throw HttpException with status 429 if AI fails due to rate limit', async () => {
-      mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Mistral 429 rate limit exceeded'));
+      mockLlmService.callAndParseJSON.mockRejectedValue(
+        new Error('Mistral 429 rate limit exceeded')
+      );
 
       await expect(service.getSuggestions('В')).rejects.toMatchObject({
         status: 429,
@@ -447,7 +449,9 @@ describe('AlphadateService', () => {
     });
 
     it('should throw ServiceUnavailableException if AI fails due to timeout', async () => {
-      mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Request timed out after 30000ms'));
+      mockLlmService.callAndParseJSON.mockRejectedValue(
+        new Error('Request timed out after 30000ms')
+      );
 
       await expect(service.getSuggestions('Г')).rejects.toThrow(
         'Час очікування відповіді від сервісу AI вичерпано'

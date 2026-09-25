@@ -26,10 +26,7 @@ export class AlphadateController {
   }
 
   @Get('suggestions')
-  async getSuggestions(
-    @Query('letter') letter: string,
-    @Query('lang') lang?: string
-  ) {
+  async getSuggestions(@Query('letter') letter: string, @Query('lang') lang?: string) {
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Query parameter "letter" is required');
     }
@@ -40,10 +37,7 @@ export class AlphadateController {
   }
 
   @Get('suggestions/:letter')
-  async getSuggestionsByParam(
-    @Param('letter') letter: string,
-    @Query('lang') lang?: string
-  ) {
+  async getSuggestionsByParam(@Param('letter') letter: string, @Query('lang') lang?: string) {
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Parameter "letter" is required');
     }
