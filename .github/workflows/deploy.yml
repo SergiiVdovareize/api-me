@@ -2,6 +2,8 @@ name: Deploy
 
 on:
   push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -37,6 +39,7 @@ jobs:
         run: npm run test:cov
 
       - name: Run Database Migrations
+        if: github.ref == 'refs/heads/main'
         run: npx prisma migrate deploy
         env:
           POSTGRES_PRISMA_URL: ${{ secrets.POSTGRES_PRISMA_URL }}
@@ -49,6 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Vercel
+        if: github.ref == 'refs/heads/main'
         run: npm run deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
