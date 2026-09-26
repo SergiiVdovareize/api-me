@@ -223,9 +223,9 @@ describe('AlphadateController', () => {
       };
       service.getSuggestions.mockResolvedValue(mockResult as any);
 
-      const result = await controller.getSuggestions('А', 'uk');
+      const result = await controller.getSuggestions('А');
       expect(result).toEqual(mockResult);
-      expect(service.getSuggestions).toHaveBeenCalledWith('А', 'uk');
+      expect(service.getSuggestions).toHaveBeenCalledWith('А');
     });
   });
 
@@ -239,9 +239,9 @@ describe('AlphadateController', () => {
       const mockResult = { success: true, letter: 'Б', suggestions: [] };
       service.getSuggestions.mockResolvedValue(mockResult as any);
 
-      const result = await controller.getSuggestionsByParam('Б', undefined);
+      const result = await controller.getSuggestionsByParam('Б');
       expect(result).toEqual(mockResult);
-      expect(service.getSuggestions).toHaveBeenCalledWith('Б', undefined);
+      expect(service.getSuggestions).toHaveBeenCalledWith('Б');
     });
   });
 });
