@@ -401,7 +401,16 @@ describe('AlphadateService', () => {
       await expect(service.getSuggestions('AB')).rejects.toThrow(BadRequestException);
     });
 
-    it('should call llmService and return sanitized suggestions', async () => {
+    it('should throw BadRequestException if letter is not an English or Ukrainian alphabet letter', async () => {
+      await expect(service.getSuggestions('1')).rejects.toThrow(
+        'Query parameter "letter" must be a valid English or Ukrainian alphabet letter'
+      );
+      await expect(service.getSuggestions('@')).rejects.toThrow(
+        'Query parameter "letter" must be a valid English or Ukrainian alphabet letter'
+      );
+    });
+
+    it('should auto-detect Cyrillic letter and return Ukrainian suggestions', async () => {
       mockLlmService.callAndParseJSON.mockResolvedValue({
         letter: 'А',
         suggestions: [
@@ -414,15 +423,42 @@ describe('AlphadateService', () => {
         ],
       });
 
-      const result = await service.getSuggestions('а', 'uk');
+      const result = await service.getSuggestions('а');
 
       expect(result.success).toBe(true);
       expect(result.letter).toBe('А');
+      expect(result.lang).toBe('uk');
       expect(result.suggestions).toHaveLength(1);
       expect(result.suggestions[0].title).toBe('Аквапарк');
       expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
         expect.stringContaining('AlphaDate'),
         expect.stringContaining('Літера: "А"')
+      );
+    });
+
+    it('should auto-detect Latin letter and return English suggestions', async () => {
+      mockLlmService.callAndParseJSON.mockResolvedValue({
+        letter: 'B',
+        suggestions: [
+          {
+            title: 'Bowling',
+            description: 'Fun bowling evening with delicious pizza.',
+            category: 'active',
+            estimatedCost: 'moderate',
+          },
+        ],
+      });
+
+      const result = await service.getSuggestions('b');
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('B');
+      expect(result.lang).toBe('en');
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0].title).toBe('Bowling');
+      expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
+        expect.stringContaining('Alphabet Dating'),
+        expect.stringContaining('Letter: "B"')
       );
     });
 

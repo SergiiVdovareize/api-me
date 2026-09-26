@@ -8,5 +8,6 @@ export interface DateSuggestion {
 export interface DateSuggestionsResponse {
   success: boolean;
   letter: string;
+  lang?: 'en' | 'uk';
   suggestions: DateSuggestion[];
 }

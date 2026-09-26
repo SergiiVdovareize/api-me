@@ -54,32 +54,37 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 Generates creative romantic date ideas starting with a required single-character letter of the alphabet using the AI LLM rotator. Also accessible via `GET /alphadate/suggestions/:letter`.
 
 > [!NOTE]
-> **Caching**: Results are cached in Upstash Redis for **1 hour** (`TTL = 3600s`) per letter and language (`alphadate:suggestions:{LETTER}:{LANG}`). Repeat calls within the hour are served instantly (sub-200ms) without consuming AI LLM quota.
+> **Automatic Language Detection**: The endpoint automatically detects which alphabet the letter belongs to:
+> - **Latin letters** (`A-Z`): Returns suggestions in **English** (`lang: "en"`).
+> - **Cyrillic letters** (`А-Я`, `І`, `Ї`, `Є`, `Ґ`): Returns suggestions in **Ukrainian** (`lang: "uk"`).
+> 
+> **Caching**: Results are cached in Upstash Redis for **1 hour** (`TTL = 3600s`) per letter and detected language (`alphadate:suggestions:{LETTER}:{LANG}`). Repeat calls within the hour are served instantly (sub-200ms) without consuming AI LLM quota.
 
 #### Query Parameters
 * `letter` (`string`, **Required**): Single character representing the target letter (e.g. `А`, `Б`, `A`, `B`).
-* `lang` (`string`, *Optional*): Target language code (e.g. `uk` for Ukrainian, `en` for English). Defaults to `uk`.
+* `lang` (`string`, *Optional*): Optional language override (`uk` or `en`). Defaults to auto-detection from the letter's alphabet.
 
 #### Example Request
 ```bash
-curl "https://api.vdovareize.me/alphadate/suggestions?letter=А&lang=uk"
+curl "https://api.vdovareize.me/alphadate/suggestions?letter=B"
 ```
 
 #### Response (`200 OK`)
 ```json
 {
   "success": true,
-  "letter": "А",
+  "letter": "B",
+  "lang": "en",
   "suggestions": [
     {
-      "title": "Астрономічна обсерваторія",
-      "description": "Романтичний вечір під зорями з телескопом та затишною атмосферою.",
-      "category": "romantic",
-      "estimatedCost": "budget"
+      "title": "Bakery",
+      "description": "Explore a cozy, artisanal bakery together, sampling fresh pastries and sourdough bread.",
+      "category": "food",
+      "estimatedCost": "moderate"
     },
     {
-      "title": "Аквапарк",
-      "description": "Веселий та енергійний день на водних атракціонах.",
+      "title": "Bowling",
+      "description": "Playful and lively bowling evening with friendly competition and pizza.",
       "category": "active",
       "estimatedCost": "moderate"
     }

@@ -26,25 +26,25 @@ export class AlphadateController {
   }
 
   @Get('suggestions')
-  async getSuggestions(@Query('letter') letter: string, @Query('lang') lang?: string) {
+  async getSuggestions(@Query('letter') letter: string) {
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Query parameter "letter" is required');
     }
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Query parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(letter, lang);
+    return this.alphadateService.getSuggestions(letter);
   }
 
   @Get('suggestions/:letter')
-  async getSuggestionsByParam(@Param('letter') letter: string, @Query('lang') lang?: string) {
+  async getSuggestionsByParam(@Param('letter') letter: string) {
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Parameter "letter" is required');
     }
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(letter, lang);
+    return this.alphadateService.getSuggestions(letter);
   }
 
   @Get(':key')

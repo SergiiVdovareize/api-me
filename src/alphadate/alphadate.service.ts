@@ -462,9 +462,11 @@ export class AlphadateService {
   }
 
   /**
-   * Generates date ideas for a given letter of the alphabet using AI rotator
+   * Generates date ideas for a given letter of the alphabet using AI rotator.
+   * Automatically recognizes the alphabet (English / Latin or Ukrainian / Cyrillic)
+   * and returns date ideas in the corresponding language.
    */
-  async getSuggestions(letter: string, lang = 'uk'): Promise<DateSuggestionsResponse> {
+  async getSuggestions(letter: string): Promise<DateSuggestionsResponse> {
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Query parameter "letter" is required');
     }
@@ -474,16 +476,25 @@ export class AlphadateService {
       throw new BadRequestException('Query parameter "letter" must be a single character');
     }
 
+    const isLatin = /^[a-zA-Z]$/.test(trimmed);
+    const isCyrillic = /^[\u0400-\u04FF]$/.test(trimmed);
+
+    if (!isLatin && !isCyrillic) {
+      throw new BadRequestException(
+        'Query parameter "letter" must be a valid English or Ukrainian alphabet letter'
+      );
+    }
+
+    const detectedLang: 'en' | 'uk' = isLatin ? 'en' : 'uk';
     const normalizedLetter = trimmed.toUpperCase();
-    const normalizedLang = (lang || 'uk').trim().toLowerCase();
-    const cacheKey = `alphadate:suggestions:${normalizedLetter}:${normalizedLang}`;
+    const cacheKey = `alphadate:suggestions:${normalizedLetter}:${detectedLang}`;
 
     if (this.redisReader) {
       try {
         const cached = await this.redisReader.read(cacheKey);
         if (cached && Array.isArray(cached.suggestions) && cached.suggestions.length > 0) {
           this.logger.log(
-            `Serving date suggestions for letter "${normalizedLetter}" from Upstash cache`
+            `Serving date suggestions for letter "${normalizedLetter}" (${detectedLang}) from Upstash cache`
           );
           return cached;
         }
@@ -498,7 +509,10 @@ export class AlphadateService {
 
     let data: { letter?: string; suggestions?: DateSuggestion[] };
     try {
-      const { systemPrompt, userPrompt } = buildDateSuggestionsPrompt(normalizedLetter, lang);
+      const { systemPrompt, userPrompt } = buildDateSuggestionsPrompt(
+        normalizedLetter,
+        detectedLang
+      );
       data = await this.llmService.callAndParseJSON<{
         letter?: string;
         suggestions?: DateSuggestion[];
@@ -553,6 +567,7 @@ export class AlphadateService {
     const response: DateSuggestionsResponse = {
       success: true,
       letter: normalizedLetter,
+      lang: detectedLang,
       suggestions: sanitized,
     };
 
