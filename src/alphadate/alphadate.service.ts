@@ -493,7 +493,7 @@ export class AlphadateService {
     }
 
     if (!this.llmService) {
-      throw new ServiceUnavailableException('Сервіс генерації ідей наразі недоступний');
+      throw new ServiceUnavailableException('AI date suggestion service is currently unavailable');
     }
 
     let data: { letter?: string; suggestions?: DateSuggestion[] };
@@ -520,19 +520,17 @@ export class AlphadateService {
 
       if (isRateLimit) {
         throw new HttpException(
-          'Перевищено ліміт запитів до сервісу штучного інтелекту. Будь ласка, зачекайте кілька хвилин та спробуйте знову.',
+          'AI service rate limit exceeded. Please wait a few moments and try again.',
           HttpStatus.TOO_MANY_REQUESTS
         );
       }
 
       if (errMsg.includes('timed out') || errMsg.includes('timeout')) {
-        throw new ServiceUnavailableException(
-          'Час очікування відповіді від сервісу AI вичерпано. Будь ласка, спробуйте ще раз.'
-        );
+        throw new ServiceUnavailableException('AI service request timed out. Please try again.');
       }
 
       throw new ServiceUnavailableException(
-        'Не вдалося отримати відповідь від AI через вичерпання лімітів або тимчасову недоступність сервісу. Будь ласка, спробуйте пізніше.'
+        'Failed to get a response from AI service due to rate limits or temporary unavailability. Please try again later.'
       );
     }
 
@@ -548,7 +546,7 @@ export class AlphadateService {
 
     if (sanitized.length === 0) {
       throw new ServiceUnavailableException(
-        `Штучний інтелект не зміг згенерувати валідні ідеї на літеру "${normalizedLetter}". Будь ласка, спробуйте ще раз.`
+        `AI could not generate valid date ideas for letter "${normalizedLetter}". Please try again.`
       );
     }
 

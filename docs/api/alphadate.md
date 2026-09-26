@@ -252,9 +252,11 @@ Permanently deletes a board, its partners, and associated history.
 
 | Status Code | Reason | Example Response |
 | :--- | :--- | :--- |
-| `400 Bad Request` | Malformed JSON, invalid letter status, multi-character `currentLetter` | `{"statusCode": 400, "message": "currentLetter must be a single-character string or null"}` |
+| `400 Bad Request` | Malformed JSON, invalid letter status, multi-character `currentLetter` | `{"statusCode": 400, "message": "Query parameter \"letter\" is required"}` |
 | `404 Not Found` | Board key does not exist | `{"statusCode": 404, "message": "Board with key abcde not found"}` |
 | `409 Conflict` | Unique key generation collision | `{"statusCode": 409, "message": "Could not generate a unique key after multiple attempts"}` |
+| `429 Too Many Requests` | AI service rate limits reached | `{"statusCode": 429, "message": "AI service rate limit exceeded. Please wait a few moments and try again."}` |
+| `503 Service Unavailable` | AI service temporary timeout or unavailability | `{"statusCode": 503, "message": "Failed to get a response from AI service due to rate limits or temporary unavailability. Please try again later."}` |
 
 ---
 

@@ -433,7 +433,7 @@ describe('AlphadateService', () => {
       });
 
       await expect(service.getSuggestions('Б')).rejects.toThrow(
-        'Штучний інтелект не зміг згенерувати валідні ідеї'
+        'AI could not generate valid date ideas'
       );
     });
 
@@ -444,7 +444,7 @@ describe('AlphadateService', () => {
 
       await expect(service.getSuggestions('В')).rejects.toMatchObject({
         status: 429,
-        message: expect.stringContaining('Перевищено ліміт запитів до сервісу штучного інтелекту'),
+        message: expect.stringContaining('AI service rate limit exceeded'),
       });
     });
 
@@ -453,16 +453,14 @@ describe('AlphadateService', () => {
         new Error('Request timed out after 30000ms')
       );
 
-      await expect(service.getSuggestions('Г')).rejects.toThrow(
-        'Час очікування відповіді від сервісу AI вичерпано'
-      );
+      await expect(service.getSuggestions('Г')).rejects.toThrow('AI service request timed out');
     });
 
     it('should throw ServiceUnavailableException if AI fails due to general error', async () => {
       mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Network connection failed'));
 
       await expect(service.getSuggestions('Д')).rejects.toThrow(
-        'Не вдалося отримати відповідь від AI через вичерпання лімітів або тимчасову недоступність сервісу'
+        'Failed to get a response from AI service due to rate limits or temporary unavailability'
       );
     });
   });
