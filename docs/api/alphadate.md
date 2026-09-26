@@ -53,6 +53,9 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 
 Generates creative romantic date ideas starting with a required single-character letter of the alphabet using the AI LLM rotator. Also accessible via `GET /alphadate/suggestions/:letter`.
 
+> [!NOTE]
+> **Caching**: Results are cached in Upstash Redis for **1 hour** (`TTL = 3600s`) per letter and language (`alphadate:suggestions:{LETTER}:{LANG}`). Repeat calls within the hour are served instantly (sub-200ms) without consuming AI LLM quota.
+
 #### Query Parameters
 * `letter` (`string`, **Required**): Single character representing the target letter (e.g. `А`, `Б`, `A`, `B`).
 * `lang` (`string`, *Optional*): Target language code (e.g. `uk` for Ukrainian, `en` for English). Defaults to `uk`.
@@ -196,15 +199,24 @@ Updates letters, active selected letter, notes, partners, or security settings.
 
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `letters` | `LetterState[]` | Yes | Array of letter objects containing `letter`, `status`, and optional `note`. |
+| `letters` | `LetterState[]` | Yes | Array of letter objects containing `letter`, `status`, optional `note`, and optional `selectedAt` / `completedAt` overrides. |
 | `currentLetter` | `string \| null` | No | Active single-character letter. If changed to a letter, `currentLetterSelectedAt` is set to `now()`. If `null`, selection timestamp resets. |
 | `metadata.partners` | `string[]` | No | Updated array of partner names. |
 | `metadata.pinHash` | `string \| null` | No | Updated PIN hash or `null` to clear. |
 
-#### Automatic Business Rules
+#### Automatic Business Rules & Time Tracking
 1. **Turn Rotation**: When any letter transitions from non-used to `used`, the turn automatically advances to the next partner in sequence (`(current + 1) % length`).
-2. **Full Reset**: If all letters are reset to `available`, a starting partner is randomly chosen.
-3. **Countdown Tracking**: Whenever `currentLetter` changes to a new character, `currentLetterSelectedAt` is updated to current timestamp.
+2. **Time Tracking & History**:
+   - When a letter is set as `currentLetter`, `currentLetterSelectedAt` is recorded.
+   - When that letter transitions to `used`, a history entry is saved with:
+     - `selectedAt`: Start timestamp (when the letter was chosen).
+     - `completedAt`: End timestamp (when the date was finished).
+     - `partnerId` / `partnerName` / `playerId`: The partner responsible for this date.
+   - **Frontend UI calculations**:
+     - **Letter Duration**: `new Date(completedAt).getTime() - new Date(selectedAt).getTime()`.
+     - **Active Countdown / Timer**: `Date.now() - new Date(currentLetterSelectedAt).getTime()`.
+     - **Partner Stats**: Group `history` by `partnerId` to calculate total time spent by each partner, average completion time, and date count.
+3. **Full Reset**: If all letters are reset to `available`, a starting partner is randomly chosen and history is cleared.
 4. **Partner Synchronization**: Adding, editing, or deleting partner names preserves turn continuity.
 
 #### Response (`200 OK`)

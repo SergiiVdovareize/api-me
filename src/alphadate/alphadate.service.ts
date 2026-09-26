@@ -18,6 +18,9 @@ import { GenderizeService } from './genderize.service';
 import { LlmService } from '../llm/llm.service';
 import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-suggestion.interface';
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
+import { RedisReader } from '../common/helpers/redisReader';
+
+const SUGGESTIONS_CACHE_TTL = 3600; // 1 hour in seconds
 
 @Injectable()
 export class AlphadateService {
@@ -28,7 +31,8 @@ export class AlphadateService {
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
     private readonly genderizeService: GenderizeService,
-    @Optional() private readonly llmService?: LlmService
+    @Optional() private readonly llmService?: LlmService,
+    @Optional() private readonly redisReader?: RedisReader
   ) {}
 
   private generateRandomKey(length: number): string {
@@ -207,8 +211,18 @@ export class AlphadateService {
       }
     }
 
-    const newlyUsedLetters: { letter: string; note?: string | null }[] = [];
-    const updatedNoteLetters: { letter: string; note: string | null }[] = [];
+    const newlyUsedLetters: {
+      letter: string;
+      note?: string | null;
+      selectedAt?: string | Date | null;
+      completedAt?: string | Date | null;
+    }[] = [];
+    const updatedNoteLetters: {
+      letter: string;
+      note: string | null;
+      selectedAt?: string | Date | null;
+      completedAt?: string | Date | null;
+    }[] = [];
     const noLongerUsedLetters: string[] = [];
 
     for (const item of dto.letters) {
@@ -219,12 +233,20 @@ export class AlphadateService {
         newlyUsedLetters.push({
           letter: item.letter,
           note: item.note,
+          selectedAt: item.selectedAt,
+          completedAt: item.completedAt,
         });
       } else if (item.status === 'used' && oldStatus === 'used') {
-        if (item.note !== undefined && item.note !== oldNote) {
+        if (
+          (item.note !== undefined && item.note !== oldNote) ||
+          item.selectedAt !== undefined ||
+          item.completedAt !== undefined
+        ) {
           updatedNoteLetters.push({
             letter: item.letter,
             note: item.note ?? null,
+            selectedAt: item.selectedAt,
+            completedAt: item.completedAt,
           });
         }
       } else if (oldStatus === 'used' && item.status !== 'used') {
@@ -337,6 +359,13 @@ export class AlphadateService {
         });
       } else {
         for (const item of newlyUsedLetters) {
+          const letterSelectedAt = item.selectedAt
+            ? new Date(item.selectedAt)
+            : item.letter === board.currentLetter
+              ? board.currentLetterSelectedAt || new Date()
+              : new Date();
+          const letterCompletedAt = item.completedAt ? new Date(item.completedAt) : new Date();
+
           await tx.alphadateHistory.upsert({
             where: {
               boardId_letter: {
@@ -350,28 +379,36 @@ export class AlphadateService {
               partnerId: board.currentPartnerId,
               status: 'used',
               note: item.note || null,
-              selectedAt: board.currentLetterSelectedAt,
-              completedAt: new Date(),
+              selectedAt: letterSelectedAt,
+              completedAt: letterCompletedAt,
             },
             update: {
               partnerId: board.currentPartnerId,
               status: 'used',
               note: item.note || null,
-              selectedAt: board.currentLetterSelectedAt,
-              completedAt: new Date(),
+              selectedAt: letterSelectedAt,
+              completedAt: letterCompletedAt,
             },
           });
         }
 
         for (const item of updatedNoteLetters) {
+          const updateData: any = {
+            note: item.note,
+          };
+          if (item.selectedAt !== undefined) {
+            updateData.selectedAt = item.selectedAt ? new Date(item.selectedAt) : null;
+          }
+          if (item.completedAt !== undefined) {
+            updateData.completedAt = item.completedAt ? new Date(item.completedAt) : null;
+          }
+
           await tx.alphadateHistory.updateMany({
             where: {
               boardId: key,
               letter: item.letter,
             },
-            data: {
-              note: item.note,
-            },
+            data: updateData,
           });
         }
 
@@ -438,6 +475,22 @@ export class AlphadateService {
     }
 
     const normalizedLetter = trimmed.toUpperCase();
+    const normalizedLang = (lang || 'uk').trim().toLowerCase();
+    const cacheKey = `alphadate:suggestions:${normalizedLetter}:${normalizedLang}`;
+
+    if (this.redisReader) {
+      try {
+        const cached = await this.redisReader.read(cacheKey);
+        if (cached && Array.isArray(cached.suggestions) && cached.suggestions.length > 0) {
+          this.logger.log(
+            `Serving date suggestions for letter "${normalizedLetter}" from Upstash cache`
+          );
+          return cached;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to read suggestions cache for "${cacheKey}": ${err?.message}`);
+      }
+    }
 
     if (!this.llmService) {
       throw new ServiceUnavailableException('Сервіс генерації ідей наразі недоступний');
@@ -499,10 +552,23 @@ export class AlphadateService {
       );
     }
 
-    return {
+    const response: DateSuggestionsResponse = {
       success: true,
       letter: normalizedLetter,
       suggestions: sanitized,
     };
+
+    if (this.redisReader) {
+      try {
+        await this.redisReader.write(cacheKey, response, SUGGESTIONS_CACHE_TTL);
+        this.logger.log(
+          `Cached date suggestions for letter "${normalizedLetter}" with TTL ${SUGGESTIONS_CACHE_TTL}s`
+        );
+      } catch (err: any) {
+        this.logger.warn(`Failed to cache date suggestions for "${cacheKey}": ${err?.message}`);
+      }
+    }
+
+    return response;
   }
 }

@@ -6,6 +6,7 @@ import { PrismaService } from '../src/models/prisma/prisma.service';
 import { EmailService } from '../src/email/email.service';
 import { GenderizeService } from '../src/alphadate/genderize.service';
 import { LlmModule } from '../src/llm/llm.module';
+import { RedisReader } from '../src/common/helpers/redisReader';
 
 async function bootstrap() {
   const letter = (process.argv[2] || 'А').trim();
@@ -17,6 +18,7 @@ async function bootstrap() {
     imports: [LlmModule],
     providers: [
       AlphadateService,
+      RedisReader,
       { provide: PrismaService, useValue: {} },
       { provide: EmailService, useValue: {} },
       { provide: ConfigService, useValue: new ConfigService() },

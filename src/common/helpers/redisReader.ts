@@ -68,10 +68,12 @@ export class RedisReader {
    * Writes a value to Redis by key.
    * @param key The key to write.
    * @param value The value to write.
+   * @param ttl Optional TTL in seconds. Defaults to REDIS_CONSTANTS.DEFAULT_TTL.
    * @returns The result of the set operation.
    */
-  async write(key: string, value: any): Promise<any> {
-    return await this.redis.set(key, value, { ex: REDIS_CONSTANTS.DEFAULT_TTL });
+  async write(key: string, value: any, ttl?: number): Promise<any> {
+    if (!this.redis) return null;
+    return await this.redis.set(key, value, { ex: ttl ?? REDIS_CONSTANTS.DEFAULT_TTL });
   }
 
   /**
