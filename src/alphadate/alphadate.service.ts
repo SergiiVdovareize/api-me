@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   ServiceUnavailableException,
   HttpException,
   HttpStatus,
@@ -462,11 +463,16 @@ export class AlphadateService {
   }
 
   /**
-   * Generates date ideas for a given letter of the alphabet using AI rotator.
+   * Generates date ideas for a given letter of the alphabet for a specific board using AI rotator.
+   * Validates board existence (returns 403 Forbidden if not found).
    * Automatically recognizes the alphabet (English / Latin or Ukrainian / Cyrillic)
-   * and returns date ideas in the corresponding language.
+   * and returns date ideas in the corresponding language with board-level caching.
    */
-  async getSuggestions(letter: string): Promise<DateSuggestionsResponse> {
+  async getSuggestions(key: string, letter: string): Promise<DateSuggestionsResponse> {
+    if (!key || typeof key !== 'string' || !key.trim()) {
+      throw new BadRequestException('Board key is required');
+    }
+
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Query parameter "letter" is required');
     }
@@ -485,16 +491,25 @@ export class AlphadateService {
       );
     }
 
+    const trimmedKey = key.trim();
+    const board = await this.prisma.alphadateBoard.findUnique({
+      where: { key: trimmedKey },
+    });
+
+    if (!board) {
+      throw new ForbiddenException('Access denied: board not found or invalid');
+    }
+
     const detectedLang: 'en' | 'uk' = isLatin ? 'en' : 'uk';
     const normalizedLetter = trimmed.toUpperCase();
-    const cacheKey = `alphadate:suggestions:${normalizedLetter}:${detectedLang}`;
+    const cacheKey = `alphadate:suggestions:${trimmedKey}:${normalizedLetter}:${detectedLang}`;
 
     if (this.redisReader) {
       try {
         const cached = await this.redisReader.read(cacheKey);
         if (cached && Array.isArray(cached.suggestions) && cached.suggestions.length > 0) {
           this.logger.log(
-            `Serving date suggestions for letter "${normalizedLetter}" (${detectedLang}) from Upstash cache`
+            `Serving date suggestions for board "${trimmedKey}" letter "${normalizedLetter}" (${detectedLang}) from Upstash cache`
           );
           return cached;
         }
@@ -575,7 +590,7 @@ export class AlphadateService {
       try {
         await this.redisReader.write(cacheKey, response, SUGGESTIONS_CACHE_TTL);
         this.logger.log(
-          `Cached date suggestions for letter "${normalizedLetter}" with TTL ${SUGGESTIONS_CACHE_TTL}s`
+          `Cached date suggestions for board "${trimmedKey}" letter "${normalizedLetter}" with TTL ${SUGGESTIONS_CACHE_TTL}s`
         );
       } catch (err: any) {
         this.logger.warn(`Failed to cache date suggestions for "${cacheKey}": ${err?.message}`);

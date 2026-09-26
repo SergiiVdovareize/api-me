@@ -25,26 +25,32 @@ export class AlphadateController {
     };
   }
 
-  @Get('suggestions')
-  async getSuggestions(@Query('letter') letter: string) {
+  @Get(':key/suggestions')
+  async getSuggestions(@Param('key') key: string, @Query('letter') letter: string) {
+    if (!key || typeof key !== 'string' || !key.trim()) {
+      throw new BadRequestException('Board key is required');
+    }
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Query parameter "letter" is required');
     }
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Query parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(letter);
+    return this.alphadateService.getSuggestions(key, letter);
   }
 
-  @Get('suggestions/:letter')
-  async getSuggestionsByParam(@Param('letter') letter: string) {
+  @Get(':key/suggestions/:letter')
+  async getSuggestionsByParam(@Param('key') key: string, @Param('letter') letter: string) {
+    if (!key || typeof key !== 'string' || !key.trim()) {
+      throw new BadRequestException('Board key is required');
+    }
     if (!letter || typeof letter !== 'string' || !letter.trim()) {
       throw new BadRequestException('Parameter "letter" is required');
     }
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(letter);
+    return this.alphadateService.getSuggestions(key, letter);
   }
 
   @Get(':key')

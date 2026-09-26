@@ -13,7 +13,7 @@ API for creating, managing, and synchronizing shared romantic alphabet date boar
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/alphadate` | Create a new date board and invite partners via email |
-| `GET` | `/alphadate/suggestions` | Generate AI date ideas for a specific letter (`?letter=А`) |
+| `GET` | `/alphadate/:key/suggestions` | Generate AI date ideas for a specific board and letter (`?letter=А`) |
 | `GET` | `/alphadate/:key` | Retrieve the current board state, letters, and metadata |
 | `PUT` | `/alphadate/:key` | Update board state (letters, active letter, turn, partners, PIN) |
 | `DELETE` | `/alphadate/:key` | Delete a board by its unique key |
@@ -49,24 +49,30 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 
 ---
 
-### 2. Get Date Suggestions (`GET /alphadate/suggestions`)
+### 2. Get Date Suggestions (`GET /alphadate/:key/suggestions`)
 
-Generates creative romantic date ideas starting with a required single-character letter of the alphabet using the AI LLM rotator. Also accessible via `GET /alphadate/suggestions/:letter`.
+Generates creative romantic date ideas starting with a required single-character letter of the alphabet for a specific board using the AI LLM rotator. Also accessible via `GET /alphadate/:key/suggestions/:letter`.
 
 > [!NOTE]
+> **Board Validation**: The endpoint verifies the existence of the board `key`. If the board does not exist or is invalid, it returns `403 Forbidden` (`Access denied: board not found or invalid`).
+>
 > **Automatic Language Detection**: The endpoint automatically detects which alphabet the letter belongs to:
 > - **Latin letters** (`A-Z`): Returns suggestions in **English** (`lang: "en"`).
 > - **Cyrillic letters** (`А-Я`, `І`, `Ї`, `Є`, `Ґ`): Returns suggestions in **Ukrainian** (`lang: "uk"`).
 > 
-> **Caching**: Results are cached in Upstash Redis for **1 hour** (`TTL = 3600s`) per letter and detected language (`alphadate:suggestions:{LETTER}:{LANG}`). Repeat calls within the hour are served instantly (sub-200ms) without consuming AI LLM quota.
+> **Board-level Caching**: Results are cached in Upstash Redis for **1 hour** (`TTL = 3600s`) per board, letter, and detected language (`alphadate:suggestions:{BOARD_KEY}:{LETTER}:{LANG}`). Repeat calls within the hour for that board are served instantly (sub-200ms) without consuming AI LLM quota.
+
+#### URL Parameters
+* `key` (`string`, **Required**): Unique 5-character board key (e.g. `x9a2k`).
 
 #### Query Parameters
 * `letter` (`string`, **Required**): Single character representing the target letter (e.g. `А`, `Б`, `A`, `B`).
-* `lang` (`string`, *Optional*): Optional language override (`uk` or `en`). Defaults to auto-detection from the letter's alphabet.
 
 #### Example Request
 ```bash
-curl "https://api.vdovareize.me/alphadate/suggestions?letter=B"
+curl "https://api.vdovareize.me/alphadate/x9a2k/suggestions?letter=B"
+# or via path param:
+curl "https://api.vdovareize.me/alphadate/x9a2k/suggestions/B"
 ```
 
 #### Response (`200 OK`)
@@ -257,7 +263,8 @@ Permanently deletes a board, its partners, and associated history.
 
 | Status Code | Reason | Example Response |
 | :--- | :--- | :--- |
-| `400 Bad Request` | Malformed JSON, invalid letter status, multi-character `currentLetter` | `{"statusCode": 400, "message": "Query parameter \"letter\" is required"}` |
+| `400 Bad Request` | Malformed JSON, invalid letter status, multi-character `letter` | `{"statusCode": 400, "message": "Query parameter \"letter\" is required"}` |
+| `403 Forbidden` | Board not found or access denied for suggestions | `{"statusCode": 403, "message": "Access denied: board not found or invalid"}` |
 | `404 Not Found` | Board key does not exist | `{"statusCode": 404, "message": "Board with key abcde not found"}` |
 | `409 Conflict` | Unique key generation collision | `{"statusCode": 409, "message": "Could not generate a unique key after multiple attempts"}` |
 | `429 Too Many Requests` | AI service rate limits reached | `{"statusCode": 429, "message": "AI service rate limit exceeded. Please wait a few moments and try again."}` |

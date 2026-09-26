@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
@@ -391,26 +396,48 @@ describe('AlphadateService', () => {
   });
 
   describe('getSuggestions', () => {
+    it('should throw BadRequestException if key is missing or empty', async () => {
+      await expect(service.getSuggestions('', 'А')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('   ', 'А')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions(undefined as any, 'А')).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
     it('should throw BadRequestException if letter is missing or empty', async () => {
-      await expect(service.getSuggestions('')).rejects.toThrow(BadRequestException);
-      await expect(service.getSuggestions('   ')).rejects.toThrow(BadRequestException);
-      await expect(service.getSuggestions(undefined as any)).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('valid-key', '')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('valid-key', '   ')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('valid-key', undefined as any)).rejects.toThrow(
+        BadRequestException
+      );
     });
 
     it('should throw BadRequestException if letter length is not 1', async () => {
-      await expect(service.getSuggestions('AB')).rejects.toThrow(BadRequestException);
+      await expect(service.getSuggestions('valid-key', 'AB')).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if letter is not an English or Ukrainian alphabet letter', async () => {
-      await expect(service.getSuggestions('1')).rejects.toThrow(
+      await expect(service.getSuggestions('valid-key', '1')).rejects.toThrow(
         'Query parameter "letter" must be a valid English or Ukrainian alphabet letter'
       );
-      await expect(service.getSuggestions('@')).rejects.toThrow(
+      await expect(service.getSuggestions('valid-key', '@')).rejects.toThrow(
         'Query parameter "letter" must be a valid English or Ukrainian alphabet letter'
+      );
+    });
+
+    it('should throw ForbiddenException if board does not exist', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(null);
+
+      await expect(service.getSuggestions('non-existent-key', 'А')).rejects.toThrow(
+        ForbiddenException
+      );
+      await expect(service.getSuggestions('non-existent-key', 'А')).rejects.toThrow(
+        'Access denied: board not found or invalid'
       );
     });
 
     it('should auto-detect Cyrillic letter and return Ukrainian suggestions', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockResolvedValue({
         letter: 'А',
         suggestions: [
@@ -423,7 +450,7 @@ describe('AlphadateService', () => {
         ],
       });
 
-      const result = await service.getSuggestions('а');
+      const result = await service.getSuggestions('valid-key', 'а');
 
       expect(result.success).toBe(true);
       expect(result.letter).toBe('А');
@@ -437,6 +464,7 @@ describe('AlphadateService', () => {
     });
 
     it('should auto-detect Latin letter and return English suggestions', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockResolvedValue({
         letter: 'B',
         suggestions: [
@@ -449,7 +477,7 @@ describe('AlphadateService', () => {
         ],
       });
 
-      const result = await service.getSuggestions('b');
+      const result = await service.getSuggestions('valid-key', 'b');
 
       expect(result.success).toBe(true);
       expect(result.letter).toBe('B');
@@ -463,39 +491,45 @@ describe('AlphadateService', () => {
     });
 
     it('should throw ServiceUnavailableException if AI returns empty suggestions', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockResolvedValue({
         letter: 'Б',
         suggestions: [],
       });
 
-      await expect(service.getSuggestions('Б')).rejects.toThrow(
+      await expect(service.getSuggestions('valid-key', 'Б')).rejects.toThrow(
         'AI could not generate valid date ideas'
       );
     });
 
     it('should throw HttpException with status 429 if AI fails due to rate limit', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockRejectedValue(
         new Error('Mistral 429 rate limit exceeded')
       );
 
-      await expect(service.getSuggestions('В')).rejects.toMatchObject({
+      await expect(service.getSuggestions('valid-key', 'В')).rejects.toMatchObject({
         status: 429,
         message: expect.stringContaining('AI service rate limit exceeded'),
       });
     });
 
     it('should throw ServiceUnavailableException if AI fails due to timeout', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockRejectedValue(
         new Error('Request timed out after 30000ms')
       );
 
-      await expect(service.getSuggestions('Г')).rejects.toThrow('AI service request timed out');
+      await expect(service.getSuggestions('valid-key', 'Г')).rejects.toThrow(
+        'AI service request timed out'
+      );
     });
 
     it('should throw ServiceUnavailableException if AI fails due to general error', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockRejectedValue(new Error('Network connection failed'));
 
-      await expect(service.getSuggestions('Д')).rejects.toThrow(
+      await expect(service.getSuggestions('valid-key', 'Д')).rejects.toThrow(
         'Failed to get a response from AI service due to rate limits or temporary unavailability'
       );
     });

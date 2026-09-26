@@ -10,16 +10,23 @@ import { RedisReader } from '../src/common/helpers/redisReader';
 
 async function bootstrap() {
   const letter = (process.argv[2] || 'А').trim();
-  const lang = process.argv[3] || 'uk';
+  const key = (process.argv[3] || 'test-board').trim();
 
-  console.log(`\n🔍 Запит ідей для літери: "${letter}" (мова: ${lang})...\n`);
+  console.log(`\n🔍 Запит ідей для дошки "${key}", літери: "${letter}"...\n`);
 
   const moduleRef = await Test.createTestingModule({
     imports: [LlmModule],
     providers: [
       AlphadateService,
       RedisReader,
-      { provide: PrismaService, useValue: {} },
+      {
+        provide: PrismaService,
+        useValue: {
+          alphadateBoard: {
+            findUnique: () => Promise.resolve({ key }),
+          },
+        },
+      },
       { provide: EmailService, useValue: {} },
       { provide: ConfigService, useValue: new ConfigService() },
       { provide: GenderizeService, useValue: {} },
@@ -29,7 +36,7 @@ async function bootstrap() {
   try {
     const service = moduleRef.get(AlphadateService);
     const startTime = Date.now();
-    const result = await service.getSuggestions(letter, lang);
+    const result = await service.getSuggestions(key, letter);
     const elapsed = Date.now() - startTime;
 
     console.log(`✅ Успішно отримано відповідь за ${elapsed}мс:\n`);

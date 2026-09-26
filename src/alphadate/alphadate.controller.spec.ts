@@ -196,19 +196,31 @@ describe('AlphadateController', () => {
   });
 
   describe('getSuggestions', () => {
-    it('should throw BadRequestException if letter query param is missing or empty', async () => {
-      await expect(controller.getSuggestions(undefined as any)).rejects.toThrow(
+    it('should throw BadRequestException if key is missing or empty', async () => {
+      await expect(controller.getSuggestions('', 'А')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions('   ', 'А')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions(undefined as any, 'А')).rejects.toThrow(
         BadRequestException
       );
-      await expect(controller.getSuggestions('')).rejects.toThrow(BadRequestException);
-      await expect(controller.getSuggestions('   ')).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if letter query param is missing or empty', async () => {
+      await expect(controller.getSuggestions('valid-key', undefined as any)).rejects.toThrow(
+        BadRequestException
+      );
+      await expect(controller.getSuggestions('valid-key', '')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions('valid-key', '   ')).rejects.toThrow(
+        BadRequestException
+      );
     });
 
     it('should throw BadRequestException if letter query param is longer than 1 character', async () => {
-      await expect(controller.getSuggestions('AB')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestions('valid-key', 'AB')).rejects.toThrow(
+        BadRequestException
+      );
     });
 
-    it('should call service.getSuggestions and return result when letter is valid', async () => {
+    it('should call service.getSuggestions and return result when key and letter are valid', async () => {
       const mockResult = {
         success: true,
         letter: 'А',
@@ -223,25 +235,33 @@ describe('AlphadateController', () => {
       };
       service.getSuggestions.mockResolvedValue(mockResult as any);
 
-      const result = await controller.getSuggestions('А');
+      const result = await controller.getSuggestions('valid-key', 'А');
       expect(result).toEqual(mockResult);
-      expect(service.getSuggestions).toHaveBeenCalledWith('А');
+      expect(service.getSuggestions).toHaveBeenCalledWith('valid-key', 'А');
     });
   });
 
   describe('getSuggestionsByParam', () => {
+    it('should throw BadRequestException if key is missing or empty', async () => {
+      await expect(controller.getSuggestionsByParam('', 'Б')).rejects.toThrow(BadRequestException);
+    });
+
     it('should throw BadRequestException if letter path param is invalid', async () => {
-      await expect(controller.getSuggestionsByParam('')).rejects.toThrow(BadRequestException);
-      await expect(controller.getSuggestionsByParam('LONG')).rejects.toThrow(BadRequestException);
+      await expect(controller.getSuggestionsByParam('valid-key', '')).rejects.toThrow(
+        BadRequestException
+      );
+      await expect(controller.getSuggestionsByParam('valid-key', 'LONG')).rejects.toThrow(
+        BadRequestException
+      );
     });
 
     it('should call service.getSuggestions with path param letter', async () => {
       const mockResult = { success: true, letter: 'Б', suggestions: [] };
       service.getSuggestions.mockResolvedValue(mockResult as any);
 
-      const result = await controller.getSuggestionsByParam('Б');
+      const result = await controller.getSuggestionsByParam('valid-key', 'Б');
       expect(result).toEqual(mockResult);
-      expect(service.getSuggestions).toHaveBeenCalledWith('Б');
+      expect(service.getSuggestions).toHaveBeenCalledWith('valid-key', 'Б');
     });
   });
 });
