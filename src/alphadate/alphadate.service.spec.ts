@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { PrismaService } from '../models/prisma/prisma.service';
@@ -143,6 +144,32 @@ describe('AlphadateService', () => {
       ).rejects.toThrow(ConflictException);
       expect(mockPrismaService.alphadateBoard.findUnique).toHaveBeenCalledTimes(10);
     });
+
+    it('should hash and store pin when pin is provided in dto', async () => {
+      const dto = {
+        email: 'test@example.com',
+        partners: ['Partner A'],
+        pin: '1234',
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(null);
+      mockPrismaService.alphadateBoard.create.mockResolvedValue({ key: 'abcde', email: dto.email });
+      mockPrismaService.alphadatePartner.create.mockResolvedValue({ id: 1, name: 'Partner A', turnOrder: 1 });
+      mockPrismaService.alphadateBoard.update.mockResolvedValue({
+        key: 'abcde',
+        currentPartnerId: 1,
+      });
+
+      await service.create(dto);
+
+      expect(mockPrismaService.alphadateBoard.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          key: expect.any(String),
+          email: dto.email,
+          pin: expect.stringContaining(':'),
+        }),
+      });
+    });
   });
 
   describe('getBoardState', () => {
@@ -152,7 +179,33 @@ describe('AlphadateService', () => {
       await expect(service.getBoardState('invalid-key')).rejects.toThrow(NotFoundException);
     });
 
-    it('should return board state successfully', async () => {
+    it('should throw UnauthorizedException if board has PIN and none is provided', async () => {
+      const dbBoard = {
+        key: 'protected-key',
+        pin: 'pin-hash',
+        partners: [],
+        history: [],
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      await expect(service.getBoardState('protected-key')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if board has PIN and invalid PIN is provided', async () => {
+      const dbBoard = {
+        key: 'protected-key',
+        pin: 'pin-hash',
+        partners: [],
+        history: [],
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      await expect(service.getBoardState('protected-key', 'wrong-pin')).rejects.toThrow(
+        UnauthorizedException
+      );
+    });
+
+    it('should return board state successfully when PIN is valid', async () => {
       const selectedAt = new Date('2026-09-20T10:00:00.000Z');
       const dbBoard = {
         key: 'valid-key',
@@ -180,7 +233,7 @@ describe('AlphadateService', () => {
 
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
 
-      const result = await service.getBoardState('valid-key');
+      const result = await service.getBoardState('valid-key', 'pin-hash');
       expect(result).toEqual({
         success: true,
         letters: dbBoard.letters,
@@ -205,9 +258,25 @@ describe('AlphadateService', () => {
           currentPartnerPlayerId: 2,
           currentLetter: 'Б',
           currentLetterSelectedAt: selectedAt,
-          pinHash: 'pin-hash',
+          hasPin: true,
         },
       });
+    });
+
+    it('should return board state without PIN if board is not protected', async () => {
+      const dbBoard = {
+        key: 'unprotected-key',
+        letters: [],
+        pin: null,
+        partners: [],
+        history: [],
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      const result = await service.getBoardState('unprotected-key');
+      expect(result.success).toBe(true);
+      expect(result.metadata.hasPin).toBe(false);
     });
   });
 
@@ -327,7 +396,8 @@ describe('AlphadateService', () => {
       });
     });
 
-    it('should update pin hash when metadata.pinHash is updated', async () => {
+
+    it('should hash and update pin when metadata.pin is updated', async () => {
       const dbBoard = {
         key: 'key',
         letters: [],
@@ -340,7 +410,7 @@ describe('AlphadateService', () => {
       const dto = {
         letters: [],
         metadata: {
-          pinHash: 'new-pin-hash',
+          pin: '1234',
         },
       };
 
@@ -348,8 +418,38 @@ describe('AlphadateService', () => {
       expect(result.success).toBe(true);
       expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
         where: { key: 'key' },
-        data: expect.objectContaining({ pin: 'new-pin-hash' }),
+        data: expect.objectContaining({ pin: expect.stringContaining(':') }),
       });
+    });
+
+    it('should throw UnauthorizedException when updating a protected board without PIN', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [],
+        pin: 'pin-hash',
+        currentPartnerId: 1,
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      await expect(service.updateBoardState('key', { letters: [] })).rejects.toThrow(
+        UnauthorizedException
+      );
+    });
+
+    it('should allow updating protected board when valid PIN is provided', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [],
+        pin: 'pin-hash',
+        currentPartnerId: 1,
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+      mockPrismaService.alphadatePartner.findMany.mockResolvedValue([]);
+
+      const result = await service.updateBoardState('key', { letters: [] }, 'pin-hash');
+      expect(result.success).toBe(true);
     });
 
     it('should update currentLetter when currentLetter is provided', async () => {

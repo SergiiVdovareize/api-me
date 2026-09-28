@@ -53,6 +53,13 @@ describe('AlphadateController', () => {
       expect(result).toEqual({ success: true, letters: [] });
       expect(service.getBoardState).toHaveBeenCalledWith('abcde');
     });
+
+    it('should pass pin header to service.getBoardState when provided', async () => {
+      service.getBoardState.mockResolvedValue({ success: true, letters: [] } as any);
+
+      await controller.getBoardState('abcde', '1234');
+      expect(service.getBoardState).toHaveBeenCalledWith('abcde', '1234');
+    });
   });
 
   describe('updateBoardState', () => {
@@ -138,7 +145,7 @@ describe('AlphadateController', () => {
         letters: [{ letter: 'A', status: 'used' }],
         metadata: {
           partners: ['Alice', 'Bob'],
-          pinHash: 'hash',
+          pin: '1234',
         },
       };
 
@@ -150,9 +157,45 @@ describe('AlphadateController', () => {
         letters: [{ letter: 'A', status: 'used' }],
         metadata: {
           partners: ['Alice', 'Bob'],
-          pinHash: 'hash',
+          pin: '1234',
         },
       });
+    });
+
+    it('should validate metadata.pin format and throw BadRequestException if invalid', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+        metadata: {
+          pin: 'not-4-digits',
+        },
+      };
+
+      await expect(controller.updateBoardState('key', payload)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should pass pin header to service.updateBoardState when provided', async () => {
+      const payload = {
+        letters: [{ letter: 'A', status: 'used' }],
+        metadata: {
+          pin: '1234',
+        },
+      };
+
+      service.updateBoardState.mockResolvedValue({ currentPartnerId: 2 } as any);
+
+      await controller.updateBoardState('key', payload, '1234');
+      expect(service.updateBoardState).toHaveBeenCalledWith(
+        'key',
+        {
+          letters: [{ letter: 'A', status: 'used' }],
+          metadata: {
+            pin: '1234',
+          },
+        },
+        '1234'
+      );
     });
 
     it('should include player IDs and partners in updateBoardState response when provided', async () => {
@@ -193,6 +236,13 @@ describe('AlphadateController', () => {
       expect(result).toEqual({ success: true });
       expect(service.deleteBoard).toHaveBeenCalledWith('key');
     });
+
+    it('should pass pin header to service.deleteBoard when provided', async () => {
+      service.deleteBoard.mockResolvedValue({ success: true });
+
+      await controller.deleteBoard('key', '1234');
+      expect(service.deleteBoard).toHaveBeenCalledWith('key', '1234');
+    });
   });
 
   describe('getSuggestions', () => {
@@ -202,6 +252,14 @@ describe('AlphadateController', () => {
       await expect(controller.getSuggestions(undefined as any, 'А')).rejects.toThrow(
         BadRequestException
       );
+    });
+
+    it('should pass pin header to service.getSuggestions when provided', async () => {
+      const mockResult = { success: true, letter: 'А', suggestions: [] };
+      service.getSuggestions.mockResolvedValue(mockResult as any);
+
+      await controller.getSuggestions('valid-key', 'А', '1234');
+      expect(service.getSuggestions).toHaveBeenCalledWith('valid-key', 'А', '1234');
     });
 
     it('should throw BadRequestException if letter query param is missing or empty', async () => {

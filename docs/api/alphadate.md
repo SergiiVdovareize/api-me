@@ -30,7 +30,8 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 ```json
 {
   "partners": ["Олена", "Андрій"],
-  "email": "couple@example.com"
+  "email": "couple@example.com",
+  "pin": "1234"
 }
 ```
 
@@ -38,6 +39,7 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 | :--- | :--- | :--- | :--- |
 | `partners` | `string[]` | Yes | Array of partner names (at least 1 non-empty name). |
 | `email` | `string` | Yes | Valid email address for board recovery and welcome link. |
+| `pin` | `string` | No | Optional 4-digit PIN code (`0000`-`9999`) to protect the board from unauthorized access. |
 
 #### Response (`201 Created`)
 ```json
@@ -104,8 +106,24 @@ curl "https://api.vdovareize.me/alphadate/x9a2k/suggestions/B"
 
 Retrieves the current state of a board by its unique 5-character key.
 
+> [!IMPORTANT]
+> **PIN Code Protection**: If the board was created with a PIN code (or configured with one), clients must supply the PIN code via the `x-board-pin` header.
+> If a protected board is accessed without the correct PIN, the API returns `401 Unauthorized`:
+> ```json
+> {
+>   "statusCode": 401,
+>   "message": "Board is protected by PIN code",
+>   "isPinRequired": true
+> }
+> ```
+
 #### URL Parameters
 * `key` (`string`): Unique board identifier (e.g. `x9a2k`).
+
+#### Request Headers
+| Header | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `x-board-pin` | `string` | No | 4-digit PIN code (required if the board has PIN protection configured). |
 
 #### Response (`200 OK`)
 ```json
@@ -148,7 +166,7 @@ Retrieves the current state of a board by its unique 5-character key.
     "currentPartnerPlayerId": 1,
     "currentLetter": "А",
     "currentLetterSelectedAt": "2026-09-20T10:00:00.000Z",
-    "pinHash": null
+    "hasPin": false
   }
 }
 ```
@@ -178,13 +196,18 @@ Retrieves the current state of a board by its unique 5-character key.
 * `currentPartnerPlayerId`: Player ID of the currently active partner (`1, 2, 3...` or `null`).
 * `currentLetter`: Currently active single-character letter, or `null`.
 * `currentLetterSelectedAt`: ISO timestamp when `currentLetter` was selected (used for countdowns).
-* `pinHash`: Hashed PIN code if protection is configured, otherwise `null`.
+* `hasPin`: Boolean indicating whether the board is protected by a PIN code (`true` / `false`).
 
 ---
 
-### 3. Update Board State (`PUT /alphadate/:key`)
+### 4. Update Board State (`PUT /alphadate/:key`)
 
-Updates letters, active selected letter, notes, partners, or security settings.
+Updates letters, active selected letter, notes, partners, or security settings. Requires `x-board-pin` header if the board is PIN protected.
+
+#### Request Headers
+| Header | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `x-board-pin` | `string` | No | 4-digit PIN code (required if the board has PIN protection configured). |
 
 #### Request Body
 ```json
@@ -203,7 +226,7 @@ Updates letters, active selected letter, notes, partners, or security settings.
   "currentLetter": "Б",
   "metadata": {
     "partners": ["Олена", "Андрій"],
-    "pinHash": "optional-hashed-pin"
+    "pin": "1234"
   }
 }
 ```
@@ -213,7 +236,7 @@ Updates letters, active selected letter, notes, partners, or security settings.
 | `letters` | `LetterState[]` | Yes | Array of letter objects containing `letter`, `status`, optional `note`, and optional `selectedAt` / `completedAt` overrides. |
 | `currentLetter` | `string \| null` | No | Active single-character letter. If changed to a letter, `currentLetterSelectedAt` is set to `now()`. If `null`, selection timestamp resets. |
 | `metadata.partners` | `string[]` | No | Updated array of partner names. |
-| `metadata.pinHash` | `string \| null` | No | Updated PIN hash or `null` to clear. |
+| `metadata.pin` | `string \| null` | No | 4-digit PIN to set or update board protection, or `null` to remove PIN. |
 
 #### Automatic Business Rules & Time Tracking
 1. **Turn Rotation**: When any letter transitions from non-used to `used`, the turn automatically advances to the next partner in sequence (`(current + 1) % length`).

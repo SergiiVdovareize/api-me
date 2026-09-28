@@ -7,6 +7,7 @@ import {
   Delete,
   Param,
   Query,
+  Headers,
   BadRequestException,
 } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
@@ -26,7 +27,11 @@ export class AlphadateController {
   }
 
   @Get(':key/suggestions')
-  async getSuggestions(@Param('key') key: string, @Query('letter') letter: string) {
+  async getSuggestions(
+    @Param('key') key: string,
+    @Query('letter') letter: string,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
     if (!key || typeof key !== 'string' || !key.trim()) {
       throw new BadRequestException('Board key is required');
     }
@@ -36,11 +41,17 @@ export class AlphadateController {
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Query parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(key, letter);
+    return pinHeader
+      ? this.alphadateService.getSuggestions(key, letter, pinHeader)
+      : this.alphadateService.getSuggestions(key, letter);
   }
 
   @Get(':key/suggestions/:letter')
-  async getSuggestionsByParam(@Param('key') key: string, @Param('letter') letter: string) {
+  async getSuggestionsByParam(
+    @Param('key') key: string,
+    @Param('letter') letter: string,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
     if (!key || typeof key !== 'string' || !key.trim()) {
       throw new BadRequestException('Board key is required');
     }
@@ -50,16 +61,27 @@ export class AlphadateController {
     if (letter.trim().length !== 1) {
       throw new BadRequestException('Parameter "letter" must be a single character');
     }
-    return this.alphadateService.getSuggestions(key, letter);
+    return pinHeader
+      ? this.alphadateService.getSuggestions(key, letter, pinHeader)
+      : this.alphadateService.getSuggestions(key, letter);
   }
 
   @Get(':key')
-  async getBoardState(@Param('key') key: string) {
-    return this.alphadateService.getBoardState(key);
+  async getBoardState(
+    @Param('key') key: string,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
+    return pinHeader
+      ? this.alphadateService.getBoardState(key, pinHeader)
+      : this.alphadateService.getBoardState(key);
   }
 
   @Put(':key')
-  async updateBoardState(@Param('key') key: string, @Body() body: any) {
+  async updateBoardState(
+    @Param('key') key: string,
+    @Body() body: any,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('Request body must be a JSON object');
     }
@@ -94,14 +116,14 @@ export class AlphadateController {
     }
 
     let parsedPartners: string[] | undefined = undefined;
-    let parsedPinHash: string | null | undefined = undefined;
+    let parsedPin: string | null | undefined = undefined;
 
     if (metadata !== undefined && metadata !== null) {
       if (typeof metadata !== 'object' || Array.isArray(metadata)) {
         throw new BadRequestException('metadata must be a JSON object');
       }
 
-      const { partners, pinHash } = metadata;
+      const { partners, pin } = metadata;
 
       if (partners !== undefined) {
         if (!Array.isArray(partners) || partners.length === 0) {
@@ -127,11 +149,11 @@ export class AlphadateController {
         }
       }
 
-      if (pinHash !== undefined) {
-        if (pinHash !== null && typeof pinHash !== 'string') {
-          throw new BadRequestException('metadata.pinHash must be a string or null');
+      if (pin !== undefined) {
+        if (pin !== null && (typeof pin !== 'string' || !/^\d{4}$/.test(pin.trim()))) {
+          throw new BadRequestException('metadata.pin must be a 4-digit string or null');
         }
-        parsedPinHash = pinHash;
+        parsedPin = pin !== null ? pin.trim() : null;
       }
     }
 
@@ -149,17 +171,19 @@ export class AlphadateController {
       updateBoardDto.currentLetter = currentLetter;
     }
 
-    if (parsedPartners !== undefined || parsedPinHash !== undefined) {
+    if (parsedPartners !== undefined || parsedPin !== undefined) {
       updateBoardDto.metadata = {};
       if (parsedPartners !== undefined) {
         updateBoardDto.metadata.partners = parsedPartners;
       }
-      if (parsedPinHash !== undefined) {
-        updateBoardDto.metadata.pinHash = parsedPinHash;
+      if (parsedPin !== undefined) {
+        updateBoardDto.metadata.pin = parsedPin;
       }
     }
 
-    const result = await this.alphadateService.updateBoardState(key, updateBoardDto);
+    const result = pinHeader
+      ? await this.alphadateService.updateBoardState(key, updateBoardDto, pinHeader)
+      : await this.alphadateService.updateBoardState(key, updateBoardDto);
 
     return {
       success: true,
@@ -177,7 +201,13 @@ export class AlphadateController {
   }
 
   @Delete(':key')
-  async deleteBoard(@Param('key') key: string) {
-    return this.alphadateService.deleteBoard(key);
+  async deleteBoard(
+    @Param('key') key: string,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
+    return pinHeader
+      ? this.alphadateService.deleteBoard(key, pinHeader)
+      : this.alphadateService.deleteBoard(key);
   }
 }
+

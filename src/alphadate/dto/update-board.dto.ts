@@ -8,7 +8,7 @@ export interface LetterState {
 
 export interface BoardMetadata {
   partners?: string[];
-  pinHash?: string | null;
+  pin?: string | null;
 }
 
 export interface UpdateBoardDto {

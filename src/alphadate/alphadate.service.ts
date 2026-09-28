@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  UnauthorizedException,
   ServiceUnavailableException,
   HttpException,
   HttpStatus,
@@ -20,6 +21,7 @@ import { LlmService } from '../llm/llm.service';
 import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-suggestion.interface';
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 import { RedisReader } from '../common/helpers/redisReader';
+import { hashPin, verifyPin } from './utils/pin.util';
 
 const SUGGESTIONS_CACHE_TTL = 3600; // 1 hour in seconds
 
@@ -65,21 +67,52 @@ export class AlphadateService {
     return key;
   }
 
-  private async sendCreationEmail(email: string, partners: string[], key: string): Promise<void> {
+  private async sendCreationEmail(
+    email: string,
+    partners: string[],
+    key: string,
+    pin?: string | null
+  ): Promise<void> {
     const frontendBaseUrl =
       this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
     const boardLink = `${frontendBaseUrl}/#/${key}`;
 
     const partnersText = partners.map(name => `<strong>${name}</strong>`).join(' та ');
     const subject = 'Ваша дошка побачень AlphaDate створена! 💖';
+    const pinHtml = pin
+      ? `<p>Встановлений PIN-код дошки: <strong>${pin}</strong> (збережіть його для доступу до дошки).</p>`
+      : '';
     const html = `
       <p>Привіт!</p>
       <p>Ви успішно створили нову дошку для планування побачень AlphaDate для ${partnersText}.</p>
+      ${pinHtml}
       <p>Щоб повернутися до вашої спільної дошки будь-коли або поділитися нею, збережіть це посилання: <a href="${boardLink}">${boardLink}</a></p>
       <p>Бажаємо незабутніх побачень!</p>
     `;
 
     await this.emailService.sendEmail(email, subject, html);
+  }
+
+  verifyBoardAccess(board: { pin: string | null }, providedPin?: string | null): void {
+    if (!board.pin) {
+      return;
+    }
+
+    if (!providedPin || typeof providedPin !== 'string' || !providedPin.trim()) {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'Board is protected by PIN code',
+        isPinRequired: true,
+      });
+    }
+
+    if (!verifyPin(providedPin.trim(), board.pin)) {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        message: 'Invalid PIN code',
+        isPinRequired: true,
+      });
+    }
   }
 
   async create(dto: CreateBoardDto) {
@@ -88,11 +121,17 @@ export class AlphadateService {
     const genders = await this.genderizeService.detectGenders(dto.partners);
     const playerIds = this.genderizeService.assignPlayerIds(genders);
 
+    let pinToStore: string | null = null;
+    if (dto.pin && typeof dto.pin === 'string' && dto.pin.trim()) {
+      pinToStore = hashPin(dto.pin.trim());
+    }
+
     const result = await this.prisma.$transaction(async tx => {
       const board = await tx.alphadateBoard.create({
         data: {
           key,
           email: dto.email,
+          pin: pinToStore,
           settings: {},
         },
       });
@@ -126,7 +165,7 @@ export class AlphadateService {
       };
     });
 
-    this.sendCreationEmail(dto.email, dto.partners, key).catch(err => {
+    this.sendCreationEmail(dto.email, dto.partners, key, dto.pin).catch(err => {
       this.logger.error(
         `Failed to send creation email in background for key ${key}: ${err.message}`,
         err.stack
@@ -136,7 +175,7 @@ export class AlphadateService {
     return result;
   }
 
-  async getBoardState(key: string) {
+  async getBoardState(key: string, pin?: string) {
     const board = await this.prisma.alphadateBoard.findUnique({
       where: { key },
       include: {
@@ -159,6 +198,8 @@ export class AlphadateService {
     if (!board) {
       throw new NotFoundException(`Board with key ${key} not found`);
     }
+
+    this.verifyBoardAccess(board, pin);
 
     const letters = (board.letters as any) || [];
     const history = (board.history || []).map(h => ({
@@ -188,12 +229,12 @@ export class AlphadateService {
         currentPartnerPlayerId: currentPartner ? currentPartner.playerId : null,
         currentLetter: board.currentLetter,
         currentLetterSelectedAt: board.currentLetterSelectedAt,
-        pinHash: board.pin,
+        hasPin: Boolean(board.pin),
       },
     };
   }
 
-  async updateBoardState(key: string, dto: UpdateBoardDto) {
+  async updateBoardState(key: string, dto: UpdateBoardDto, pin?: string) {
     const board = await this.prisma.alphadateBoard.findUnique({
       where: { key },
     });
@@ -201,6 +242,8 @@ export class AlphadateService {
     if (!board) {
       throw new NotFoundException(`Board with key ${key} not found`);
     }
+
+    this.verifyBoardAccess(board, pin);
 
     const dbLetters = (board.letters as any) || [];
     const dbStatusMap = new Map<string, string>();
@@ -350,8 +393,8 @@ export class AlphadateService {
         }
       }
 
-      if (dto.metadata && dto.metadata.pinHash !== undefined) {
-        updateData.pin = dto.metadata.pinHash;
+      if (dto.metadata && dto.metadata.pin !== undefined) {
+        updateData.pin = dto.metadata.pin ? hashPin(dto.metadata.pin) : null;
       }
 
       if (isFullReset) {
@@ -446,7 +489,7 @@ export class AlphadateService {
     };
   }
 
-  async deleteBoard(key: string) {
+  async deleteBoard(key: string, pin?: string) {
     const board = await this.prisma.alphadateBoard.findUnique({
       where: { key },
     });
@@ -454,6 +497,8 @@ export class AlphadateService {
     if (!board) {
       throw new NotFoundException(`Board with key ${key} not found`);
     }
+
+    this.verifyBoardAccess(board, pin);
 
     await this.prisma.alphadateBoard.delete({
       where: { key },
@@ -468,7 +513,7 @@ export class AlphadateService {
    * Automatically recognizes the alphabet (English / Latin or Ukrainian / Cyrillic)
    * and returns date ideas in the corresponding language with board-level caching.
    */
-  async getSuggestions(key: string, letter: string): Promise<DateSuggestionsResponse> {
+  async getSuggestions(key: string, letter: string, pin?: string): Promise<DateSuggestionsResponse> {
     if (!key || typeof key !== 'string' || !key.trim()) {
       throw new BadRequestException('Board key is required');
     }
@@ -499,6 +544,8 @@ export class AlphadateService {
     if (!board) {
       throw new ForbiddenException('Access denied: board not found or invalid');
     }
+
+    this.verifyBoardAccess(board, pin);
 
     const detectedLang: 'en' | 'uk' = isLatin ? 'en' : 'uk';
     const normalizedLetter = trimmed.toUpperCase();
