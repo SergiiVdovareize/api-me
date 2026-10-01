@@ -554,7 +554,7 @@ export class AlphadateService {
     if (this.redisReader) {
       try {
         const cached = await this.redisReader.read(cacheKey);
-        if (cached && Array.isArray(cached.suggestions) && cached.suggestions.length > 0) {
+        if (cached && Array.isArray(cached.suggestions)) {
           this.logger.log(
             `Serving date suggestions for board "${trimmedKey}" letter "${normalizedLetter}" (${detectedLang}) from Upstash cache`
           );
@@ -613,18 +613,13 @@ export class AlphadateService {
     const rawSuggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
     const sanitized: DateSuggestion[] = rawSuggestions
       .filter(s => s && typeof s === 'object' && typeof s.title === 'string' && s.title.trim())
+      .filter(s => s.title.trim().toUpperCase().startsWith(normalizedLetter))
       .map(s => ({
         title: s.title.trim(),
         description: typeof s.description === 'string' ? s.description.trim() : '',
         category: s.category || 'romantic',
         estimatedCost: s.estimatedCost || 'moderate',
       }));
-
-    if (sanitized.length === 0) {
-      throw new ServiceUnavailableException(
-        `AI could not generate valid date ideas for letter "${normalizedLetter}". Please try again.`
-      );
-    }
 
     const response: DateSuggestionsResponse = {
       success: true,

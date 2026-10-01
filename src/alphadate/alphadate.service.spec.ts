@@ -590,16 +590,46 @@ describe('AlphadateService', () => {
       );
     });
 
-    it('should throw ServiceUnavailableException if AI returns empty suggestions', async () => {
+    it('should return empty suggestions array if AI returns no ideas for a letter', async () => {
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
       mockLlmService.callAndParseJSON.mockResolvedValue({
-        letter: 'Б',
+        letter: 'Ь',
         suggestions: [],
       });
 
-      await expect(service.getSuggestions('valid-key', 'Б')).rejects.toThrow(
-        'AI could not generate valid date ideas'
-      );
+      const result = await service.getSuggestions('valid-key', 'ь');
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('Ь');
+      expect(result.lang).toBe('uk');
+      expect(result.suggestions).toEqual([]);
+    });
+
+    it('should filter out suggestions that do not start with the specified letter', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
+      mockLlmService.callAndParseJSON.mockResolvedValue({
+        letter: 'Є',
+        suggestions: [
+          {
+            title: 'Єноти',
+            description: 'Похід до контактного зоопарку',
+            category: 'active',
+            estimatedCost: 'moderate',
+          },
+          {
+            title: 'Ялинка',
+            description: 'Похід за ялинкою',
+            category: 'active',
+            estimatedCost: 'budget',
+          },
+        ],
+      });
+
+      const result = await service.getSuggestions('valid-key', 'є');
+
+      expect(result.success).toBe(true);
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0].title).toBe('Єноти');
     });
 
     it('should throw HttpException with status 429 if AI fails due to rate limit', async () => {
