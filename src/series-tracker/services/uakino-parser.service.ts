@@ -50,11 +50,28 @@ export class UakinoParserService {
         return await this.fetchPage(`${targetUrl}.html`);
       }
 
+      let errorBody = '';
+      if (typeof response.text === 'function') {
+        try {
+          errorBody = await response.text();
+        } catch {
+          // ignore
+        }
+      }
+
+      const isScraperApi = Boolean(apiKey);
+      const prefix = isScraperApi ? '[ScraperAPI] ' : '';
+      const hint =
+        isScraperApi && (response.status === 401 || response.status === 403)
+          ? ' (Check SCRAPERAPI_KEY in GitHub Secrets: key is invalid, expired, or out of credits)'
+          : '';
+      const detail = errorBody ? `: ${errorBody.slice(0, 300).trim()}` : '';
+
       this.logger.error(
-        `Failed to fetch ${targetUrl} after ${elapsed}ms: HTTP ${response.status} ${response.statusText}`
+        `${prefix}Failed to fetch ${targetUrl} after ${elapsed}ms: HTTP ${response.status} ${response.statusText}${hint}${detail}`
       );
       throw new Error(
-        `Failed to fetch ${targetUrl}: HTTP ${response.status} ${response.statusText}`
+        `${prefix}Failed to fetch ${targetUrl}: HTTP ${response.status} ${response.statusText}${hint}${detail}`
       );
     }
 
