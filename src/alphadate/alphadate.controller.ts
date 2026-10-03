@@ -9,9 +9,12 @@ import {
   Query,
   Headers,
   BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AlphadateService } from './alphadate.service';
 import { CreateBoardDto } from './dto/create-board.dto';
+import { RecoverBoardDto } from './dto/recover-board.dto';
 
 @Controller('alphadate')
 export class AlphadateController {
@@ -24,6 +27,27 @@ export class AlphadateController {
       success: true,
       key: result.key,
     };
+  }
+
+  @Post('recover')
+  @HttpCode(HttpStatus.OK)
+  async recover(@Body() recoverBoardDto: RecoverBoardDto) {
+    if (
+      !recoverBoardDto ||
+      typeof recoverBoardDto !== 'object' ||
+      !recoverBoardDto.email ||
+      typeof recoverBoardDto.email !== 'string' ||
+      !recoverBoardDto.email.trim()
+    ) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recoverBoardDto.email.trim())) {
+      throw new BadRequestException('Invalid email format');
+    }
+
+    return this.alphadateService.recover(recoverBoardDto);
   }
 
   @Get(':key/suggestions')
@@ -67,10 +91,7 @@ export class AlphadateController {
   }
 
   @Get(':key')
-  async getBoardState(
-    @Param('key') key: string,
-    @Headers('x-board-pin') pinHeader?: string
-  ) {
+  async getBoardState(@Param('key') key: string, @Headers('x-board-pin') pinHeader?: string) {
     return pinHeader
       ? this.alphadateService.getBoardState(key, pinHeader)
       : this.alphadateService.getBoardState(key);
@@ -201,13 +222,9 @@ export class AlphadateController {
   }
 
   @Delete(':key')
-  async deleteBoard(
-    @Param('key') key: string,
-    @Headers('x-board-pin') pinHeader?: string
-  ) {
+  async deleteBoard(@Param('key') key: string, @Headers('x-board-pin') pinHeader?: string) {
     return pinHeader
       ? this.alphadateService.deleteBoard(key, pinHeader)
       : this.alphadateService.deleteBoard(key);
   }
 }
-

@@ -14,6 +14,7 @@ describe('AlphadateController', () => {
       updateBoardState: jest.fn(),
       deleteBoard: jest.fn(),
       getSuggestions: jest.fn(),
+      recover: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -42,6 +43,27 @@ describe('AlphadateController', () => {
       const result = await controller.create(dto);
       expect(result).toEqual({ success: true, key: 'abcde' });
       expect(service.create).toHaveBeenCalledWith(dto);
+    });
+  });
+
+  describe('recover', () => {
+    it('should call service.recover and return response when email is valid', async () => {
+      service.recover.mockResolvedValue({ success: true });
+
+      const result = await controller.recover({ email: 'user@example.com' });
+      expect(result).toEqual({ success: true });
+      expect(service.recover).toHaveBeenCalledWith({ email: 'user@example.com' });
+    });
+
+    it('should throw BadRequestException if email is missing or empty', async () => {
+      await expect(controller.recover({ email: '' } as any)).rejects.toThrow(BadRequestException);
+      await expect(controller.recover(null as any)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if email format is invalid', async () => {
+      await expect(controller.recover({ email: 'invalid-email' })).rejects.toThrow(
+        BadRequestException
+      );
     });
   });
 

@@ -186,4 +186,3 @@ Return JSON with this exact schema (title must start with "${letter}"; if none e
 
   return { systemPrompt, userPrompt };
 }
-

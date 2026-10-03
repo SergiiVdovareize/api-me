@@ -1,4 +1,12 @@
-import { IsArray, IsString, IsNotEmpty, ArrayMinSize, IsEmail, IsOptional, Matches } from 'class-validator';
+import {
+  IsArray,
+  IsString,
+  IsNotEmpty,
+  ArrayMinSize,
+  IsEmail,
+  IsOptional,
+  Matches,
+} from 'class-validator';
 
 export class CreateBoardDto {
   @IsArray()
@@ -17,5 +25,3 @@ export class CreateBoardDto {
   @Matches(/^\d{4}$/, { message: 'PIN must be a 4-digit number' })
   pin?: string;
 }
-
-

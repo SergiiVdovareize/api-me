@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../models/prisma/prisma.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
+import { RecoverBoardDto } from './dto/recover-board.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
@@ -22,6 +23,11 @@ import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-sugge
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 import { RedisReader } from '../common/helpers/redisReader';
 import { hashPin, verifyPin } from './utils/pin.util';
+import {
+  renderCreationEmail,
+  renderRecoveryEmail,
+  formatPartnersWithNbsp,
+} from './templates/alphadate-email.template';
 
 const SUGGESTIONS_CACHE_TTL = 3600; // 1 hour in seconds
 
@@ -77,18 +83,44 @@ export class AlphadateService {
       this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
     const boardLink = `${frontendBaseUrl}/#/${key}`;
 
-    const partnersText = partners.map(name => `<strong>${name}</strong>`).join(' та ');
     const subject = 'Ваша дошка побачень AlphaDate створена! 💖';
-    const pinHtml = pin
-      ? `<p>Встановлений PIN-код дошки: <strong>${pin}</strong> (збережіть його для доступу до дошки).</p>`
-      : '';
-    const html = `
-      <p>Привіт!</p>
-      <p>Ви успішно створили нову дошку для планування побачень AlphaDate для ${partnersText}.</p>
-      ${pinHtml}
-      <p>Щоб повернутися до вашої спільної дошки будь-коли або поділитися нею, збережіть це посилання: <a href="${boardLink}">${boardLink}</a></p>
-      <p>Бажаємо незабутніх побачень!</p>
-    `;
+    const html = renderCreationEmail({
+      partners,
+      boardLink,
+      pin,
+    });
+
+    await this.emailService.sendEmail(email, subject, html);
+  }
+
+  private async sendRecoveryEmail(
+    email: string,
+    boards: Array<{ key: string; partners: Array<{ name: string }> }>
+  ): Promise<void> {
+    const frontendBaseUrl =
+      this.configService.get<string>('FRONTEND_BASE_URL') || 'http://localhost:3000';
+
+    const isMultiple = boards.length > 1;
+    const subject = isMultiple
+      ? 'Відновлення доступу до ваших дошок AlphaDate 💖'
+      : 'Відновлення доступу до вашої дошки AlphaDate 💖';
+
+    const formattedBoards = boards.map(b => {
+      const boardLink = `${frontendBaseUrl}/#/${b.key}`;
+      const partnersText =
+        b.partners && b.partners.length > 0
+          ? formatPartnersWithNbsp(b.partners.map(p => p.name))
+          : '';
+      return {
+        key: b.key,
+        boardLink,
+        partnersText,
+      };
+    });
+
+    const html = renderRecoveryEmail({
+      boards: formattedBoards,
+    });
 
     await this.emailService.sendEmail(email, subject, html);
   }
@@ -173,6 +205,46 @@ export class AlphadateService {
     });
 
     return result;
+  }
+
+  async recover(dto: RecoverBoardDto): Promise<{ success: true }> {
+    const normalizedEmail = dto.email.trim().toLowerCase();
+
+    const boards = await this.prisma.alphadateBoard.findMany({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+      include: {
+        partners: {
+          orderBy: {
+            turnOrder: 'asc',
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (boards.length > 0) {
+      try {
+        await this.sendRecoveryEmail(dto.email.trim(), boards);
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send recovery email for ${dto.email}: ${err?.message}`,
+          err?.stack
+        );
+      }
+    } else {
+      this.logger.log(
+        `Recovery requested for email with no associated boards (enumeration prevention).`
+      );
+    }
+
+    return { success: true };
   }
 
   async getBoardState(key: string, pin?: string) {
@@ -513,7 +585,11 @@ export class AlphadateService {
    * Automatically recognizes the alphabet (English / Latin or Ukrainian / Cyrillic)
    * and returns date ideas in the corresponding language with board-level caching.
    */
-  async getSuggestions(key: string, letter: string, pin?: string): Promise<DateSuggestionsResponse> {
+  async getSuggestions(
+    key: string,
+    letter: string,
+    pin?: string
+  ): Promise<DateSuggestionsResponse> {
     if (!key || typeof key !== 'string' || !key.trim()) {
       throw new BadRequestException('Board key is required');
     }

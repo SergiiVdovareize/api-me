@@ -13,6 +13,7 @@ API for creating, managing, and synchronizing shared romantic alphabet date boar
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/alphadate` | Create a new date board and invite partners via email |
+| `POST` | `/alphadate/recover` | Send recovery email with links to boards for the specified email |
 | `GET` | `/alphadate/:key/suggestions` | Generate AI date ideas for a specific board and letter (`?letter=А`) |
 | `GET` | `/alphadate/:key` | Retrieve the current board state, letters, and metadata |
 | `PUT` | `/alphadate/:key` | Update board state (letters, active letter, turn, partners, PIN) |
@@ -51,7 +52,31 @@ Creates a new board, initializes partner turn orders, randomly designates the st
 
 ---
 
-### 2. Get Date Suggestions (`GET /alphadate/:key/suggestions`)
+### 2. Recover Board Access (`POST /alphadate/recover`)
+
+Sends an email with links to all boards associated with the given email address. For security and to prevent email enumeration, this endpoint **always** returns `{ "success": true }` (even if no board is associated with that email in the database).
+
+#### Request Body
+```json
+{
+  "email": "couple@example.com"
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `email` | `string` | Yes | Valid email address to search and send recovery links to. |
+
+#### Response (`200 OK`)
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### 3. Get Date Suggestions (`GET /alphadate/:key/suggestions`)
 
 Generates creative romantic date ideas starting with a required single-character letter of the alphabet for a specific board using the AI LLM rotator. Also accessible via `GET /alphadate/:key/suggestions/:letter`.
 
@@ -102,7 +127,7 @@ curl "https://api.vdovareize.me/alphadate/x9a2k/suggestions/B"
 
 ---
 
-### 3. Get Board State (`GET /alphadate/:key`)
+### 4. Get Board State (`GET /alphadate/:key`)
 
 Retrieves the current state of a board by its unique 5-character key.
 
@@ -200,7 +225,7 @@ Retrieves the current state of a board by its unique 5-character key.
 
 ---
 
-### 4. Update Board State (`PUT /alphadate/:key`)
+### 5. Update Board State (`PUT /alphadate/:key`)
 
 Updates letters, active selected letter, notes, partners, or security settings. Requires `x-board-pin` header if the board is PIN protected.
 
@@ -269,7 +294,7 @@ Updates letters, active selected letter, notes, partners, or security settings. 
 
 ---
 
-### 4. Delete Board (`DELETE /alphadate/:key`)
+### 6. Delete Board (`DELETE /alphadate/:key`)
 
 Permanently deletes a board, its partners, and associated history.
 

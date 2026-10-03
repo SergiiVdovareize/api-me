@@ -28,6 +28,7 @@ describe('AlphadateService', () => {
       }),
       alphadateBoard: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
@@ -132,7 +133,7 @@ describe('AlphadateService', () => {
       expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
         dto.email,
         expect.stringContaining('AlphaDate'),
-        expect.stringContaining('Partner A')
+        expect.stringContaining('Partner&nbsp;A')
       );
     });
 
@@ -154,7 +155,11 @@ describe('AlphadateService', () => {
 
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(null);
       mockPrismaService.alphadateBoard.create.mockResolvedValue({ key: 'abcde', email: dto.email });
-      mockPrismaService.alphadatePartner.create.mockResolvedValue({ id: 1, name: 'Partner A', turnOrder: 1 });
+      mockPrismaService.alphadatePartner.create.mockResolvedValue({
+        id: 1,
+        name: 'Partner A',
+        turnOrder: 1,
+      });
       mockPrismaService.alphadateBoard.update.mockResolvedValue({
         key: 'abcde',
         currentPartnerId: 1,
@@ -395,7 +400,6 @@ describe('AlphadateService', () => {
         where: { id: { in: [2] } },
       });
     });
-
 
     it('should hash and update pin when metadata.pin is updated', async () => {
       const dbBoard = {
@@ -662,6 +666,98 @@ describe('AlphadateService', () => {
       await expect(service.getSuggestions('valid-key', 'Д')).rejects.toThrow(
         'Failed to get a response from AI service due to rate limits or temporary unavailability'
       );
+    });
+  });
+
+  describe('recover', () => {
+    it('should send email with board link when matching board exists and return success', async () => {
+      mockPrismaService.alphadateBoard.findMany.mockResolvedValue([
+        {
+          key: 'abcde',
+          email: 'user@example.com',
+          partners: [{ name: 'Олена' }, { name: 'Андрій' }],
+        },
+      ]);
+
+      const result = await service.recover({ email: 'User@Example.com' });
+
+      expect(result).toEqual({ success: true });
+      expect(mockPrismaService.alphadateBoard.findMany).toHaveBeenCalledWith({
+        where: {
+          email: {
+            equals: 'user@example.com',
+            mode: 'insensitive',
+          },
+        },
+        include: {
+          partners: {
+            orderBy: {
+              turnOrder: 'asc',
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
+        'User@Example.com',
+        expect.stringContaining('Відновлення доступу до вашої дошки'),
+        expect.stringContaining('http://localhost:3000/#/abcde')
+      );
+    });
+
+    it('should list all boards in email when multiple boards exist for email', async () => {
+      mockPrismaService.alphadateBoard.findMany.mockResolvedValue([
+        {
+          key: 'board1',
+          email: 'user@example.com',
+          partners: [{ name: 'Олена' }],
+        },
+        {
+          key: 'board2',
+          email: 'user@example.com',
+          partners: [{ name: 'Марія' }, { name: 'Іван' }],
+        },
+      ]);
+
+      const result = await service.recover({ email: 'user@example.com' });
+
+      expect(result).toEqual({ success: true });
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.stringContaining('дошок'),
+        expect.stringContaining('http://localhost:3000/#/board1')
+      );
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.any(String),
+        expect.stringContaining('http://localhost:3000/#/board2')
+      );
+    });
+
+    it('should return success and not send email if no boards exist for email (prevent enumeration)', async () => {
+      mockPrismaService.alphadateBoard.findMany.mockResolvedValue([]);
+
+      const result = await service.recover({ email: 'nonexistent@example.com' });
+
+      expect(result).toEqual({ success: true });
+      expect(mockEmailService.sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('should return success even if email sending throws an error', async () => {
+      mockPrismaService.alphadateBoard.findMany.mockResolvedValue([
+        {
+          key: 'abcde',
+          email: 'user@example.com',
+          partners: [{ name: 'Олена' }],
+        },
+      ]);
+      mockEmailService.sendEmail.mockRejectedValue(new Error('Resend network error'));
+
+      const result = await service.recover({ email: 'user@example.com' });
+
+      expect(result).toEqual({ success: true });
     });
   });
 });

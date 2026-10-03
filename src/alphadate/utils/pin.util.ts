@@ -36,4 +36,3 @@ export function verifyPin(pin: string, storedPin: string): boolean {
   // Fallback for simple plain-text in unit test mocks
   return pin === storedPin;
 }
-
