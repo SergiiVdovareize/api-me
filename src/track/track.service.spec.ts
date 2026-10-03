@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TrackService } from './track.service';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/models/prisma/prisma.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { RedisReader } from 'src/common/helpers/redisReader';
 import { ConfigService } from '@nestjs/config';

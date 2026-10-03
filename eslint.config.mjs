@@ -34,7 +34,7 @@ export default defineConfig([globalIgnores(["**/.eslintrc.js"]), {
 
         parserOptions: {
             project: "tsconfig.json",
-            tsconfigRootDir: "/Users/s.vdovareize/work/api-me",
+            tsconfigRootDir: __dirname,
         },
     },
 

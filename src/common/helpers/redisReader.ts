@@ -9,6 +9,7 @@ export class RedisReader {
   private readonly logger = new Logger(RedisReader.name);
   private cachedRedisNumber: number | undefined;
   private redisPairs: string[] = [];
+  private readonly clientPool = new Map<string, Redis>();
 
   constructor(private readonly configService: ConfigService) {
     this.redisPairs = Object.keys(process.env).filter(prop =>
@@ -44,10 +45,21 @@ export class RedisReader {
     const url = this.configService.get<string>(`${REDIS_CONSTANTS.REST_URL_PROP}${pairSuffix}`);
     const token = this.configService.get<string>(`${REDIS_CONSTANTS.REST_TOKEN_PROP}${pairSuffix}`);
 
-    return new Redis({
+    if (!url || !token) {
+      return null;
+    }
+
+    const cacheKey = `${url}:${token}`;
+    if (this.clientPool.has(cacheKey)) {
+      return this.clientPool.get(cacheKey)!;
+    }
+
+    const client = new Redis({
       url,
       token,
     });
+    this.clientPool.set(cacheKey, client);
+    return client;
   }
 
   /**
@@ -57,6 +69,7 @@ export class RedisReader {
    */
   async read(key: string): Promise<any> {
     try {
+      if (!this.redis) return null;
       return await this.redis.get(key);
     } catch (error) {
       Sentry.captureMessage(`couldn't read cache, key - ${key}, `, error);
@@ -82,7 +95,13 @@ export class RedisReader {
    * @returns The result of the delete operation.
    */
   async delete(key: string): Promise<any> {
-    return await this.redis.del(key);
+    try {
+      if (!this.redis) return null;
+      return await this.redis.del(key);
+    } catch (error: any) {
+      this.logger.warn(`Failed to delete cache key "${key}": ${error?.message}`);
+      return null;
+    }
   }
 
   async nudgeAll(): Promise<any> {

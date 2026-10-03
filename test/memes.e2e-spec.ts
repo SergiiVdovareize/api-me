@@ -3,8 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import * as Sentry from '@sentry/nestjs';
-import { PrismaService as PrismaService1 } from 'src/prisma.service';
-import { PrismaService as PrismaService2 } from 'src/models/prisma/prisma.service';
+import { PrismaService } from 'src/models/prisma/prisma.service';
 import { PosthogService } from 'src/posthog/posthog.service';
 import { BlobService } from 'src/blob/blob.service';
 import {
@@ -34,13 +33,7 @@ describe('MemesController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(PrismaService1)
-      .useValue({
-        $connect: jest.fn().mockResolvedValue(undefined),
-        $disconnect: jest.fn().mockResolvedValue(undefined),
-        onModuleInit: jest.fn().mockResolvedValue(undefined),
-      })
-      .overrideProvider(PrismaService2)
+      .overrideProvider(PrismaService)
       .useValue({
         $connect: jest.fn().mockResolvedValue(undefined),
         $disconnect: jest.fn().mockResolvedValue(undefined),

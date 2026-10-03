@@ -1,9 +1,19 @@
-import { Controller, Get, Query, HttpException, HttpStatus, StreamableFile } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  HttpException,
+  HttpStatus,
+  StreamableFile,
+  Logger,
+} from '@nestjs/common';
 import { Readable } from 'stream';
 import { AppService } from './app.service';
 import { AnalyticsService } from './analytics/analytics.service';
 @Controller()
 export class AppController {
+  private readonly logger = new Logger(AppController.name);
+
   constructor(
     private readonly appService: AppService,
     private readonly analyticsService: AnalyticsService
@@ -17,7 +27,7 @@ export class AppController {
 
   @Get('test')
   async test(@Query('v') v: string) {
-    console.log('test', v);
+    this.logger.log(`test query parameter: ${v}`);
     return {
       success: true,
     };
@@ -104,7 +114,7 @@ export class AppController {
         length: contentLength ? parseInt(contentLength, 10) : undefined,
       });
     } catch (error: any) {
-      console.error('Error proxying download:', error.message);
+      this.logger.error(`Error proxying download: ${error.message}`);
       if (error instanceof HttpException) {
         throw error;
       }

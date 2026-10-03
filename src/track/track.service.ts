@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/nestjs';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountType } from 'src/models/enums/account-type.enum';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/models/prisma/prisma.service';
 import { JarResponse, JarStatus } from './types';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { promises as fs } from 'fs';

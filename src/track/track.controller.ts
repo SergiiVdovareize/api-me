@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Logger } from '@nestjs/common';
 import { TrackService } from './track.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AccountType } from 'src/models/enums/account-type.enum';
@@ -6,6 +6,8 @@ import { AnalyticsEvent } from 'src/analytics/analytics.events';
 
 @Controller('track')
 export class TrackController {
+  private readonly logger = new Logger(TrackController.name);
+
   constructor(
     private readonly trackService: TrackService,
     private readonly analyticsService: AnalyticsService
@@ -20,14 +22,6 @@ export class TrackController {
     return `${hours}:${minutes}:${seconds}`;
   }
 
-  async delay() {
-    return new Promise<void>(resolve => {
-      setTimeout(() => {
-        resolve();
-      }, 30000);
-    });
-  }
-
   @Get('')
   async track() {
     await this.trackService.syncAccounts();
@@ -37,14 +31,14 @@ export class TrackController {
   @Get('ping')
   async ping() {
     const timestamp = this.getTime();
-    console.log('ping:', timestamp);
+    this.logger.log(`ping: ${timestamp}`);
     return { state: 'ping', timestamp };
   }
 
   @Get('pong')
   async pong() {
     const timestamp = this.getTime();
-    console.log('pong:', timestamp);
+    this.logger.log(`pong: ${timestamp}`);
     return { state: 'pong', timestamp };
   }
 
