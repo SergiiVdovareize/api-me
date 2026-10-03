@@ -30,6 +30,24 @@ import {
 } from './templates/alphadate-email.template';
 
 const SUGGESTIONS_CACHE_TTL = 3600; // 1 hour in seconds
+const BOARD_CACHE_TTL = 86400; // 24 hours in seconds
+
+interface CachedBoardData {
+  response: {
+    success: boolean;
+    letters: any[];
+    history: any[];
+    metadata: {
+      partners: Array<{ id: number; name: string; playerId: number | null }>;
+      currentPartnerId: number | null;
+      currentPartnerPlayerId: number | null;
+      currentLetter: string | null;
+      currentLetterSelectedAt: Date | string | null;
+      hasPin: boolean;
+    };
+  };
+  storedPin: string | null;
+}
 
 @Injectable()
 export class AlphadateService {
@@ -123,6 +141,19 @@ export class AlphadateService {
     });
 
     await this.emailService.sendEmail(email, subject, html);
+  }
+
+  private async invalidateBoardCache(key: string): Promise<void> {
+    if (!this.redisReader) return;
+    const trimmedKey = (key || '').trim();
+    if (!trimmedKey) return;
+    const cacheKey = `alphadate:board:${trimmedKey}`;
+    try {
+      await this.redisReader.delete(cacheKey);
+      this.logger.log(`Invalidated board cache for key: "${trimmedKey}"`);
+    } catch (err: any) {
+      this.logger.warn(`Failed to invalidate board cache for "${trimmedKey}": ${err?.message}`);
+    }
   }
 
   verifyBoardAccess(board: { pin: string | null }, providedPin?: string | null): void {
@@ -248,8 +279,27 @@ export class AlphadateService {
   }
 
   async getBoardState(key: string, pin?: string) {
+    const trimmedKey = (key || '').trim();
+    const cacheKey = `alphadate:board:${trimmedKey}`;
+
+    if (this.redisReader && trimmedKey) {
+      try {
+        const cached: CachedBoardData | null = await this.redisReader.read(cacheKey);
+        if (cached && cached.response && cached.response.metadata) {
+          this.verifyBoardAccess({ pin: cached.storedPin }, pin);
+          this.logger.log(`Serving board state for "${trimmedKey}" from Upstash cache`);
+          return cached.response;
+        }
+      } catch (err: any) {
+        if (err instanceof UnauthorizedException) {
+          throw err;
+        }
+        this.logger.warn(`Failed to read board cache for "${cacheKey}": ${err?.message}`);
+      }
+    }
+
     const board = await this.prisma.alphadateBoard.findUnique({
-      where: { key },
+      where: { key: trimmedKey },
       include: {
         partners: {
           orderBy: {
@@ -287,7 +337,7 @@ export class AlphadateService {
 
     const currentPartner = board.partners.find(p => p.id === board.currentPartnerId);
 
-    return {
+    const response = {
       success: true,
       letters,
       history,
@@ -304,6 +354,21 @@ export class AlphadateService {
         hasPin: Boolean(board.pin),
       },
     };
+
+    if (this.redisReader && trimmedKey) {
+      try {
+        const cacheData: CachedBoardData = {
+          response,
+          storedPin: board.pin,
+        };
+        await this.redisReader.write(cacheKey, cacheData, BOARD_CACHE_TTL);
+        this.logger.log(`Cached board state for "${trimmedKey}" with TTL ${BOARD_CACHE_TTL}s`);
+      } catch (err: any) {
+        this.logger.warn(`Failed to cache board state for "${cacheKey}": ${err?.message}`);
+      }
+    }
+
+    return response;
   }
 
   async updateBoardState(key: string, dto: UpdateBoardDto, pin?: string) {
@@ -544,6 +609,8 @@ export class AlphadateService {
       });
     });
 
+    await this.invalidateBoardCache(key);
+
     const nextPartner = updatedPartners.find(p => p.id === nextPartnerId);
 
     return {
@@ -575,6 +642,8 @@ export class AlphadateService {
     await this.prisma.alphadateBoard.delete({
       where: { key },
     });
+
+    await this.invalidateBoardCache(key);
 
     return { success: true };
   }

@@ -142,6 +142,9 @@ Retrieves the current state of a board by its unique 5-character key.
 > }
 > ```
 
+> [!NOTE]
+> **Performance & Caching**: Board state is cached in Redis with a 24-hour TTL (`alphadate:board:${key}`). Cached responses verify the PIN hash in-memory to guarantee sub-millisecond responses without compromising security. The cache is automatically invalidated whenever any board state parameter is updated (`PUT /alphadate/:key`) or when the board is deleted (`DELETE /alphadate/:key`).
+
 #### URL Parameters
 * `key` (`string`): Unique board identifier (e.g. `x9a2k`).
 
@@ -227,7 +230,7 @@ Retrieves the current state of a board by its unique 5-character key.
 
 ### 5. Update Board State (`PUT /alphadate/:key`)
 
-Updates letters, active selected letter, notes, partners, or security settings. Requires `x-board-pin` header if the board is PIN protected.
+Updates letters, active selected letter, notes, partners, or security settings. Requires `x-board-pin` header if the board is PIN protected. Automatically invalidates the cached board state in Redis.
 
 #### Request Headers
 | Header | Type | Required | Description |
@@ -296,7 +299,7 @@ Updates letters, active selected letter, notes, partners, or security settings. 
 
 ### 6. Delete Board (`DELETE /alphadate/:key`)
 
-Permanently deletes a board, its partners, and associated history.
+Permanently deletes a board, its partners, and associated history, and removes the board state from Redis cache.
 
 #### Response (`200 OK`)
 ```json

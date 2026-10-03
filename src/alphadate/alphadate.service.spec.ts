@@ -12,6 +12,7 @@ import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
 import { LlmService } from '../llm/llm.service';
+import { RedisReader } from '../common/helpers/redisReader';
 
 describe('AlphadateService', () => {
   let service: AlphadateService;
@@ -20,6 +21,7 @@ describe('AlphadateService', () => {
   let mockConfigService: any;
   let mockGenderizeService: any;
   let mockLlmService: any;
+  let mockRedisReader: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -63,6 +65,12 @@ describe('AlphadateService', () => {
       callAndParseJSON: jest.fn(),
     };
 
+    mockRedisReader = {
+      read: jest.fn().mockResolvedValue(null),
+      write: jest.fn().mockResolvedValue('OK'),
+      delete: jest.fn().mockResolvedValue(1),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlphadateService,
@@ -85,6 +93,10 @@ describe('AlphadateService', () => {
         {
           provide: LlmService,
           useValue: mockLlmService,
+        },
+        {
+          provide: RedisReader,
+          useValue: mockRedisReader,
         },
       ],
     }).compile();
@@ -283,6 +295,99 @@ describe('AlphadateService', () => {
       expect(result.success).toBe(true);
       expect(result.metadata.hasPin).toBe(false);
     });
+
+    it('should serve board state from Redis cache on cache hit without querying Prisma', async () => {
+      const cachedState = {
+        response: {
+          success: true,
+          letters: [{ letter: 'A', status: 'available' }],
+          history: [],
+          metadata: {
+            partners: [{ id: 1, name: 'Partner A', playerId: 1 }],
+            currentPartnerId: 1,
+            currentPartnerPlayerId: 1,
+            currentLetter: null,
+            currentLetterSelectedAt: null,
+            hasPin: false,
+          },
+        },
+        storedPin: null,
+      };
+      mockRedisReader.read.mockResolvedValue(cachedState);
+
+      const result = await service.getBoardState('cached-key');
+
+      expect(result).toEqual(cachedState.response);
+      expect(mockRedisReader.read).toHaveBeenCalledWith('alphadate:board:cached-key');
+      expect(mockPrismaService.alphadateBoard.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should verify PIN against cached storedPin on cache hit and reject if invalid', async () => {
+      const cachedState = {
+        response: {
+          success: true,
+          letters: [],
+          history: [],
+          metadata: {
+            partners: [],
+            currentPartnerId: null,
+            currentPartnerPlayerId: null,
+            currentLetter: null,
+            currentLetterSelectedAt: null,
+            hasPin: true,
+          },
+        },
+        storedPin: '1234',
+      };
+      mockRedisReader.read.mockResolvedValue(cachedState);
+
+      await expect(service.getBoardState('cached-key', 'wrong-pin')).rejects.toThrow(
+        UnauthorizedException
+      );
+      expect(mockPrismaService.alphadateBoard.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('should cache board state in Redis on cache miss', async () => {
+      mockRedisReader.read.mockResolvedValue(null);
+      const dbBoard = {
+        key: 'valid-key',
+        letters: [],
+        partners: [],
+        history: [],
+        pin: null,
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      await service.getBoardState('valid-key');
+
+      expect(mockRedisReader.write).toHaveBeenCalledWith(
+        'alphadate:board:valid-key',
+        expect.objectContaining({
+          response: expect.objectContaining({ success: true }),
+          storedPin: null,
+        }),
+        86400
+      );
+    });
+
+    it('should fallback to Prisma if Redis read throws an error', async () => {
+      mockRedisReader.read.mockRejectedValue(new Error('Redis connection error'));
+      const dbBoard = {
+        key: 'fallback-key',
+        letters: [],
+        partners: [],
+        history: [],
+        pin: null,
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      const result = await service.getBoardState('fallback-key');
+
+      expect(result.success).toBe(true);
+      expect(mockPrismaService.alphadateBoard.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { key: 'fallback-key' } })
+      );
+    });
   });
 
   describe('updateBoardState', () => {
@@ -477,6 +582,7 @@ describe('AlphadateService', () => {
         where: { key: 'key' },
         data: expect.objectContaining({ currentLetter: 'Б' }),
       });
+      expect(mockRedisReader.delete).toHaveBeenCalledWith('alphadate:board:key');
     });
   });
 
@@ -496,6 +602,7 @@ describe('AlphadateService', () => {
       expect(mockPrismaService.alphadateBoard.delete).toHaveBeenCalledWith({
         where: { key: 'to-delete' },
       });
+      expect(mockRedisReader.delete).toHaveBeenCalledWith('alphadate:board:to-delete');
     });
   });
 
