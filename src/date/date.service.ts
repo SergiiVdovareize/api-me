@@ -15,7 +15,7 @@ export class DateService {
   async getRandomDate(): Promise<string> {
     const now = new Date();
     const beginningOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const dateFileName = `date-${beginningOfToday}`;
+    const dateFileName = `cache-date-${beginningOfToday}`;
 
     let content: any = null;
     try {

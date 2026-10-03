@@ -29,10 +29,11 @@ describe('AsyncService', () => {
   });
 
   describe('generateFilename', () => {
-    it('should generate a string of expected format', () => {
+    it('should generate a string of expected format with cache- prefix', () => {
       const filename = service.generateFilename();
       expect(typeof filename).toBe('string');
-      expect(filename.length).toBeGreaterThan(10);
+      expect(filename.startsWith('cache-')).toBe(true);
+      expect(filename.length).toBeGreaterThan(15);
     });
   });
 
@@ -44,12 +45,12 @@ describe('AsyncService', () => {
   });
 
   describe('createResultFile', () => {
-    it('should call put and return the url', async () => {
+    it('should call put and return the url with cache- prefix', async () => {
       (put as jest.Mock).mockResolvedValue({ url: 'https://example.com/result' });
       const data = { foo: 'bar' } as any;
 
       const result = await service.createResultFile('test-file', data);
-      expect(put).toHaveBeenCalledWith('test-file', JSON.stringify(data), {
+      expect(put).toHaveBeenCalledWith('cache-test-file', JSON.stringify(data), {
         access: 'public',
         contentType: 'application/json',
       });
@@ -58,13 +59,13 @@ describe('AsyncService', () => {
   });
 
   describe('findResultFileUrl', () => {
-    it('should return url if exactly one blob is found', async () => {
+    it('should return url if exactly one blob is found with cache- prefix', async () => {
       (list as jest.Mock).mockResolvedValue({
         blobs: [{ url: 'https://example.com/found' }],
       });
 
       const url = await service.findResultFileUrl('id-123');
-      expect(list).toHaveBeenCalledWith({ prefix: 'id-123' });
+      expect(list).toHaveBeenCalledWith({ prefix: 'cache-id-123' });
       expect(url).toBe('https://example.com/found');
     });
 

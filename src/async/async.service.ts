@@ -43,7 +43,7 @@ export class AsyncService {
       .toString()
       .match(/.{1,3}/g)
       .reverse();
-    const fileName = `${uid(2)}${base[0]}${uid(2)}${base[1]}${uid(2)}${base[4]}${uid(2)}${base[3]}${uid(2)}${base[2]}${uid(2)}`;
+    const fileName = `cache-${uid(2)}${base[0]}${uid(2)}${base[1]}${uid(2)}${base[4]}${uid(2)}${base[3]}${uid(2)}${base[2]}${uid(2)}`;
     return fileName;
   }
 
@@ -52,7 +52,8 @@ export class AsyncService {
   }
 
   async createResultFile(filename: string, data: JSON): Promise<string> {
-    const blob = await put(filename, JSON.stringify(data), {
+    const targetFilename = filename.startsWith('cache-') ? filename : `cache-${filename}`;
+    const blob = await put(targetFilename, JSON.stringify(data), {
       access: 'public',
       contentType: 'application/json',
     });
@@ -61,7 +62,11 @@ export class AsyncService {
   }
 
   async findResultFileUrl(id: string): Promise<string | null> {
-    const fileList: ListFoldedBlobResult = await list({ prefix: id });
+    const prefix = id.startsWith('cache-') ? id : `cache-${id}`;
+    let fileList: ListFoldedBlobResult = await list({ prefix });
+    if (fileList.blobs.length !== 1 && !id.startsWith('cache-')) {
+      fileList = await list({ prefix: id });
+    }
     return fileList.blobs.length === 1 ? fileList.blobs[0].url : null;
   }
 

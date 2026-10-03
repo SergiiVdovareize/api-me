@@ -61,23 +61,28 @@ describe('CacheService', () => {
       const newDate = new Date();
 
       const items = [];
-      // 110 old items, 10 new items
+      // 110 old items, 10 new items, and 5 non-cache items
       for (let i = 0; i < 110; i++) {
-        items.push({ pathname: `old-${i}`, uploadedAt: oldDate });
+        items.push({ pathname: `cache-old-${i}`, uploadedAt: oldDate });
       }
       for (let i = 0; i < 10; i++) {
-        items.push({ pathname: `new-${i}`, uploadedAt: newDate });
+        items.push({ pathname: `cache-new-${i}`, uploadedAt: newDate });
+      }
+      for (let i = 0; i < 5; i++) {
+        items.push({ pathname: `photo-${i}`, uploadedAt: oldDate });
       }
 
       blobService.list.mockResolvedValue(items);
       await service.refresh();
 
+      expect(blobService.list).toHaveBeenCalledWith('cache-');
       // Should remove only up to MAX_ITEMS_TO_REMOVE (100)
       expect(blobService.remove).toHaveBeenCalledTimes(100);
-      expect(blobService.remove).toHaveBeenCalledWith('old-0');
-      expect(blobService.remove).toHaveBeenCalledWith('old-99');
-      expect(blobService.remove).not.toHaveBeenCalledWith('old-100');
-      expect(blobService.remove).not.toHaveBeenCalledWith('new-0');
+      expect(blobService.remove).toHaveBeenCalledWith('cache-old-0');
+      expect(blobService.remove).toHaveBeenCalledWith('cache-old-99');
+      expect(blobService.remove).not.toHaveBeenCalledWith('cache-old-100');
+      expect(blobService.remove).not.toHaveBeenCalledWith('cache-new-0');
+      expect(blobService.remove).not.toHaveBeenCalledWith('photo-0');
     });
   });
 
