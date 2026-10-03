@@ -2,9 +2,12 @@ import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { env } from 'process';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(json({ limit: '10mb' }));
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
   app.enableCors({
     origin: (origin, callback) => {
       if (env.HOST === 'local' && (!origin || origin.startsWith('http://localhost:'))) {

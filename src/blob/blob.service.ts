@@ -108,4 +108,30 @@ export class BlobService {
       throw error;
     }
   }
+
+  /**
+   * Upload binary buffer or string to blob storage.
+   * @param pathname The destination path in blob.
+   * @param body Buffer, string or Blob.
+   * @param contentType The MIME content type.
+   * @returns The public URL of the uploaded blob.
+   */
+  async upload(
+    pathname: string,
+    body: Buffer | string,
+    contentType: string = 'image/webp'
+  ): Promise<string> {
+    try {
+      const result = await put(pathname, body, {
+        access: 'public',
+        contentType,
+        addRandomSuffix: true,
+      });
+      this.logger.log(`Blob uploaded: ${result.url}`);
+      return result.url;
+    } catch (error) {
+      this.logger.error(`Error uploading blob ${pathname}:`, error);
+      throw error;
+    }
+  }
 }

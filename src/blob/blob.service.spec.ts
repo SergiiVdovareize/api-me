@@ -159,4 +159,27 @@ describe('BlobService', () => {
       await expect(service.remove('key1')).rejects.toThrow(error);
     });
   });
+
+  describe('upload', () => {
+    it('should call put and return the url', async () => {
+      const mockResult = { url: 'https://blob.url/photo.webp' };
+      (put as jest.Mock).mockResolvedValue(mockResult);
+
+      const buffer = Buffer.from('test-image-data');
+      const result = await service.upload('alphadate/key/A.webp', buffer, 'image/webp');
+      expect(put).toHaveBeenCalledWith('alphadate/key/A.webp', buffer, {
+        access: 'public',
+        contentType: 'image/webp',
+        addRandomSuffix: true,
+      });
+      expect(result).toBe('https://blob.url/photo.webp');
+    });
+
+    it('should throw error if upload fails', async () => {
+      const error = new Error('Upload fail');
+      (put as jest.Mock).mockRejectedValue(error);
+
+      await expect(service.upload('path', Buffer.from(''))).rejects.toThrow(error);
+    });
+  });
 });

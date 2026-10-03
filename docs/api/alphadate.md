@@ -181,6 +181,7 @@ Retrieves the current state of a board by its unique 5-character key.
       "playerId": 2,
       "status": "used",
       "note": "Боулінг та піца",
+      "photo": "https://...public.blob.vercel-storage.com/alphadate/x9a2k/Б.webp",
       "selectedAt": "2026-09-18T18:00:00.000Z",
       "completedAt": "2026-09-20T11:30:00.000Z"
     }
@@ -212,6 +213,7 @@ Retrieves the current state of a board by its unique 5-character key.
 * `playerId`: Board-scoped unique player ID of the partner who completed the date (odd for males, even for females, null if unclassified).
 * `status`: Always `"used"`.
 * `note`: Optional comment/description of the date.
+* `photo`: Optional public CDN URL of the memory photo uploaded for this date.
 * `selectedAt`: Timestamp when the letter was originally picked.
 * `completedAt`: Timestamp when the date was completed.
 
@@ -244,7 +246,8 @@ Updates letters, active selected letter, notes, partners, or security settings. 
     {
       "letter": "А",
       "status": "used",
-      "note": "Астрономічна обсерваторія під зорями"
+      "note": "Астрономічна обсерваторія під зорями",
+      "photo": "data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAA..."
     },
     {
       "letter": "Б",
@@ -261,7 +264,7 @@ Updates letters, active selected letter, notes, partners, or security settings. 
 
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `letters` | `LetterState[]` | Yes | Array of letter objects containing `letter`, `status`, optional `note`, and optional `selectedAt` / `completedAt` overrides. |
+| `letters` | `LetterState[]` | Yes | Array of letter objects containing `letter`, `status`, optional `note`, optional `photo` (WebP Data URL `data:image/webp;base64,...` or image URL), and optional `selectedAt` / `completedAt` overrides. |
 | `currentLetter` | `string \| null` | No | Active single-character letter. If changed to a letter, `currentLetterSelectedAt` is set to `now()`. If `null`, selection timestamp resets. |
 | `metadata.partners` | `string[]` | No | Updated array of partner names. |
 | `metadata.pin` | `string \| null` | No | 4-digit PIN to set or update board protection, or `null` to remove PIN. |

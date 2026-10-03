@@ -2,6 +2,7 @@ export interface LetterState {
   letter: string;
   status: 'available' | 'used' | 'excluded' | 'skipped';
   note?: string | null;
+  photo?: string | null;
   selectedAt?: string | Date | null;
   completedAt?: string | Date | null;
 }

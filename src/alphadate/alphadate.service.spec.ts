@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import { GenderizeService } from './genderize.service';
 import { LlmService } from '../llm/llm.service';
 import { RedisReader } from '../common/helpers/redisReader';
+import { BlobService } from '../blob/blob.service';
 
 describe('AlphadateService', () => {
   let service: AlphadateService;
@@ -22,6 +23,7 @@ describe('AlphadateService', () => {
   let mockGenderizeService: any;
   let mockLlmService: any;
   let mockRedisReader: any;
+  let mockBlobService: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -71,6 +73,11 @@ describe('AlphadateService', () => {
       delete: jest.fn().mockResolvedValue(1),
     };
 
+    mockBlobService = {
+      upload: jest.fn().mockResolvedValue('https://blob.vercel-storage.com/alphadate/key/A.webp'),
+      remove: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlphadateService,
@@ -97,6 +104,10 @@ describe('AlphadateService', () => {
         {
           provide: RedisReader,
           useValue: mockRedisReader,
+        },
+        {
+          provide: BlobService,
+          useValue: mockBlobService,
         },
       ],
     }).compile();
@@ -294,6 +305,33 @@ describe('AlphadateService', () => {
       const result = await service.getBoardState('unprotected-key');
       expect(result.success).toBe(true);
       expect(result.metadata.hasPin).toBe(false);
+    });
+
+    it('should return board state with photo in history', async () => {
+      const dbBoard = {
+        key: 'photo-board',
+        letters: [{ letter: 'А', status: 'used', photo: 'https://blob.url/A.webp' }],
+        pin: null,
+        partners: [{ id: 1, name: 'Alice', playerId: 2, turnOrder: 1 }],
+        history: [
+          {
+            letter: 'А',
+            partnerId: 1,
+            partner: { name: 'Alice', playerId: 2 },
+            status: 'used',
+            note: 'Romantic date',
+            photo: 'https://blob.url/A.webp',
+            selectedAt: new Date(),
+            completedAt: new Date(),
+          },
+        ],
+      };
+
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+
+      const result = await service.getBoardState('photo-board');
+      expect(result.letters[0].photo).toBe('https://blob.url/A.webp');
+      expect(result.history[0].photo).toBe('https://blob.url/A.webp');
     });
 
     it('should serve board state from Redis cache on cache hit without querying Prisma', async () => {
@@ -584,6 +622,88 @@ describe('AlphadateService', () => {
       });
       expect(mockRedisReader.delete).toHaveBeenCalledWith('alphadate:board:key');
     });
+
+    it('should upload photo if data URL is provided and save blob url to letters and history', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [{ letter: 'А', status: 'available' }],
+        currentPartnerId: 1,
+        pin: null,
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+      mockPrismaService.alphadatePartner.findMany.mockResolvedValue([{ id: 1, turnOrder: 1 }]);
+
+      const dto = {
+        letters: [
+          {
+            letter: 'А',
+            status: 'used' as const,
+            note: 'Great date',
+            photo: 'data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+          },
+        ],
+      };
+
+      const result = await service.updateBoardState('key', dto);
+      expect(result.success).toBe(true);
+      expect(mockBlobService.upload).toHaveBeenCalledWith(
+        'alphadate/key/%D0%90.webp',
+        expect.any(Buffer),
+        'image/webp'
+      );
+      expect(mockPrismaService.alphadateHistory.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            photo: 'https://blob.vercel-storage.com/alphadate/key/A.webp',
+          }),
+        })
+      );
+      expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            letters: [
+              expect.objectContaining({
+                photo: 'https://blob.vercel-storage.com/alphadate/key/A.webp',
+              }),
+            ],
+          }),
+        })
+      );
+    });
+
+    it('should clean up old blob if photo is updated or replaced', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [
+          {
+            letter: 'А',
+            status: 'used',
+            note: 'Old note',
+            photo: 'https://blob.vercel-storage.com/old-photo.webp',
+          },
+        ],
+        currentPartnerId: 1,
+        pin: null,
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+      mockPrismaService.alphadatePartner.findMany.mockResolvedValue([{ id: 1, turnOrder: 1 }]);
+
+      const dto = {
+        letters: [
+          {
+            letter: 'А',
+            status: 'used' as const,
+            note: 'Updated note',
+            photo: 'data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+          },
+        ],
+      };
+
+      await service.updateBoardState('key', dto);
+      expect(mockBlobService.remove).toHaveBeenCalledWith(
+        'https://blob.vercel-storage.com/old-photo.webp'
+      );
+    });
   });
 
   describe('deleteBoard', () => {
@@ -593,8 +713,14 @@ describe('AlphadateService', () => {
       await expect(service.deleteBoard('non-existent-key')).rejects.toThrow(NotFoundException);
     });
 
-    it('should delete board successfully', async () => {
-      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'to-delete' });
+    it('should delete board successfully and clean up blobs', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'to-delete',
+        history: [
+          { letter: 'А', photo: 'https://blob.vercel-storage.com/photo-1.webp' },
+          { letter: 'Б', photo: null },
+        ],
+      });
       mockPrismaService.alphadateBoard.delete.mockResolvedValue({});
 
       const result = await service.deleteBoard('to-delete');
@@ -602,6 +728,9 @@ describe('AlphadateService', () => {
       expect(mockPrismaService.alphadateBoard.delete).toHaveBeenCalledWith({
         where: { key: 'to-delete' },
       });
+      expect(mockBlobService.remove).toHaveBeenCalledWith(
+        'https://blob.vercel-storage.com/photo-1.webp'
+      );
       expect(mockRedisReader.delete).toHaveBeenCalledWith('alphadate:board:to-delete');
     });
   });

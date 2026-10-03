@@ -82,6 +82,7 @@ model AlphadateHistory {
   letter      String            @db.Char(1)
   status      LetterStatus
   note        String?           @db.Text
+  photo       String?           @db.Text
   selectedAt  DateTime?
   completedAt DateTime?
   createdAt   DateTime          @default(now())

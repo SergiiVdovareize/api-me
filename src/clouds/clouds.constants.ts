@@ -16,5 +16,5 @@ export const CLOUDS_CONSTANTS = {
     message: 'no more free requests this month, try tomorrow',
   },
   MAX_WAIT_TIME: 60 * 60 * 1000, // 60 minutes
-  ID_REGEX: /(?:cache-)?\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/,
+  ID_REGEX: /(?:cache-)?\w{2}(\d{1})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}(\d{3})\w{2}/,
 };

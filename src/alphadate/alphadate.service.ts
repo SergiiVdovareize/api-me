@@ -22,6 +22,7 @@ import { LlmService } from '../llm/llm.service';
 import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-suggestion.interface';
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 import { RedisReader } from '../common/helpers/redisReader';
+import { BlobService } from '../blob/blob.service';
 import { hashPin, verifyPin } from './utils/pin.util';
 import {
   renderCreationEmail,
@@ -59,7 +60,8 @@ export class AlphadateService {
     private readonly configService: ConfigService,
     private readonly genderizeService: GenderizeService,
     @Optional() private readonly llmService?: LlmService,
-    @Optional() private readonly redisReader?: RedisReader
+    @Optional() private readonly redisReader?: RedisReader,
+    @Optional() private readonly blobService?: BlobService
   ) {}
 
   private generateRandomKey(length: number): string {
@@ -154,6 +156,49 @@ export class AlphadateService {
     } catch (err: any) {
       this.logger.warn(`Failed to invalidate board cache for "${trimmedKey}": ${err?.message}`);
     }
+  }
+
+  private async processPhoto(
+    key: string,
+    letter: string,
+    photo?: string | null
+  ): Promise<string | null> {
+    if (!photo) return null;
+    const trimmed = photo.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('data:')) {
+      const matches = trimmed.match(/^data:([^;]+);base64,(.+)$/);
+      if (!matches) {
+        this.logger.warn(`Invalid Data URL photo format for board "${key}" letter "${letter}"`);
+        return null;
+      }
+      const contentType = matches[1].toLowerCase();
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+      const ext = contentType.includes('png')
+        ? 'png'
+        : contentType.includes('jpeg') || contentType.includes('jpg')
+          ? 'jpg'
+          : 'webp';
+      const safeLetter = encodeURIComponent(letter);
+      const pathname = `alphadate/${key}/${safeLetter}.${ext}`;
+      if (this.blobService) {
+        try {
+          const url = await this.blobService.upload(pathname, buffer, contentType);
+          this.logger.log(`Uploaded photo for board "${key}" letter "${letter}" to ${url}`);
+          return url;
+        } catch (err: any) {
+          this.logger.error(
+            `Failed to upload photo for board "${key}" letter "${letter}": ${err?.message}`
+          );
+          return null;
+        }
+      }
+    }
+    return null;
   }
 
   verifyBoardAccess(board: { pin: string | null }, providedPin?: string | null): void {
@@ -331,6 +376,7 @@ export class AlphadateService {
       playerId: h.partner ? h.partner.playerId : null,
       status: h.status,
       note: h.note,
+      photo: h.photo,
       selectedAt: h.selectedAt,
       completedAt: h.completedAt,
     }));
@@ -385,60 +431,106 @@ export class AlphadateService {
     const dbLetters = (board.letters as any) || [];
     const dbStatusMap = new Map<string, string>();
     const dbNoteMap = new Map<string, string | null>();
+    const dbPhotoMap = new Map<string, string | null | undefined>();
     for (const item of dbLetters) {
       if (item && typeof item === 'object' && item.letter) {
         dbStatusMap.set(item.letter, item.status);
         dbNoteMap.set(item.letter, item.note ?? null);
+        dbPhotoMap.set(item.letter, item.photo !== undefined ? item.photo : undefined);
       }
     }
+
+    const processedLetters = await Promise.all(
+      dto.letters.map(async item => {
+        const oldPhoto = dbPhotoMap.get(item.letter);
+        let photoUrl: string | null | undefined = oldPhoto;
+
+        if (item.photo !== undefined) {
+          if (item.photo && item.photo.startsWith('data:')) {
+            photoUrl = await this.processPhoto(key, item.letter, item.photo);
+            if (oldPhoto && oldPhoto !== photoUrl && oldPhoto.includes('vercel-storage.com')) {
+              this.blobService?.remove(oldPhoto).catch(() => {});
+            }
+          } else if (
+            item.photo &&
+            (item.photo.startsWith('http://') || item.photo.startsWith('https://'))
+          ) {
+            photoUrl = item.photo;
+          } else if (!item.photo) {
+            photoUrl = null;
+            if (oldPhoto && oldPhoto.includes('vercel-storage.com')) {
+              this.blobService?.remove(oldPhoto).catch(() => {});
+            }
+          }
+        }
+
+        const letterObj: any = {
+          ...item,
+        };
+        if (photoUrl !== undefined) {
+          letterObj.photo = photoUrl;
+        }
+
+        return letterObj;
+      })
+    );
 
     const newlyUsedLetters: {
       letter: string;
       note?: string | null;
+      photo?: string | null;
       selectedAt?: string | Date | null;
       completedAt?: string | Date | null;
     }[] = [];
     const updatedNoteLetters: {
       letter: string;
       note: string | null;
+      photo?: string | null;
       selectedAt?: string | Date | null;
       completedAt?: string | Date | null;
     }[] = [];
     const noLongerUsedLetters: string[] = [];
 
-    for (const item of dto.letters) {
+    for (const item of processedLetters) {
       const oldStatus = dbStatusMap.get(item.letter) || 'available';
       const oldNote = dbNoteMap.get(item.letter);
+      const oldPhoto = dbPhotoMap.get(item.letter);
 
       if (item.status === 'used' && oldStatus !== 'used') {
         newlyUsedLetters.push({
           letter: item.letter,
           note: item.note,
+          photo: item.photo,
           selectedAt: item.selectedAt,
           completedAt: item.completedAt,
         });
       } else if (item.status === 'used' && oldStatus === 'used') {
         if (
           (item.note !== undefined && item.note !== oldNote) ||
+          (item.photo !== undefined && item.photo !== oldPhoto) ||
           item.selectedAt !== undefined ||
           item.completedAt !== undefined
         ) {
           updatedNoteLetters.push({
             letter: item.letter,
             note: item.note ?? null,
+            photo: item.photo !== undefined ? item.photo : oldPhoto,
             selectedAt: item.selectedAt,
             completedAt: item.completedAt,
           });
         }
       } else if (oldStatus === 'used' && item.status !== 'used') {
         noLongerUsedLetters.push(item.letter);
+        if (oldPhoto && oldPhoto.includes('vercel-storage.com')) {
+          this.blobService?.remove(oldPhoto).catch(() => {});
+        }
       }
     }
 
     const hasChangedToUsed = newlyUsedLetters.length > 0;
 
     const isFullReset =
-      dto.letters.length > 0 && dto.letters.every(item => item.status === 'available');
+      processedLetters.length > 0 && processedLetters.every(item => item.status === 'available');
 
     let nextPartnerId: number | null = board.currentPartnerId;
     let nextLetterSelectedAt: Date | null | undefined = undefined;
@@ -516,7 +608,7 @@ export class AlphadateService {
       }
 
       const updateData: any = {
-        letters: dto.letters as any,
+        letters: processedLetters as any,
         currentPartnerId: nextPartnerId,
       };
 
@@ -560,6 +652,7 @@ export class AlphadateService {
               partnerId: board.currentPartnerId,
               status: 'used',
               note: item.note || null,
+              photo: item.photo || null,
               selectedAt: letterSelectedAt,
               completedAt: letterCompletedAt,
             },
@@ -567,6 +660,7 @@ export class AlphadateService {
               partnerId: board.currentPartnerId,
               status: 'used',
               note: item.note || null,
+              photo: item.photo || null,
               selectedAt: letterSelectedAt,
               completedAt: letterCompletedAt,
             },
@@ -577,6 +671,9 @@ export class AlphadateService {
           const updateData: any = {
             note: item.note,
           };
+          if (item.photo !== undefined) {
+            updateData.photo = item.photo;
+          }
           if (item.selectedAt !== undefined) {
             updateData.selectedAt = item.selectedAt ? new Date(item.selectedAt) : null;
           }
@@ -631,6 +728,9 @@ export class AlphadateService {
   async deleteBoard(key: string, pin?: string) {
     const board = await this.prisma.alphadateBoard.findUnique({
       where: { key },
+      include: {
+        history: true,
+      },
     });
 
     if (!board) {
@@ -638,6 +738,14 @@ export class AlphadateService {
     }
 
     this.verifyBoardAccess(board, pin);
+
+    if (this.blobService && board.history) {
+      for (const h of board.history) {
+        if (h.photo && h.photo.includes('vercel-storage.com')) {
+          this.blobService.remove(h.photo).catch(() => {});
+        }
+      }
+    }
 
     await this.prisma.alphadateBoard.delete({
       where: { key },
