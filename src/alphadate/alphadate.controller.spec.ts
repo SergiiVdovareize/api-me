@@ -184,6 +184,50 @@ describe('AlphadateController', () => {
       });
     });
 
+    it('should successfully pass photo in letters payload', async () => {
+      const payload = {
+        letters: [
+          {
+            letter: 'A',
+            status: 'used',
+            note: 'My note',
+            photo: 'data:image/webp;base64,abc123==',
+          },
+        ],
+      };
+
+      service.updateBoardState.mockResolvedValue({ currentPartnerId: 2 } as any);
+
+      const result = await controller.updateBoardState('key', payload);
+      expect(result).toEqual({ success: true, currentPartnerId: 2 });
+      expect(service.updateBoardState).toHaveBeenCalledWith('key', {
+        letters: [
+          {
+            letter: 'A',
+            status: 'used',
+            note: 'My note',
+            photo: 'data:image/webp;base64,abc123==',
+          },
+        ],
+      });
+    });
+
+    it('should throw BadRequestException if photo is not a string or null', async () => {
+      const payload = {
+        letters: [
+          {
+            letter: 'A',
+            status: 'used',
+            photo: 12345 as any,
+          },
+        ],
+      };
+
+      await expect(controller.updateBoardState('key', payload)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
     it('should validate metadata.pin format and throw BadRequestException if invalid', async () => {
       const payload = {
         letters: [{ letter: 'A', status: 'used' }],

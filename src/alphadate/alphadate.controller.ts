@@ -134,6 +134,9 @@ export class AlphadateController {
       if (item.note !== undefined && item.note !== null && typeof item.note !== 'string') {
         throw new BadRequestException('Letter note must be a string or null');
       }
+      if (item.photo !== undefined && item.photo !== null && typeof item.photo !== 'string') {
+        throw new BadRequestException('Letter photo must be a string or null');
+      }
     }
 
     let parsedPartners: string[] | undefined = undefined;
@@ -184,6 +187,9 @@ export class AlphadateController {
         status: item.status,
         ...(item.note !== undefined && {
           note: typeof item.note === 'string' ? item.note.trim() : null,
+        }),
+        ...(item.photo !== undefined && {
+          photo: typeof item.photo === 'string' ? item.photo.trim() : null,
         }),
       })),
     };
