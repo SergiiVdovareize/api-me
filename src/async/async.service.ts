@@ -1,10 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { put, del, list, ListFoldedBlobResult } from '@vercel/blob';
 import { uid } from 'uid';
 import { ASYNC_CONSTANTS } from './async.constants';
+import { BlobService } from '../blob/blob.service';
 
 @Injectable()
 export class AsyncService {
+  constructor(@Optional() private readonly blobService?: BlobService) {}
+
   async prepareResult(execute: () => Promise<JSON>, track?: () => void) {
     const result: { type: 'sync' | 'async'; data: string | object } = {
       type: null,
@@ -48,11 +51,19 @@ export class AsyncService {
   }
 
   removeResultFile(url: string): void {
+    if (this.blobService) {
+      this.blobService.remove(url).catch(() => {});
+      return;
+    }
     del(url);
   }
 
   async createResultFile(filename: string, data: JSON): Promise<string> {
     const targetFilename = filename.startsWith('cache-') ? filename : `cache-${filename}`;
+    if (this.blobService) {
+      const blob = await this.blobService.create(targetFilename, data);
+      return blob.url;
+    }
     const blob = await put(targetFilename, JSON.stringify(data), {
       access: 'public',
       contentType: 'application/json',
@@ -63,6 +74,13 @@ export class AsyncService {
 
   async findResultFileUrl(id: string): Promise<string | null> {
     const prefix = id.startsWith('cache-') ? id : `cache-${id}`;
+    if (this.blobService) {
+      let blobs = await this.blobService.list(prefix);
+      if (blobs.length !== 1 && !id.startsWith('cache-')) {
+        blobs = await this.blobService.list(id);
+      }
+      return blobs.length === 1 ? blobs[0].url : null;
+    }
     let fileList: ListFoldedBlobResult = await list({ prefix });
     if (fileList.blobs.length !== 1 && !id.startsWith('cache-')) {
       fileList = await list({ prefix: id });

@@ -88,6 +88,27 @@ describe('CnapController', () => {
   });
 
   describe('checkSlotsPost', () => {
+    it('should call service with provided body object', async () => {
+      const result = await controller.checkSlotsPost({
+        category: 'Категорія 2',
+        service: 'Послуга 2',
+        location: 'Шевченка',
+        notify: 'always',
+        force: 'false',
+        chatId: '67890',
+      });
+
+      expect(result).toEqual(mockResponse);
+      expect(mockCnapService.checkAndNotify).toHaveBeenCalledWith({
+        category: 'Категорія 2',
+        service: 'Послуга 2',
+        location: 'Шевченка',
+        notify: 'always',
+        force: 'false',
+        chatId: '67890',
+      });
+    });
+
     it('should call service with provided query parameters', async () => {
       const result = await controller.checkSlotsPost(
         'Категорія 2',

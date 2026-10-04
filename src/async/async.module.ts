@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AsyncService } from './async.service';
-import { RequestsService } from 'src/requests/requests.service';
 import { PrismaModule } from 'src/models/prisma/prisma.module';
 import { AsyncController } from './async.controller';
-import { PosthogService } from 'src/posthog/posthog.service';
-import { AnalyticsService } from 'src/analytics/analytics.service';
+import { RequestsModule } from 'src/requests/requests.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, RequestsModule],
   controllers: [AsyncController],
-  providers: [AsyncService, RequestsService, AsyncService, AnalyticsService, PosthogService],
+  providers: [AsyncService],
+  exports: [AsyncService],
 })
 export class AsyncModule {}

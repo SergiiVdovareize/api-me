@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Logger } from '@nestjs/common';
 import { TrackService } from './track.service';
 import { AnalyticsService } from 'src/analytics/analytics.service';
 import { AccountType } from 'src/models/enums/account-type.enum';
@@ -49,11 +49,17 @@ export class TrackController {
     return { success: true };
   }
 
-  @Get('deactivate/:trackId')
+  @Post('deactivate/:trackId')
   async deactivate(@Param('trackId') trackId: string) {
     this.analyticsService.trackEvent(AnalyticsEvent.DeactivateAccount, { trackId });
     await this.trackService.deactivateAccountByTrackId(trackId);
     return { success: true };
+  }
+
+  // Deprecated GET alias for backward compatibility with older clients
+  @Get('deactivate/:trackId')
+  async deactivateGet(@Param('trackId') trackId: string) {
+    return this.deactivate(trackId);
   }
 
   @Get('check/:type/:id')

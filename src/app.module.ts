@@ -4,24 +4,15 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
-import { DateController } from './date/date.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './models/prisma/prisma.module';
 import { RequestsModule } from './requests/requests.module';
-import { RequestsService } from './requests/requests.service';
 import { CloudsModule } from './clouds/clouds.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MemesModule } from './memes/memes.module';
 import { AsyncModule } from './async/async.module';
-import { AnalyticsService } from './analytics/analytics.service';
-import { PosthogService } from './posthog/posthog.service';
-import { DateService } from './date/date.service';
 import { TrackModule } from './track/track.module';
-import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from './cache/cache.module';
-import { BlobService } from './blob/blob.service';
-import { RedisReader } from './common/helpers/redisReader';
-import { AnalyticsController } from './analytics/analytics.controller';
 import { GameResultsModule } from './game-results/game-results.module';
 import { AlphadateModule } from './alphadate/alphadate.module';
 import { EmailModule } from './email/email.module';
@@ -29,6 +20,11 @@ import { SeriesTrackerModule } from './series-tracker/series-tracker.module';
 import { FuelModule } from './fuel/fuel.module';
 import { CnapModule } from './cnap/cnap.module';
 import { LlmModule } from './llm/llm.module';
+import { BlobModule } from './blob/blob.module';
+import { RedisModule } from './common/redis.module';
+import { PosthogModule } from './posthog/posthog.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { DateModule } from './date/date.module';
 
 @Module({
   imports: [
@@ -45,7 +41,11 @@ import { LlmModule } from './llm/llm.module';
         },
       ],
     }),
-    ScheduleModule.forRoot(),
+    BlobModule,
+    RedisModule,
+    PosthogModule,
+    AnalyticsModule,
+    DateModule,
     PrismaModule,
     RequestsModule,
     CloudsModule,
@@ -62,7 +62,7 @@ import { LlmModule } from './llm/llm.module';
     LlmModule,
   ],
 
-  controllers: [AppController, DateController, AnalyticsController],
+  controllers: [AppController],
   providers: [
     {
       provide: APP_FILTER,
@@ -73,12 +73,6 @@ import { LlmModule } from './llm/llm.module';
       useClass: ThrottlerGuard,
     },
     AppService,
-    RequestsService,
-    PosthogService,
-    AnalyticsService,
-    DateService,
-    BlobService,
-    RedisReader,
   ],
 })
 export class AppModule {}
