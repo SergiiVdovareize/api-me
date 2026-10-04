@@ -27,35 +27,14 @@ export class CnapController {
   }
 
   @Post('check')
-  async checkSlotsPost(
-    @Body() bodyOrCategory?: CheckCnapDto | string,
-    @Query('service') serviceParam?: string,
-    @Query('location') locationParam?: string,
-    @Query('notify') notifyParam?: string,
-    @Query('force') forceParam?: string,
-    @Query('chatId') chatIdParam?: string
-  ): Promise<CnapCheckResponse> {
-    const isBodyObject =
-      bodyOrCategory !== null &&
-      typeof bodyOrCategory === 'object' &&
-      !Array.isArray(bodyOrCategory);
-
-    const category = isBodyObject
-      ? (bodyOrCategory as CheckCnapDto).category
-      : (bodyOrCategory as string | undefined);
-    const service = isBodyObject ? (bodyOrCategory as CheckCnapDto).service : serviceParam;
-    const location = isBodyObject ? (bodyOrCategory as CheckCnapDto).location : locationParam;
-    const notify = isBodyObject ? (bodyOrCategory as CheckCnapDto).notify : notifyParam;
-    const force = isBodyObject ? (bodyOrCategory as CheckCnapDto).force : forceParam;
-    const chatId = isBodyObject ? (bodyOrCategory as CheckCnapDto).chatId : chatIdParam;
-
+  async checkSlotsPost(@Body() dto: CheckCnapDto): Promise<CnapCheckResponse> {
     return this.cnapService.checkAndNotify({
-      category,
-      service,
-      location,
-      notify,
-      force,
-      chatId,
+      category: dto?.category,
+      service: dto?.service,
+      location: dto?.location,
+      notify: dto?.notify,
+      force: dto?.force,
+      chatId: dto?.chatId,
     });
   }
 

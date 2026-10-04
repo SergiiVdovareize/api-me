@@ -56,12 +56,6 @@ export class TrackController {
     return { success: true };
   }
 
-  // Deprecated GET alias for backward compatibility with older clients
-  @Get('deactivate/:trackId')
-  async deactivateGet(@Param('trackId') trackId: string) {
-    return this.deactivate(trackId);
-  }
-
   @Get('check/:type/:id')
   async check(
     @Param('type') type: AccountType,

@@ -109,29 +109,8 @@ describe('CnapController', () => {
       });
     });
 
-    it('should call service with provided query parameters', async () => {
-      const result = await controller.checkSlotsPost(
-        'Категорія 2',
-        'Послуга 2',
-        'Шевченка',
-        'always',
-        'false',
-        '67890'
-      );
-
-      expect(result).toEqual(mockResponse);
-      expect(mockCnapService.checkAndNotify).toHaveBeenCalledWith({
-        category: 'Категорія 2',
-        service: 'Послуга 2',
-        location: 'Шевченка',
-        notify: 'always',
-        force: 'false',
-        chatId: '67890',
-      });
-    });
-
-    it('should call service with undefined query parameters', async () => {
-      const result = await controller.checkSlotsPost();
+    it('should call service with empty DTO properties', async () => {
+      const result = await controller.checkSlotsPost({} as any);
 
       expect(result).toEqual(mockResponse);
       expect(mockCnapService.checkAndNotify).toHaveBeenCalledWith({

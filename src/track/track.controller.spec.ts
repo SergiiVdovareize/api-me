@@ -43,11 +43,5 @@ describe('TrackController', () => {
       expect(result).toEqual({ success: true });
       expect(trackService.deactivateAccountByTrackId).toHaveBeenCalledWith('test-track-123');
     });
-
-    it('should support legacy GET deactivate method', async () => {
-      const result = await controller.deactivateGet('test-track-123');
-      expect(result).toEqual({ success: true });
-      expect(trackService.deactivateAccountByTrackId).toHaveBeenCalledWith('test-track-123');
-    });
   });
 });
