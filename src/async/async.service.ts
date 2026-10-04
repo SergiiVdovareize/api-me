@@ -59,7 +59,8 @@ export class AsyncService {
   }
 
   async createResultFile(filename: string, data: JSON): Promise<string> {
-    const targetFilename = filename.startsWith('cache-') ? filename : `cache-${filename}`;
+    const clean = filename.replace(/^cache\//, '');
+    const targetFilename = clean.startsWith('cache-') ? `cache/${clean}` : `cache/cache-${clean}`;
     if (this.blobService) {
       const blob = await this.blobService.create(targetFilename, data);
       return blob.url;
@@ -73,17 +74,26 @@ export class AsyncService {
   }
 
   async findResultFileUrl(id: string): Promise<string | null> {
-    const prefix = id.startsWith('cache-') ? id : `cache-${id}`;
+    const clean = id.replace(/^cache\//, '');
+    const prefixInFolder = clean.startsWith('cache-') ? `cache/${clean}` : `cache/cache-${clean}`;
     if (this.blobService) {
-      let blobs = await this.blobService.list(prefix);
-      if (blobs.length !== 1 && !id.startsWith('cache-')) {
-        blobs = await this.blobService.list(id);
+      let blobs = await this.blobService.list(prefixInFolder);
+      if (blobs.length !== 1) {
+        blobs = await this.blobService.list(`cache/${clean}`);
+      }
+      if (blobs.length !== 1) {
+        const legacyPrefix = clean.startsWith('cache-') ? clean : `cache-${clean}`;
+        blobs = await this.blobService.list(legacyPrefix);
       }
       return blobs.length === 1 ? blobs[0].url : null;
     }
-    let fileList: ListFoldedBlobResult = await list({ prefix });
-    if (fileList.blobs.length !== 1 && !id.startsWith('cache-')) {
-      fileList = await list({ prefix: id });
+    let fileList: ListFoldedBlobResult = await list({ prefix: prefixInFolder });
+    if (fileList.blobs.length !== 1) {
+      fileList = await list({ prefix: `cache/${clean}` });
+    }
+    if (fileList.blobs.length !== 1) {
+      const legacyPrefix = clean.startsWith('cache-') ? clean : `cache-${clean}`;
+      fileList = await list({ prefix: legacyPrefix });
     }
     return fileList.blobs.length === 1 ? fileList.blobs[0].url : null;
   }

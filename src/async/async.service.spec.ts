@@ -45,12 +45,12 @@ describe('AsyncService', () => {
   });
 
   describe('createResultFile', () => {
-    it('should call put and return the url with cache- prefix', async () => {
+    it('should call put and return the url with cache/ prefix', async () => {
       (put as jest.Mock).mockResolvedValue({ url: 'https://example.com/result' });
       const data = { foo: 'bar' } as any;
 
       const result = await service.createResultFile('test-file', data);
-      expect(put).toHaveBeenCalledWith('cache-test-file', JSON.stringify(data), {
+      expect(put).toHaveBeenCalledWith('cache/cache-test-file', JSON.stringify(data), {
         access: 'public',
         contentType: 'application/json',
       });
@@ -59,13 +59,13 @@ describe('AsyncService', () => {
   });
 
   describe('findResultFileUrl', () => {
-    it('should return url if exactly one blob is found with cache- prefix', async () => {
+    it('should return url if exactly one blob is found with cache/ prefix', async () => {
       (list as jest.Mock).mockResolvedValue({
         blobs: [{ url: 'https://example.com/found' }],
       });
 
       const url = await service.findResultFileUrl('id-123');
-      expect(list).toHaveBeenCalledWith({ prefix: 'cache-id-123' });
+      expect(list).toHaveBeenCalledWith({ prefix: 'cache/cache-id-123' });
       expect(url).toBe('https://example.com/found');
     });
 

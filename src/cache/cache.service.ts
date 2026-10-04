@@ -4,7 +4,7 @@ import { RedisReader } from 'src/common/helpers/redisReader';
 
 const OLD_INDICATOR_DAYS = 1;
 const MAX_ITEMS_TO_REMOVE = 100;
-const CACHE_PREFIX = 'cache-';
+const CACHE_FOLDER = 'cache/';
 
 @Injectable()
 export class CacheService {
@@ -25,14 +25,14 @@ export class CacheService {
   }
 
   async refresh() {
-    const blobList = await this.blobService.list(CACHE_PREFIX);
+    const blobList = await this.blobService.list(CACHE_FOLDER);
     if (!blobList?.length) {
       this.logger.log('No blob items found');
       return;
     }
     this.logger.log(`Total blob items found: ${blobList.length}`);
     const oldItems = blobList
-      .filter(item => item.pathname?.startsWith(CACHE_PREFIX) && this.isItemOld(item.uploadedAt))
+      .filter(item => item.pathname?.startsWith(CACHE_FOLDER) && this.isItemOld(item.uploadedAt))
       .slice(0, MAX_ITEMS_TO_REMOVE);
     this.logger.log(`Old blob items found: ${oldItems.length}`);
     let removedItems = 0;
