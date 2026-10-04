@@ -5,6 +5,7 @@ export interface LetterState {
   photo?: string | null;
   selectedAt?: string | Date | null;
   completedAt?: string | Date | null;
+  partnerId?: number | null;
 }
 
 export interface BoardMetadata {

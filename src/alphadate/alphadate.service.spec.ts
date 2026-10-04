@@ -704,6 +704,60 @@ describe('AlphadateService', () => {
         'https://blob.vercel-storage.com/old-photo.webp'
       );
     });
+
+    it('should save partner and excluded status to history when a letter is excluded', async () => {
+      const dbBoard = {
+        key: 'key',
+        letters: [
+          {
+            letter: 'Б',
+            status: 'available',
+          },
+        ],
+        currentPartnerId: 2,
+        pin: null,
+      };
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(dbBoard);
+      mockPrismaService.alphadatePartner.findMany.mockResolvedValue([
+        { id: 1, turnOrder: 1 },
+        { id: 2, turnOrder: 2 },
+      ]);
+
+      const dto = {
+        letters: [
+          {
+            letter: 'Б',
+            status: 'excluded' as const,
+            note: 'Not interested in bowling',
+          },
+        ],
+      };
+
+      const result = await service.updateBoardState('key', dto);
+      expect(result.success).toBe(true);
+      expect(mockPrismaService.alphadateHistory.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            boardId_letter: {
+              boardId: 'key',
+              letter: 'Б',
+            },
+          },
+          create: expect.objectContaining({
+            boardId: 'key',
+            letter: 'Б',
+            partnerId: 2,
+            status: 'excluded',
+            note: 'Not interested in bowling',
+          }),
+          update: expect.objectContaining({
+            partnerId: 2,
+            status: 'excluded',
+            note: 'Not interested in bowling',
+          }),
+        })
+      );
+    });
   });
 
   describe('deleteBoard', () => {

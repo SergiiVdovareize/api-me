@@ -475,19 +475,25 @@ export class AlphadateService {
       })
     );
 
-    const newlyUsedLetters: {
+    interface HistoryLetterItem {
+      letter: string;
+      status: 'used' | 'excluded';
+      partnerId?: number | null;
+      note?: string | null;
+      photo?: string | null;
+      selectedAt?: string | Date | null;
+      completedAt?: string | Date | null;
+    }
+
+    const newlyUsedLetters: HistoryLetterItem[] = [];
+    const newlyExcludedLetters: HistoryLetterItem[] = [];
+    const updatedNoteLetters: {
       letter: string;
       note?: string | null;
       photo?: string | null;
       selectedAt?: string | Date | null;
       completedAt?: string | Date | null;
-    }[] = [];
-    const updatedNoteLetters: {
-      letter: string;
-      note: string | null;
-      photo?: string | null;
-      selectedAt?: string | Date | null;
-      completedAt?: string | Date | null;
+      partnerId?: number | null;
     }[] = [];
     const noLongerUsedLetters: string[] = [];
 
@@ -499,17 +505,33 @@ export class AlphadateService {
       if (item.status === 'used' && oldStatus !== 'used') {
         newlyUsedLetters.push({
           letter: item.letter,
+          status: 'used',
+          partnerId: item.partnerId,
           note: item.note,
           photo: item.photo,
           selectedAt: item.selectedAt,
           completedAt: item.completedAt,
         });
-      } else if (item.status === 'used' && oldStatus === 'used') {
+      } else if (item.status === 'excluded' && oldStatus !== 'excluded') {
+        newlyExcludedLetters.push({
+          letter: item.letter,
+          status: 'excluded',
+          partnerId: item.partnerId,
+          note: item.note,
+          photo: item.photo,
+          selectedAt: item.selectedAt,
+          completedAt: item.completedAt,
+        });
+      } else if (
+        (item.status === 'used' && oldStatus === 'used') ||
+        (item.status === 'excluded' && oldStatus === 'excluded')
+      ) {
         if (
           (item.note !== undefined && item.note !== oldNote) ||
           (item.photo !== undefined && item.photo !== oldPhoto) ||
           item.selectedAt !== undefined ||
-          item.completedAt !== undefined
+          item.completedAt !== undefined ||
+          item.partnerId !== undefined
         ) {
           updatedNoteLetters.push({
             letter: item.letter,
@@ -517,9 +539,14 @@ export class AlphadateService {
             photo: item.photo !== undefined ? item.photo : oldPhoto,
             selectedAt: item.selectedAt,
             completedAt: item.completedAt,
+            partnerId: item.partnerId,
           });
         }
-      } else if (oldStatus === 'used' && item.status !== 'used') {
+      } else if (
+        (oldStatus === 'used' || oldStatus === 'excluded') &&
+        item.status !== 'used' &&
+        item.status !== 'excluded'
+      ) {
         noLongerUsedLetters.push(item.letter);
         if (oldPhoto && oldPhoto.includes('vercel-storage.com')) {
           this.blobService?.remove(oldPhoto).catch(() => {});
@@ -631,13 +658,18 @@ export class AlphadateService {
           where: { boardId: key },
         });
       } else {
-        for (const item of newlyUsedLetters) {
+        const newlyHistoryLetters = [...newlyUsedLetters, ...newlyExcludedLetters];
+        for (const item of newlyHistoryLetters) {
           const letterSelectedAt = item.selectedAt
             ? new Date(item.selectedAt)
             : item.letter === board.currentLetter
               ? board.currentLetterSelectedAt || new Date()
               : new Date();
           const letterCompletedAt = item.completedAt ? new Date(item.completedAt) : new Date();
+          const partnerIdToSet =
+            item.partnerId !== undefined && item.partnerId !== null
+              ? item.partnerId
+              : board.currentPartnerId;
 
           await tx.alphadateHistory.upsert({
             where: {
@@ -649,16 +681,16 @@ export class AlphadateService {
             create: {
               boardId: key,
               letter: item.letter,
-              partnerId: board.currentPartnerId,
-              status: 'used',
+              partnerId: partnerIdToSet,
+              status: item.status,
               note: item.note || null,
               photo: item.photo || null,
               selectedAt: letterSelectedAt,
               completedAt: letterCompletedAt,
             },
             update: {
-              partnerId: board.currentPartnerId,
-              status: 'used',
+              partnerId: partnerIdToSet,
+              status: item.status,
               note: item.note || null,
               photo: item.photo || null,
               selectedAt: letterSelectedAt,
@@ -668,9 +700,10 @@ export class AlphadateService {
         }
 
         for (const item of updatedNoteLetters) {
-          const updateData: any = {
-            note: item.note,
-          };
+          const updateData: any = {};
+          if (item.note !== undefined) {
+            updateData.note = item.note;
+          }
           if (item.photo !== undefined) {
             updateData.photo = item.photo;
           }
@@ -680,14 +713,19 @@ export class AlphadateService {
           if (item.completedAt !== undefined) {
             updateData.completedAt = item.completedAt ? new Date(item.completedAt) : null;
           }
+          if (item.partnerId !== undefined) {
+            updateData.partnerId = item.partnerId;
+          }
 
-          await tx.alphadateHistory.updateMany({
-            where: {
-              boardId: key,
-              letter: item.letter,
-            },
-            data: updateData,
-          });
+          if (Object.keys(updateData).length > 0) {
+            await tx.alphadateHistory.updateMany({
+              where: {
+                boardId: key,
+                letter: item.letter,
+              },
+              data: updateData,
+            });
+          }
         }
 
         for (const letter of noLongerUsedLetters) {
