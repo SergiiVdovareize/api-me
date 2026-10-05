@@ -860,16 +860,13 @@ export class AlphadateService {
       throw new ServiceUnavailableException('AI date suggestion service is currently unavailable');
     }
 
-    let data: { letter?: string; suggestions?: DateSuggestion[] };
+    let data: any;
     try {
       const { systemPrompt, userPrompt } = buildDateSuggestionsPrompt(
         normalizedLetter,
         detectedLang
       );
-      data = await this.llmService.callAndParseJSON<{
-        letter?: string;
-        suggestions?: DateSuggestion[];
-      }>(systemPrompt, userPrompt);
+      data = await this.llmService.callAndParseJSON<any>(systemPrompt, userPrompt);
     } catch (error: any) {
       const errMsg = (error?.message || '').toLowerCase();
       this.logger.error(
@@ -901,16 +898,38 @@ export class AlphadateService {
       );
     }
 
-    const rawSuggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+    let rawSuggestions: any[] = [];
+    if (Array.isArray(data)) {
+      rawSuggestions = data;
+    } else if (Array.isArray(data?.suggestions)) {
+      rawSuggestions = data.suggestions;
+    }
+
     const sanitized: DateSuggestion[] = rawSuggestions
-      .filter(s => s && typeof s === 'object' && typeof s.title === 'string' && s.title.trim())
-      .filter(s => s.title.trim().toUpperCase().startsWith(normalizedLetter))
-      .map(s => ({
-        title: s.title.trim(),
-        description: typeof s.description === 'string' ? s.description.trim() : '',
-        category: s.category || 'romantic',
-        estimatedCost: s.estimatedCost || 'moderate',
-      }));
+      .map(s => {
+        if (typeof s === 'string') {
+          const trimmed = s.trim();
+          return trimmed
+            ? {
+                title: trimmed,
+                description: '',
+                category: 'romantic',
+                estimatedCost: 'moderate',
+              }
+            : null;
+        }
+        if (s && typeof s === 'object' && typeof s.title === 'string' && s.title.trim()) {
+          return {
+            title: s.title.trim(),
+            description: typeof s.description === 'string' ? s.description.trim() : '',
+            category: s.category || 'romantic',
+            estimatedCost: s.estimatedCost || 'moderate',
+          };
+        }
+        return null;
+      })
+      .filter((s): s is DateSuggestion => Boolean(s))
+      .filter(s => s.title.trim().toUpperCase().startsWith(normalizedLetter));
 
     const response: DateSuggestionsResponse = {
       success: true,

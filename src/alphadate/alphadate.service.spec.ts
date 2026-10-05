@@ -853,7 +853,7 @@ describe('AlphadateService', () => {
       expect(result.suggestions[0].title).toBe('Аквапарк');
       expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
         expect.stringContaining('AlphaDate'),
-        expect.stringContaining('Літера: "А"')
+        expect.stringContaining('«А»')
       );
     });
 
@@ -880,7 +880,7 @@ describe('AlphadateService', () => {
       expect(result.suggestions[0].title).toBe('Bowling');
       expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
         expect.stringContaining('Alphabet Dating'),
-        expect.stringContaining('Letter: "B"')
+        expect.stringContaining('"B"')
       );
     });
 
@@ -924,6 +924,41 @@ describe('AlphadateService', () => {
       expect(result.success).toBe(true);
       expect(result.suggestions).toHaveLength(1);
       expect(result.suggestions[0].title).toBe('Єноти');
+    });
+
+    it('should parse raw string array returned by AI', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
+      mockLlmService.callAndParseJSON.mockResolvedValue(['аквапарк', 'альтанка', 'боулінг']);
+
+      const result = await service.getSuggestions('valid-key', 'а');
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('А');
+      expect(result.suggestions).toHaveLength(2);
+      expect(result.suggestions[0].title).toBe('аквапарк');
+      expect(result.suggestions[1].title).toBe('альтанка');
+    });
+
+    it('should parse array of objects with title and description returned by AI', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
+      mockLlmService.callAndParseJSON.mockResolvedValue([
+        {
+          title: 'Аквапарк',
+          description: 'Відвідайте водні атракціони та відпочиньте у джакузі.',
+        },
+      ]);
+
+      const result = await service.getSuggestions('valid-key', 'а');
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('А');
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0].title).toBe('Аквапарк');
+      expect(result.suggestions[0].description).toBe(
+        'Відвідайте водні атракціони та відпочиньте у джакузі.'
+      );
+      expect(result.suggestions[0].category).toBe('romantic');
+      expect(result.suggestions[0].estimatedCost).toBe('moderate');
     });
 
     it('should throw HttpException with status 429 if AI fails due to rate limit', async () => {
