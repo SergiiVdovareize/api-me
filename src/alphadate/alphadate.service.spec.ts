@@ -1090,9 +1090,9 @@ describe('AlphadateService', () => {
     it('should throw NotFoundException if board not found', async () => {
       mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.updateLetter('nonexistent', 'А', { note: 'test' })
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateLetter('nonexistent', 'А', { note: 'test' })).rejects.toThrow(
+        NotFoundException
+      );
     });
 
     it('should verify PIN access if board has PIN', async () => {
@@ -1102,13 +1102,13 @@ describe('AlphadateService', () => {
         letters: [{ letter: 'А', status: 'used' }],
       });
 
-      await expect(
-        service.updateLetter('pinned-board', 'А', { note: 'test' })
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.updateLetter('pinned-board', 'А', { note: 'test' })).rejects.toThrow(
+        UnauthorizedException
+      );
 
       await expect(
         service.updateLetter('pinned-board', 'А', { note: 'test' }, '0000')
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw NotFoundException if letter is not on board', async () => {
@@ -1118,9 +1118,9 @@ describe('AlphadateService', () => {
         letters: [{ letter: 'Б', status: 'used' }],
       });
 
-      await expect(
-        service.updateLetter('test-board', 'А', { note: 'test' })
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateLetter('test-board', 'А', { note: 'test' })).rejects.toThrow(
+        NotFoundException
+      );
     });
 
     it('should throw BadRequestException if letter is not used/completed', async () => {
@@ -1130,9 +1130,9 @@ describe('AlphadateService', () => {
         letters: [{ letter: 'А', status: 'available' }],
       });
 
-      await expect(
-        service.updateLetter('test-board', 'А', { note: 'test' })
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.updateLetter('test-board', 'А', { note: 'test' })).rejects.toThrow(
+        BadRequestException
+      );
     });
 
     it('should update note and photo for completed letter and clean up old blob', async () => {
@@ -1163,9 +1163,7 @@ describe('AlphadateService', () => {
       expect(result.success).toBe(true);
       expect(result.letter).toBe('А');
       expect(result.note).toBe('Новий оновлений коментар');
-      expect(result.photo).toBe(
-        'https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp'
-      );
+      expect(result.photo).toBe('https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp');
 
       expect(mockBlobService.remove).toHaveBeenCalledWith(
         'https://blob.vercel-storage.com/alphadate/test-board/old.webp'
