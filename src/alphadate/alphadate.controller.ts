@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Put,
+  Patch,
   Delete,
   Param,
   Query,
@@ -15,6 +16,7 @@ import {
 import { AlphadateService } from './alphadate.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { RecoverBoardDto } from './dto/recover-board.dto';
+import { UpdateLetterDto } from './dto/update-letter.dto';
 
 @Controller('alphadate')
 export class AlphadateController {
@@ -225,6 +227,46 @@ export class AlphadateController {
         currentLetterSelectedAt: result.currentLetterSelectedAt,
       }),
     };
+  }
+
+  @Patch(':key/letters/:letter')
+  async updateLetter(
+    @Param('key') key: string,
+    @Param('letter') letter: string,
+    @Body() body: any,
+    @Headers('x-board-pin') pinHeader?: string
+  ) {
+    if (!key || typeof key !== 'string' || !key.trim()) {
+      throw new BadRequestException('Board key is required');
+    }
+    if (!letter || typeof letter !== 'string' || !letter.trim()) {
+      throw new BadRequestException('Letter parameter is required');
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Request body must be a JSON object');
+    }
+    if (body.note === undefined && body.photo === undefined) {
+      throw new BadRequestException('At least one of "note" or "photo" must be provided');
+    }
+    if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') {
+      throw new BadRequestException('Letter note must be a string or null');
+    }
+    if (body.photo !== undefined && body.photo !== null && typeof body.photo !== 'string') {
+      throw new BadRequestException('Letter photo must be a string or null');
+    }
+
+    const updateLetterDto: UpdateLetterDto = {
+      ...(body.note !== undefined && {
+        note: typeof body.note === 'string' ? body.note.trim() : null,
+      }),
+      ...(body.photo !== undefined && {
+        photo: typeof body.photo === 'string' ? body.photo.trim() : null,
+      }),
+    };
+
+    return pinHeader
+      ? this.alphadateService.updateLetter(key, letter, updateLetterDto, pinHeader)
+      : this.alphadateService.updateLetter(key, letter, updateLetterDto);
   }
 
   @Delete(':key')

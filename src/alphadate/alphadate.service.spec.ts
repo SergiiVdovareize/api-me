@@ -1085,4 +1085,145 @@ describe('AlphadateService', () => {
       expect(result).toEqual({ success: true });
     });
   });
+
+  describe('updateLetter', () => {
+    it('should throw NotFoundException if board not found', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateLetter('nonexistent', 'А', { note: 'test' })
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should verify PIN access if board has PIN', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'pinned-board',
+        pin: '1234',
+        letters: [{ letter: 'А', status: 'used' }],
+      });
+
+      await expect(
+        service.updateLetter('pinned-board', 'А', { note: 'test' })
+      ).rejects.toThrow(UnauthorizedException);
+
+      await expect(
+        service.updateLetter('pinned-board', 'А', { note: 'test' }, '0000')
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw NotFoundException if letter is not on board', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'test-board',
+        pin: null,
+        letters: [{ letter: 'Б', status: 'used' }],
+      });
+
+      await expect(
+        service.updateLetter('test-board', 'А', { note: 'test' })
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if letter is not used/completed', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'test-board',
+        pin: null,
+        letters: [{ letter: 'А', status: 'available' }],
+      });
+
+      await expect(
+        service.updateLetter('test-board', 'А', { note: 'test' })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should update note and photo for completed letter and clean up old blob', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'test-board',
+        pin: null,
+        letters: [
+          {
+            letter: 'А',
+            status: 'used',
+            note: 'Старий коментар',
+            photo: 'https://blob.vercel-storage.com/alphadate/test-board/old.webp',
+          },
+          { letter: 'Б', status: 'available' },
+        ],
+      });
+      mockPrismaService.$transaction.mockImplementation(async cb => cb(mockPrismaService));
+      mockBlobService.upload.mockResolvedValue(
+        'https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp'
+      );
+      mockBlobService.remove.mockResolvedValue(undefined);
+
+      const result = await service.updateLetter('test-board', 'А', {
+        note: 'Новий оновлений коментар',
+        photo: 'data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.letter).toBe('А');
+      expect(result.note).toBe('Новий оновлений коментар');
+      expect(result.photo).toBe(
+        'https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp'
+      );
+
+      expect(mockBlobService.remove).toHaveBeenCalledWith(
+        'https://blob.vercel-storage.com/alphadate/test-board/old.webp'
+      );
+      expect(mockPrismaService.alphadateBoard.update).toHaveBeenCalledWith({
+        where: { key: 'test-board' },
+        data: {
+          letters: [
+            {
+              letter: 'А',
+              status: 'used',
+              note: 'Новий оновлений коментар',
+              photo: 'https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp',
+            },
+            { letter: 'Б', status: 'available' },
+          ],
+        },
+      });
+      expect(mockPrismaService.alphadateHistory.updateMany).toHaveBeenCalledWith({
+        where: {
+          boardId: 'test-board',
+          letter: 'А',
+        },
+        data: {
+          note: 'Новий оновлений коментар',
+          photo: 'https://blob.vercel-storage.com/alphadate/test-board/%D0%90.webp',
+        },
+      });
+      expect(mockRedisReader.delete).toHaveBeenCalledWith('alphadate:board:test-board');
+    });
+
+    it('should allow clearing note and photo', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({
+        key: 'test-board',
+        pin: null,
+        letters: [
+          {
+            letter: 'А',
+            status: 'used',
+            note: 'Старий коментар',
+            photo: 'https://blob.vercel-storage.com/alphadate/test-board/old.webp',
+          },
+        ],
+      });
+      mockPrismaService.$transaction.mockImplementation(async cb => cb(mockPrismaService));
+      mockBlobService.remove.mockResolvedValue(undefined);
+
+      const result = await service.updateLetter('test-board', 'А', {
+        note: null,
+        photo: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.note).toBeNull();
+      expect(result.photo).toBeNull();
+      expect(mockBlobService.remove).toHaveBeenCalledWith(
+        'https://blob.vercel-storage.com/alphadate/test-board/old.webp'
+      );
+    });
+  });
 });

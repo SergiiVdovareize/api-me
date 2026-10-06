@@ -17,6 +17,7 @@ API for creating, managing, and synchronizing shared romantic alphabet date boar
 | `GET` | `/alphadate/:key/suggestions` | Generate AI date ideas for a specific board and letter (`?letter=А`) |
 | `GET` | `/alphadate/:key` | Retrieve the current board state, letters, and metadata |
 | `PUT` | `/alphadate/:key` | Update board state (letters, active letter, turn, partners, PIN) |
+| `PATCH` | `/alphadate/:key/letters/:letter` | Update note and/or photo for a completed letter |
 | `DELETE` | `/alphadate/:key` | Delete a board by its unique key |
 
 ---
@@ -300,7 +301,47 @@ Updates letters, active selected letter, notes, partners, or security settings. 
 
 ---
 
-### 6. Delete Board (`DELETE /alphadate/:key`)
+### 6. Update Completed Letter Note & Photo (`PATCH /alphadate/:key/letters/:letter`)
+
+Updates the comment (`note`) and/or attached image (`photo`) for a specific completed (`used`) letter without having to resend the entire board state. Updates both the `letters` array on the board and the record in `alphadateHistory`, and invalidates the board cache in Redis.
+
+> [!NOTE]
+> * **PIN Protection**: If the board has a PIN code, provide it via the `x-board-pin` header.
+> * **Status Restriction**: Only letters with status `used` can have their note or photo edited. Attempting to edit a letter in another status returns `400 Bad Request`.
+> * **Photo Upload**: Supports WebP/JPEG/PNG base64 Data URLs (`data:image/webp;base64,...`) which are automatically uploaded to Vercel Blob storage, direct image URLs (`https://...`), or `null` / empty string to remove the photo (which cleans up the previous blob file).
+
+#### URL Parameters
+* `key` (`string`, **Required**): Unique board key (e.g. `x9a2k`).
+* `letter` (`string`, **Required**): Target letter character (e.g. `А`, case-insensitive).
+
+#### Request Body
+```json
+{
+  "note": "Неймовірна поїздка в аквапарк, дуже сподобалися гірки!",
+  "photo": "data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAA..."
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `note` | `string \| null` | Optional* | Updated comment/note for this date. Trimmed, or `null` to clear. |
+| `photo` | `string \| null` | Optional* | Updated photo (Data URL, URL, or `null` to delete photo). |
+
+*\*At least one of `note` or `photo` must be provided in the request body.*
+
+#### Response (`200 OK`)
+```json
+{
+  "success": true,
+  "letter": "А",
+  "note": "Неймовірна поїздка в аквапарк, дуже сподобалися гірки!",
+  "photo": "https://blob.vercel-storage.com/alphadate/x9a2k/%D0%90.webp"
+}
+```
+
+---
+
+### 7. Delete Board (`DELETE /alphadate/:key`)
 
 Permanently deletes a board, its partners, and associated history, and removes the board state from Redis cache.
 
@@ -349,5 +390,16 @@ curl -X PUT "https://api.vdovareize.me/alphadate/x9a2k" \
       { "letter": "А", "status": "used", "note": "Чудовий вечір у планетарії!" }
     ],
     "currentLetter": null
+  }'
+```
+
+### 3. Editing Note or Photo of a Completed Letter
+```bash
+curl -X PATCH "https://api.vdovareize.me/alphadate/x9a2k/letters/А" \
+  -H "Content-Type: application/json" \
+  -H "x-board-pin: 1234" \
+  -d '{
+    "note": "Оновили відгук: найкращі враження за весь місяць!",
+    "photo": "data:image/webp;base64,UklGRmIAAABXRUJQVlA4TFYAAA..."
   }'
 ```

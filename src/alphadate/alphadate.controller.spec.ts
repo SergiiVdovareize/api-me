@@ -15,6 +15,7 @@ describe('AlphadateController', () => {
       deleteBoard: jest.fn(),
       getSuggestions: jest.fn(),
       recover: jest.fn(),
+      updateLetter: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -386,6 +387,70 @@ describe('AlphadateController', () => {
       const result = await controller.getSuggestionsByParam('valid-key', 'Б');
       expect(result).toEqual(mockResult);
       expect(service.getSuggestions).toHaveBeenCalledWith('valid-key', 'Б');
+    });
+  });
+
+  describe('updateLetter', () => {
+    it('should throw BadRequestException if key is missing or empty', async () => {
+      await expect(controller.updateLetter('', 'А', { note: 'test' })).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw BadRequestException if letter is missing or empty', async () => {
+      await expect(controller.updateLetter('key', '', { note: 'test' })).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw BadRequestException if body is not an object', async () => {
+      await expect(controller.updateLetter('key', 'А', null as any)).rejects.toThrow(
+        BadRequestException
+      );
+      await expect(controller.updateLetter('key', 'А', 'string' as any)).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw BadRequestException if neither note nor photo is provided', async () => {
+      await expect(controller.updateLetter('key', 'А', {})).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if note is invalid type', async () => {
+      await expect(controller.updateLetter('key', 'А', { note: 123 as any })).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should throw BadRequestException if photo is invalid type', async () => {
+      await expect(controller.updateLetter('key', 'А', { photo: 123 as any })).rejects.toThrow(
+        BadRequestException
+      );
+    });
+
+    it('should call service.updateLetter and return result', async () => {
+      const mockResult = {
+        success: true,
+        letter: 'А',
+        note: 'Новий коментар',
+        photo: 'https://blob/photo.webp',
+      };
+      service.updateLetter.mockResolvedValue(mockResult);
+
+      const result = await controller.updateLetter(
+        'key',
+        'А',
+        { note: '  Новий коментар  ', photo: 'https://blob/photo.webp' },
+        '1234'
+      );
+
+      expect(result).toEqual(mockResult);
+      expect(service.updateLetter).toHaveBeenCalledWith(
+        'key',
+        'А',
+        { note: 'Новий коментар', photo: 'https://blob/photo.webp' },
+        '1234'
+      );
     });
   });
 });

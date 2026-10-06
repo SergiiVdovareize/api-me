@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../models/prisma/prisma.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
+import { UpdateLetterDto } from './dto/update-letter.dto';
 import { RecoverBoardDto } from './dto/recover-board.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
@@ -760,6 +761,122 @@ export class AlphadateService {
       ...(nextLetterSelectedAt !== undefined && {
         currentLetterSelectedAt: nextLetterSelectedAt,
       }),
+    };
+  }
+
+  async updateLetter(
+    key: string,
+    letter: string,
+    dto: UpdateLetterDto,
+    pin?: string
+  ): Promise<{ success: boolean; letter: string; note: string | null; photo: string | null }> {
+    const trimmedKey = (key || '').trim();
+    const board = await this.prisma.alphadateBoard.findUnique({
+      where: { key: trimmedKey },
+      include: {
+        history: true,
+      },
+    });
+
+    if (!board) {
+      throw new NotFoundException(`Board with key ${key} not found`);
+    }
+
+    this.verifyBoardAccess(board, pin);
+
+    const letters = (board.letters as any[]) || [];
+    const normalizedLetter = letter.trim().toUpperCase();
+    const letterIndex = letters.findIndex(
+      item =>
+        item &&
+        typeof item === 'object' &&
+        typeof item.letter === 'string' &&
+        item.letter.trim().toUpperCase() === normalizedLetter
+    );
+
+    if (letterIndex === -1) {
+      throw new NotFoundException(`Letter "${letter}" not found on board`);
+    }
+
+    const targetLetter = { ...letters[letterIndex] };
+
+    if (targetLetter.status !== 'used') {
+      throw new BadRequestException(
+        `Cannot edit note or photo for letter "${targetLetter.letter}" with status "${targetLetter.status}". Only completed letters can be edited.`
+      );
+    }
+
+    const oldPhoto = targetLetter.photo;
+    let newPhotoUrl: string | null | undefined = oldPhoto;
+
+    if (dto.photo !== undefined) {
+      if (dto.photo && dto.photo.startsWith('data:')) {
+        newPhotoUrl = await this.processPhoto(trimmedKey, targetLetter.letter, dto.photo);
+        if (oldPhoto && oldPhoto !== newPhotoUrl && oldPhoto.includes('vercel-storage.com')) {
+          this.blobService?.remove(oldPhoto).catch(() => {});
+        }
+      } else if (
+        dto.photo &&
+        (dto.photo.startsWith('http://') || dto.photo.startsWith('https://'))
+      ) {
+        newPhotoUrl = dto.photo;
+      } else if (!dto.photo) {
+        newPhotoUrl = null;
+        if (oldPhoto && oldPhoto.includes('vercel-storage.com')) {
+          this.blobService?.remove(oldPhoto).catch(() => {});
+        }
+      }
+    }
+
+    const newNote =
+      dto.note !== undefined
+        ? dto.note && dto.note.trim()
+          ? dto.note.trim()
+          : null
+        : (targetLetter.note ?? null);
+
+    targetLetter.note = newNote;
+    if (dto.photo !== undefined) {
+      targetLetter.photo = newPhotoUrl ?? null;
+    }
+
+    const updatedLetters = [...letters];
+    updatedLetters[letterIndex] = targetLetter;
+
+    await this.prisma.$transaction(async tx => {
+      await tx.alphadateBoard.update({
+        where: { key: trimmedKey },
+        data: {
+          letters: updatedLetters as any,
+        },
+      });
+
+      const historyUpdateData: any = {};
+      if (dto.note !== undefined) {
+        historyUpdateData.note = newNote;
+      }
+      if (dto.photo !== undefined) {
+        historyUpdateData.photo = newPhotoUrl ?? null;
+      }
+
+      if (Object.keys(historyUpdateData).length > 0) {
+        await tx.alphadateHistory.updateMany({
+          where: {
+            boardId: trimmedKey,
+            letter: targetLetter.letter,
+          },
+          data: historyUpdateData,
+        });
+      }
+    });
+
+    await this.invalidateBoardCache(trimmedKey);
+
+    return {
+      success: true,
+      letter: targetLetter.letter,
+      note: targetLetter.note ?? null,
+      photo: targetLetter.photo ?? null,
     };
   }
 
