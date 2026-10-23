@@ -25,6 +25,7 @@ import { RedisModule } from './common/redis.module';
 import { PosthogModule } from './posthog/posthog.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DateModule } from './date/date.module';
+import { HumanAssistModule } from './human-assist/human-assist.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { DateModule } from './date/date.module';
     PosthogModule,
     AnalyticsModule,
     DateModule,
+    HumanAssistModule,
     PrismaModule,
     RequestsModule,
     CloudsModule,

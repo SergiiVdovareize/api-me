@@ -32,7 +32,11 @@ async function bootstrap() {
         return;
       }
 
-      const allowedOrigins = [/https:\/\/.*\.vdovareize\.me$/, /https:\/\/vdovareize\.me$/];
+      const allowedOrigins = [
+        /https:\/\/.*\.vdovareize\.me$/,
+        /https:\/\/vdovareize\.me$/,
+        /^https:\/\/([a-zA-Z0-9-]+\.)?human\.ua$/,
+      ];
 
       if (!origin || allowedOrigins.some(pattern => pattern.test(origin))) {
         callback(null, true); // Allow the request if origin matches
@@ -40,6 +44,8 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS')); // Reject the request if origin doesn't match
       }
     },
+    allowedHeaders: ['Content-Type', 'x-sync-secret', 'Authorization'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
   await app.listen(3000);
 }

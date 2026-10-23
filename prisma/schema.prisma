@@ -105,3 +105,12 @@ enum AccountType {
 enum GameType {
   stroop
 }
+
+model HumanAssistSync {
+  userId    String   @id @map("user_id") @db.VarChar(64)
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("human_assist_sync")
+}
