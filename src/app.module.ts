@@ -26,6 +26,7 @@ import { PosthogModule } from './posthog/posthog.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DateModule } from './date/date.module';
 import { HumanAssistModule } from './human-assist/human-assist.module';
+import { ProxyModule } from './proxy/proxy.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { HumanAssistModule } from './human-assist/human-assist.module';
     AnalyticsModule,
     DateModule,
     HumanAssistModule,
+    ProxyModule,
     PrismaModule,
     RequestsModule,
     CloudsModule,
