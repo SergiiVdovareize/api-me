@@ -33,6 +33,12 @@ async function bootstrap() {
         origin.startsWith('file://') ||
         (env.HOST === 'local' && origin.startsWith('http://localhost:'));
 
+      const allowedOrigins = [
+        /https:\/\/.*\.vdovareize\.me$/,
+        /https:\/\/vdovareize\.me$/,
+        /^https:\/\/([a-zA-Z0-9-]+\.)?human\.ua$/,
+      ];
+
       if (isAllowedLocalOrTizen || allowedOrigins.some(pattern => pattern.test(origin))) {
         callback(null, true); // Allow the request if origin matches
       } else {
