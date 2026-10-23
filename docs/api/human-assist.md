@@ -1,22 +1,22 @@
 # 🛰️ Human Assist Sync API (`/human`) — Production Specification
 
-Документація та приклади запитів/відповідей для синхронізації налаштувань плагіна Human Assist на продакшні.
+Documentation and request/response specifications for synchronizing Human Assist Chrome extension settings and student statuses across multiple Google accounts in production.
 
 * **Base URL**: `https://api.vdovareize.me/human`
 
 ---
 
-## 🔒 Заголовки безпеки
+## 🔒 Security Headers
 
-| Заголовок | Обов'язковий | Опис |
+| Header | Required | Description |
 | :--- | :--- | :--- |
-| `Origin` | Так | Має відповідати `^https:\/\/([a-zA-Z0-9-]+\.)?human\.ua$`. Інакше: **`403 Forbidden`**. |
-| `x-sync-secret` | Так | Секретний ключ розширення (`HUMAN_ASSIST_SYNC_SECRET`). Інакше: **`401 Unauthorized`**. |
-| `Content-Type` | Для `POST` | `application/json` |
+| `Origin` | Yes | Must match `^https:\/\/([a-zA-Z0-9-]+\.)?human\.ua$`. Otherwise: **`403 Forbidden`**. |
+| `x-sync-secret` | Yes | Extension secret key (`HUMAN_ASSIST_SYNC_SECRET`). Otherwise: **`401 Unauthorized`**. |
+| `Content-Type` | For `POST` | `application/json` |
 
 ---
 
-## 1. Отримати дані: `GET /human/:userId`
+## 1. Retrieve Data: `GET /human/:userId`
 
 ### cURL:
 ```bash
@@ -25,7 +25,7 @@ curl -i -X GET "https://api.vdovareize.me/human/964486" \
   -H "x-sync-secret: <YOUR_SECRET>"
 ```
 
-### JavaScript (`fetch` у плагіні):
+### JavaScript (`fetch` inside extension):
 ```javascript
 const response = await fetch('https://api.vdovareize.me/human/964486', {
   method: 'GET',
@@ -37,7 +37,7 @@ const response = await fetch('https://api.vdovareize.me/human/964486', {
 const result = await response.json();
 ```
 
-### ✅ Відповідь `HTTP 200 OK` (користувач має збережені дані):
+### ✅ Response `HTTP 200 OK` (user has existing data):
 ```json
 {
   "userId": "964486",
@@ -58,7 +58,7 @@ const result = await response.json();
 }
 ```
 
-### ✅ Відповідь `HTTP 200 OK` (новий користувач, запису ще немає):
+### ✅ Response `HTTP 200 OK` (new user, no record in DB yet):
 ```json
 {
   "userId": "964486",
@@ -69,9 +69,9 @@ const result = await response.json();
 
 ---
 
-## 2. Зберегти/Оновити дані: `POST /human/:userId`
+## 2. Save / Update Data: `POST /human/:userId`
 
-Виконує `upsert` за ідентифікатором `userId`. Час оновлення (`updatedAt`) генерується сервером.
+Performs an `upsert` by `userId`. Server automatically updates `updatedAt` to the current timestamp.
 
 ### cURL:
 ```bash
@@ -96,7 +96,7 @@ curl -i -X POST "https://api.vdovareize.me/human/964486" \
   }'
 ```
 
-### JavaScript (`fetch` у плагіні):
+### JavaScript (`fetch` inside extension):
 ```javascript
 const payload = {
   data: {
@@ -126,7 +126,7 @@ const response = await fetch('https://api.vdovareize.me/human/964486', {
 const result = await response.json();
 ```
 
-### ✅ Відповідь `HTTP 200 OK`:
+### ✅ Response `HTTP 200 OK`:
 ```json
 {
   "success": true,
@@ -138,9 +138,9 @@ const result = await response.json();
 
 ## 3. CORS Preflight (`OPTIONS /human/:userId`)
 
-Браузер відправляє цей запит автоматично перед `POST`:
+The browser sends this request automatically prior to `POST`:
 
-### Запит браузера:
+### Browser Request:
 ```http
 OPTIONS /human/964486 HTTP/1.1
 Host: api.vdovareize.me
@@ -149,7 +149,7 @@ Access-Control-Request-Method: POST
 Access-Control-Request-Headers: content-type, x-sync-secret
 ```
 
-### ✅ Відповідь сервера (`HTTP 204 No Content`):
+### ✅ Server Response (`HTTP 204 No Content`):
 ```http
 HTTP/1.1 204 No Content
 Access-Control-Allow-Origin: https://school12.human.ua
@@ -159,10 +159,10 @@ Access-Control-Allow-Headers: Content-Type, x-sync-secret, Authorization
 
 ---
 
-## 4. Помилки валідації та безпеки
+## 4. Validation and Security Errors
 
 ### ❌ `HTTP 401 Unauthorized`
-Відсутній заголовок `x-sync-secret` або передано невірний секрет:
+Missing `x-sync-secret` header or invalid secret:
 ```json
 {
   "error": "Unauthorized: Invalid secret"
@@ -170,7 +170,7 @@ Access-Control-Allow-Headers: Content-Type, x-sync-secret, Authorization
 ```
 
 ### ❌ `HTTP 403 Forbidden`
-Запит надійшов не з домену `human.ua` або його піддоменів:
+Request origin is not `human.ua` or its subdomains:
 ```json
 {
   "error": "Forbidden: Origin not allowed"
@@ -178,7 +178,7 @@ Access-Control-Allow-Headers: Content-Type, x-sync-secret, Authorization
 ```
 
 ### ❌ `HTTP 400 Bad Request`
-У тілі `POST` відсутнє обов'язкове поле `data` або `userId` порожній:
+Missing required `data` object in `POST` body or empty `userId`:
 ```json
 {
   "error": "Invalid payload: data object is required"
