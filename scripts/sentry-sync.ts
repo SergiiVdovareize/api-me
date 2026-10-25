@@ -23,13 +23,38 @@ interface SentryIssue {
 const PROJECT_BOARD_ID = 'PVT_kwHOADkqQ84BosFc';
 const PROJECT_NUMBER = 4;
 const PROJECT_OWNER = 'SergiiVdovareize';
-const REPO_NAME = 'SergiiVdovareize/api-me';
+
+function getRepoName(): string {
+  if (process.env.GITHUB_REPOSITORY) {
+    return process.env.GITHUB_REPOSITORY;
+  }
+  try {
+    const raw = execSync('gh repo view --json nameWithOwner -q .nameWithOwner', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    if (raw) return raw;
+  } catch {}
+  return 'SergiiVdovareize/api-me';
+}
+const REPO_NAME = getRepoName();
 
 // Status & Project Field / Option IDs
 const STATUS_FIELD_ID = 'PVTSSF_lAHOADkqQ84BosFczhnK_Jk';
 const STATUS_TODO_OPTION_ID = 'f75ad846';
 const PROJECT_FIELD_ID = 'PVTSSF_lAHOADkqQ84BosFczhnK_X0';
-const PROJECT_API_ME_OPTION_ID = 'ebe4d189';
+
+function getProjectOptionId(repoName: string): string {
+  const shortName = repoName.split('/')[1]?.toLowerCase() || '';
+  if (shortName.includes('api-me')) {
+    return 'ebe4d189'; // api-me
+  }
+  if (shortName.includes('tizen')) {
+    return 'fae40303'; // tizen-flix
+  }
+  return 'f5917314'; // general
+}
+const PROJECT_OPTION_ID = getProjectOptionId(REPO_NAME);
 
 function getSentryToken(): string {
   let token =
@@ -228,7 +253,6 @@ ${details}
         '--single-select-option-id',
         STATUS_TODO_OPTION_ID,
       ]);
-      // Set Project to api-me
       execFileSync('gh', [
         'project',
         'item-edit',
@@ -239,9 +263,9 @@ ${details}
         '--field-id',
         PROJECT_FIELD_ID,
         '--single-select-option-id',
-        PROJECT_API_ME_OPTION_ID,
+        PROJECT_OPTION_ID,
       ]);
-      console.log(`Added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: api-me)`);
+      console.log(`Added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: ${REPO_NAME})`);
     }
   } catch (err: any) {
     console.warn(`Warning: Could not link issue to project board: ${err.message}`);

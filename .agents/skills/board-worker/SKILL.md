@@ -2,9 +2,9 @@
 name: board-worker
 description: Pick, implement, test, and update tasks from GitHub Dev Backlog Project Board (#4).
 ---
-# Board Worker Skill
+# Board Worker Skill (Multi-Project)
 
-This skill guides the agent in autonomously fetching tasks from the multi-project GitHub Dev Backlog board, implementing the requested changes according to repository rules, verifying code quality, and updating the card's status and comments.
+This skill guides the agent in autonomously fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), implementing the requested changes according to repository rules, verifying code quality, and updating the card's status and comments.
 
 ## Project Board Details
 
@@ -30,14 +30,17 @@ This skill guides the agent in autonomously fetching tasks from the multi-projec
 ## Workflow
 
 ### 1. Identify Context and Fetch Tasks
-1. Determine the active project repository from working directory or git remote (e.g. `api-me`).
+1. Detect current project repository:
+   ```bash
+   gh repo view --json nameWithOwner,name -q '.name'
+   ```
 2. Fetch items from the board using `gh project item-list`:
    ```bash
-   gh project item-list 4 --owner @me --format json
+   gh project item-list 4 --owner SergiiVdovareize --format json
    ```
 3. Filter items where:
    * Status is `Todo` (`f75ad846`)
-   * Project matches the current repository (or is requested by the user)
+   * Project field matches the current repository (`api-me`, `tizen-flix`, or `general`)
 4. **Sequential Processing (FIFO):** Always take the very first/top task in the list in order. Do not skip tasks unless explicitly instructed.
 
 ### 2. Mark as In Progress
