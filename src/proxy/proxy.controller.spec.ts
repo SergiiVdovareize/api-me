@@ -1,22 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProxyController } from './proxy.controller';
 import { ProxyService } from './proxy.service';
-import { HttpStatus } from '@nestjs/common';
+import { Request, Response } from 'express';
 
 describe('ProxyController', () => {
   let controller: ProxyController;
   let service: ProxyService;
 
   const mockService = {
-    proxyUrl: jest.fn(),
+    handleProxy: jest.fn(),
   };
 
   const createMockResponse = () => {
     const res: any = {};
     res.status = jest.fn().mockReturnValue(res);
     res.send = jest.fn().mockReturnValue(res);
+    res.end = jest.fn().mockReturnValue(res);
     res.setHeader = jest.fn().mockReturnValue(res);
-    return res;
+    return res as Response;
   };
 
   beforeEach(async () => {
@@ -32,40 +33,43 @@ describe('ProxyController', () => {
 
     controller = module.get<ProxyController>(ProxyController);
     service = module.get<ProxyService>(ProxyService);
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('options', () => {
-    it('should set CORS headers and return 204 No Content', () => {
+  describe('handleOptions', () => {
+    it('should set CORS headers and return 200 OK', () => {
       const res = createMockResponse();
 
-      controller.options(res);
+      controller.handleOptions(res);
 
       expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
-      expect(res.status).toHaveBeenCalledWith(HttpStatus.NO_CONTENT);
-      expect(res.send).toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Access-Control-Allow-Methods',
+        'GET, HEAD, OPTIONS'
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Headers', '*');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Access-Control-Expose-Headers',
+        'Content-Length, Content-Range, Accept-Ranges'
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.end).toHaveBeenCalled();
     });
   });
 
-  describe('proxy', () => {
-    it('should call proxyService.proxyUrl and return upstream response', async () => {
+  describe('getProxy', () => {
+    it('should call proxyService.handleProxy with req and res', async () => {
+      const req = { query: { url: 'https://ashdi.vip/playlist.m3u8' } } as unknown as Request;
       const res = createMockResponse();
-      mockService.proxyUrl.mockResolvedValue({
-        data: '<html>content</html>',
-        contentType: 'text/html; charset=utf-8',
-        status: 200,
-      });
+      mockService.handleProxy.mockResolvedValue(undefined);
 
-      await controller.proxy('https://zetvideo.net/vod/1122', res);
+      await controller.getProxy(req, res);
 
-      expect(service.proxyUrl).toHaveBeenCalledWith('https://zetvideo.net/vod/1122');
-      expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.send).toHaveBeenCalledWith('<html>content</html>');
+      expect(service.handleProxy).toHaveBeenCalledWith(req, res);
     });
   });
 });

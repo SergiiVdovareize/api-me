@@ -107,9 +107,11 @@ export class SafeFetchService {
    * Resolves hostname and validates that none of the resolved IPs belong to private/loopback/cloud-metadata ranges.
    */
   private async validateHostIp(hostname: string): Promise<void> {
-    // If hostname is directly an IP
-    if (net.isIP(hostname)) {
-      if (this.isPrivateOrRestrictedIp(hostname)) {
+    // If hostname is directly an IP (strip IPv6 brackets if present)
+    const rawIp =
+      hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+    if (net.isIP(rawIp)) {
+      if (this.isPrivateOrRestrictedIp(rawIp)) {
         throw new Error(`SSRF: Blocked direct private/restricted IP: ${hostname}`);
       }
       return;

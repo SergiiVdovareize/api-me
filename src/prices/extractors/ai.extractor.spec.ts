@@ -9,7 +9,7 @@ describe('AiExtractor', () => {
     mockLlmService = {
       callAndParseJSON: jest.fn(),
     };
-    extractor = new AiExtractor(mockLlmService as LlmService);
+    extractor = new AiExtractor(mockLlmService as unknown as LlmService);
   });
 
   it('should extract product and validate matching selector', async () => {

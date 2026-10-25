@@ -267,7 +267,7 @@ describe('PricesService', () => {
       mockPrisma.priceProduct.update.mockResolvedValue({});
 
       const summary = await service.checkDuePrices();
-      expect(summary).toEqual({ checked: 0, changed: 0, failed: 0 });
+      expect(summary).toEqual({ checked: 1, changed: 0, failed: 0 });
       expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 3 },

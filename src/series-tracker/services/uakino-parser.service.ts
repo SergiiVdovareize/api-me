@@ -349,7 +349,8 @@ export class UakinoParserService {
    */
   extractMaxEpisodeFromSchedule(pageHtml: string, targetSeason: number): number {
     if (!pageHtml) return 0;
-    const $ = cheerio.load(pageHtml);
+    const htmlToLoad = pageHtml.includes('<table') ? pageHtml : `<table>${pageHtml}</table>`;
+    const $ = cheerio.load(htmlToLoad);
     let maxEpisode = 0;
 
     $('.epscape_tr').each((_, el) => {
