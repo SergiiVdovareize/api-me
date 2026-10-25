@@ -113,12 +113,26 @@ describe('MemesService', () => {
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
 
-      const result = await service.stealMeme('url-to-steal');
+      const result = await service.stealMeme('https://tiktok.com/@user/video/123');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('could not download the media');
       expect(Sentry.captureMessage).toHaveBeenCalled();
       expect(Sentry.flush).toHaveBeenCalled();
+    });
+
+    it('should NOT capture message in Sentry for synthetic test URLs like example.com', async () => {
+      jest.clearAllMocks();
+      mediasnap.steal.mockRejectedValue(new Error('mediasnap failed'));
+      snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
+      highreach.steal.mockRejectedValue(new Error('highreach failed'));
+      vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+
+      const result = await service.stealMeme('https://example.com/invalid-meme-url-12345');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('could not download the media');
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
   });
 

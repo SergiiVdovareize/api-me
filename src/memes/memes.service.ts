@@ -93,24 +93,41 @@ export class MemesService {
       }
     }
 
-    Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
-      level: 'error',
-      extra: {
-        url,
-        attempts: MEMES_CONSTANTS.MAX_ATTEMPTS,
-        errors: errors.map(e => ({
-          attempt: e.attempt,
-          downloader: e.downloader,
-          message: e.error?.message || String(e.error),
-          stack: e.error?.stack,
-        })),
-      },
-    });
+    const isSyntheticTest = (() => {
+      try {
+        const hostname = new URL(url).hostname.toLowerCase();
+        return (
+          hostname === 'example.com' ||
+          hostname.endsWith('.example.com') ||
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          url.includes('invalid-meme-url')
+        );
+      } catch {
+        return url.includes('example.com') || url.includes('invalid-meme-url');
+      }
+    })();
 
-    try {
-      await Sentry.flush(1000);
-    } catch (flushError) {
-      console.error('Sentry flush failed:', flushError);
+    if (!isSyntheticTest) {
+      Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
+        level: 'error',
+        extra: {
+          url,
+          attempts: MEMES_CONSTANTS.MAX_ATTEMPTS,
+          errors: errors.map(e => ({
+            attempt: e.attempt,
+            downloader: e.downloader,
+            message: e.error?.message || String(e.error),
+            stack: e.error?.stack,
+          })),
+        },
+      });
+
+      try {
+        await Sentry.flush(1000);
+      } catch (flushError) {
+        console.error('Sentry flush failed:', flushError);
+      }
     }
 
     return {
