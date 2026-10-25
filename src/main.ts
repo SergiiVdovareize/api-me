@@ -31,18 +31,21 @@ async function bootstrap() {
         !origin ||
         origin === 'null' ||
         origin.startsWith('file://') ||
-        (env.HOST === 'local' && origin.startsWith('http://localhost:'));
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:');
 
       const allowedOrigins = [
         /https:\/\/.*\.vdovareize\.me$/,
         /https:\/\/vdovareize\.me$/,
         /^https:\/\/([a-zA-Z0-9-]+\.)?human\.ua$/,
+        /https:\/\/.*\.vercel\.app$/,
       ];
 
       if (isAllowedLocalOrTizen || allowedOrigins.some(pattern => pattern.test(origin))) {
-        callback(null, true); // Allow the request if origin matches
+        callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS')); // Reject the request if origin doesn't match
+        // Reject cross-origin request gracefully without throwing an unhandled Error to Sentry
+        callback(null, false);
       }
     },
     allowedHeaders: [
