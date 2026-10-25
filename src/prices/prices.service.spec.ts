@@ -314,5 +314,57 @@ describe('PricesService', () => {
         })
       );
     });
+
+    it('should extract clothing variants (sizes, colors, currentColor) and save them', async () => {
+      const htmlWithVariants = `
+        <html>
+        <head>
+          <script>
+            window.__DATA__ = {
+              "sizesList": ["S", "M", "L"],
+              "unavailableSizesList": []
+            };
+          </script>
+        </head>
+        <body>
+          <h1>Сукня літня</h1>
+          <span class="color-name">Колір: білий</span>
+        </body>
+        </html>
+      `;
+
+      mockSafeFetch.fetchHtml.mockResolvedValue(htmlWithVariants);
+      mockJsonLdExtractor.extract.mockResolvedValue({
+        title: 'Сукня літня',
+        price: 1200,
+        currency: 'UAH',
+        inStock: true,
+        strategy: 'JSON_LD',
+      });
+
+      mockPrisma.priceProduct.create.mockResolvedValue({
+        id: 10,
+        title: 'Сукня літня',
+        lastPrice: 1200,
+        currency: 'UAH',
+        inStock: true,
+        strategy: 'JSON_LD',
+        url: 'https://shop.ua/dress',
+      });
+
+      const res = await service.createProduct({
+        url: 'https://shop.ua/dress',
+      });
+
+      expect(res.id).toBe(10);
+      expect(mockPrisma.priceProduct.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sizes: expect.any(Array),
+            colors: expect.any(Array),
+          }),
+        })
+      );
+    });
   });
 });

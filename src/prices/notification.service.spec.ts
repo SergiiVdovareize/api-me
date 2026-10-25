@@ -110,5 +110,55 @@ describe('NotificationService', () => {
         '1252877'
       );
     });
+
+    it('should format NEW_COLOR with other colors and DROP_PERCENT', async () => {
+      await service.sendPriceAlert(mockProduct, 850, true, 'NEW_COLOR', {
+        newColors: ['червоний'],
+        colors: ['червоний', 'синій', 'чорний'],
+      });
+
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining("З'явився новий колір: червоний!"),
+        '1252877'
+      );
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('також є: синій, чорний'),
+        '1252877'
+      );
+
+      await service.sendPriceAlert(mockProduct, 800, true, 'DROP_PERCENT');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('Ціна впала на'),
+        '1252877'
+      );
+
+      await service.sendPriceAlert(mockProduct, 850, true, 'TARGET_PRICE');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('Досягнуто бажаної ціни!'),
+        '1252877'
+      );
+
+      await service.sendPriceAlert(mockProduct, 1000, true, 'RESTOCK');
+      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+        expect.stringContaining('Товар знову в наявності!'),
+        '1252877'
+      );
+    });
+
+    it('should catch error when appendMessageToOutbox throws', async () => {
+      mockGoogleSheetsService.appendMessageToOutbox!.mockRejectedValueOnce(
+        new Error('Outbox write failure')
+      );
+
+      await expect(
+        service.sendPriceAlert(mockProduct, 850, true, 'RESTOCK')
+      ).resolves.not.toThrow();
+    });
+
+    it('should send admin error report via notifyAdminError', async () => {
+      await expect(
+        service.notifyAdminError(mockProduct, 'Parsing selector failed')
+      ).resolves.not.toThrow();
+    });
   });
 });
