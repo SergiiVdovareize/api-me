@@ -33,7 +33,13 @@ const TRACKING_PARAMS = new Set([
  */
 export function normalizeProductUrl(rawUrl: string): NormalizedUrlResult {
   let trimmed = rawUrl.trim();
-  if (!/^https?:\/\//i.test(trimmed)) {
+
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
+    const proto = trimmed.slice(0, trimmed.indexOf(':')).toLowerCase();
+    if (proto !== 'http' && proto !== 'https') {
+      throw new Error(`Unsupported protocol: ${proto}:`);
+    }
+  } else {
     trimmed = `https://${trimmed}`;
   }
 

@@ -202,7 +202,8 @@ describe('PricesService', () => {
         mockProduct,
         850,
         true,
-        'TARGET_PRICE'
+        'TARGET_PRICE',
+        expect.any(Object)
       );
       expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -227,7 +228,6 @@ describe('PricesService', () => {
       };
 
       mockPrisma.priceProduct.findMany.mockResolvedValue([mockProduct]);
-      // all extractors return null
       mockPrisma.priceProduct.update.mockResolvedValue({});
 
       const summary = await service.checkDuePrices();
@@ -237,6 +237,80 @@ describe('PricesService', () => {
         expect.objectContaining({
           where: { id: 2 },
           data: expect.objectContaining({ failCount: 1 }),
+        })
+      );
+    });
+
+    it('should reschedule re-check in 10 minutes when price spike > 40% is detected', async () => {
+      const spikeProduct = {
+        id: 3,
+        url: 'https://shop.ua/item-3',
+        domain: 'shop.ua',
+        title: 'Item 3',
+        lastPrice: 1000,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 0,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([spikeProduct]);
+      mockJsonLdExtractor.extract.mockResolvedValue({
+        title: 'Item 3',
+        price: 500, // 50% drop
+        currency: 'UAH',
+        inStock: true,
+        strategy: 'JSON_LD',
+      });
+
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      const summary = await service.checkDuePrices();
+      expect(summary).toEqual({ checked: 0, changed: 0, failed: 0 });
+      expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 3 },
+          data: expect.objectContaining({ failCount: 1 }),
+        })
+      );
+    });
+
+    it('should escalate to ERROR on 3 failures and UNSUPPORTED on 6 failures', async () => {
+      const failingProduct = {
+        id: 4,
+        url: 'https://shop.ua/item-4',
+        domain: 'shop.ua',
+        title: 'Item 4',
+        lastPrice: 100,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 2,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([failingProduct]);
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      await service.checkDuePrices();
+
+      expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 4 },
+          data: expect.objectContaining({ status: PriceProductStatus.ERROR, failCount: 3 }),
+        })
+      );
+
+      const brokenProduct = { ...failingProduct, failCount: 5 };
+      mockPrisma.priceProduct.findMany.mockResolvedValue([brokenProduct]);
+
+      await service.checkDuePrices();
+
+      expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 4 },
+          data: expect.objectContaining({ status: PriceProductStatus.UNSUPPORTED, failCount: 6 }),
         })
       );
     });
