@@ -106,19 +106,28 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
    ```bash
    npm run sentry:resolve -- <SENTRY_ISSUE_ID> resolved
    ```
-   Or via curl directly:
+6. **Commit changes and obtain commit link**:
+   Stage, commit, and push changes to the repository:
    ```bash
-   curl -s -X PUT -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" -H "Content-Type: application/json" -d '{"status":"resolved"}' "https://de.sentry.io/api/0/issues/<SENTRY_ISSUE_ID>/"
+   git add <FILES>
+   git commit -m "fix/feat: <description>"
+   git push origin <BRANCH>
+   COMMIT_SHA=$(git rev-parse HEAD)
+   REPO_NWO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
    ```
-6. Post completion comment:
+7. **Post completion comment with commit link**:
    ```bash
-   gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**\n\n- Summary of changes...\n- Verified with unit tests."
+   gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
+
+- Summary of changes...
+- Commit: https://github.com/${REPO_NWO}/commit/${COMMIT_SHA}
+- Verified with type checks and unit tests."
    ```
-7. Close the issue:
+8. Close the issue:
    ```bash
    gh issue close <ISSUE_NUMBER> --reason completed
    ```
-8. Move the board card to **`Done`**:
+9. Move the board card to **`Done`**:
    ```bash
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
    ```
