@@ -1,0 +1,37 @@
+name: Sentry Issue Sync
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Enable manual run from GitHub UI
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync-sentry-issues:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Sync Sentry Errors to Dev Backlog
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG || 'home-sr9' }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT || 'api-me' }}
+          SENTRY_URL: ${{ secrets.SENTRY_URL || 'https://de.sentry.io' }}
+          GH_TOKEN: ${{ secrets.GH_PROJECT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: npm run sentry:sync
