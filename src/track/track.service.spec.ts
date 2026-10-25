@@ -151,6 +151,13 @@ describe('TrackService', () => {
       expect(result).toEqual({ success: false, message: 'error parsing json' });
     });
 
+    it('should return error if fetch rejects with network error (e.g. ECONNRESET / fetch failed)', async () => {
+      jest.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+
+      const result = await service.checkMono('test-id');
+      expect(result).toEqual({ success: false, message: 'fetch failed' });
+    });
+
     it('should return error if response has errCode', async () => {
       jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,

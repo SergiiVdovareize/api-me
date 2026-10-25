@@ -138,54 +138,67 @@ export class TrackService {
   // }
 
   async checkMono(id: string, plain: boolean = false): Promise<JarResponse> {
-    const response = await fetch(TRACK_CONSTANTS.MONOBANK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        c: 'hello',
-        clientId: id,
-        Pc: crypto.randomUUID(),
-      }),
-    });
-
-    let json;
     try {
-      json = await response.json();
-    } catch (error) {
-      this.logger.error('Error parsing JSON response:', error?.stack);
-      const html = await response.text();
-      this.logger.error(`Check HTML: ${html}`);
+      const response = await fetch(TRACK_CONSTANTS.MONOBANK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          c: 'hello',
+          clientId: id,
+          Pc: crypto.randomUUID(),
+        }),
+      });
 
-      return {
-        success: false,
-        message: 'error parsing json',
-      };
-    }
-
-    if (!response.ok) {
-      return {
-        success: false,
-        message: response.status.toString(),
-      };
-    }
-    if (json.errCode) {
-      return {
-        success: false,
-        message: 'check the jar id',
-      };
-    }
-    return plain
-      ? json.jarAmount
-      : {
-          success: true,
-          title: json.name,
-          balance: json.jarAmount,
-          goal: json.jarGoal,
-          status: json.jarStatus,
-          ownerName: json.ownerName,
+      if (!response.ok) {
+        return {
+          success: false,
+          message: response.status.toString(),
         };
+      }
+
+      let json: any;
+      try {
+        if (typeof response.text === 'function') {
+          const rawText = await response.text();
+          json = rawText ? JSON.parse(rawText) : {};
+        } else if (typeof response.json === 'function') {
+          json = await response.json();
+        } else {
+          throw new Error('Response body cannot be read');
+        }
+      } catch (parseError: any) {
+        this.logger.error(`Error parsing JSON response for jar ${id}: ${parseError?.message}`);
+        return {
+          success: false,
+          message: 'error parsing json',
+        };
+      }
+
+      if (json.errCode) {
+        return {
+          success: false,
+          message: 'check the jar id',
+        };
+      }
+      return plain
+        ? json.jarAmount
+        : {
+            success: true,
+            title: json.name,
+            balance: json.jarAmount,
+            goal: json.jarGoal,
+            status: json.jarStatus,
+            ownerName: json.ownerName,
+          };
+    } catch (err: any) {
+      this.logger.error(`Network or fetch error checking jar ${id}: ${err.message}`, err.stack);
+      return {
+        success: false,
+        message: err.message || 'fetch failed',
+      };
+    }
   }
 
   isJarActiveStatus(json: JarResponse) {
@@ -293,52 +306,55 @@ export class TrackService {
 
     await Promise.all(
       accounts.map(async account => {
-        switch (account.type) {
-          case AccountType.MONO:
-            const response = await this.checkMono(account.trackId);
-            if (this.isJarActiveStatus(response)) {
-              const balance = response.balance || 0;
-              // if (!balance) {
-              //   console.log(`no balance: ${account.id} - ${response.balance}`);
-              //   return;
-              // }
+        try {
+          switch (account.type) {
+            case AccountType.MONO:
+              const response = await this.checkMono(account.trackId);
+              if (this.isJarActiveStatus(response)) {
+                const balance = response.balance || 0;
 
-              let needUpdateIncoming = false;
-              if (this.useCacheStorage) {
-                const recentIncoming = await this.getRecentAccountIncoming(account.id);
-                needUpdateIncoming = !recentIncoming || balance !== recentIncoming.balance;
-              } else {
-                needUpdateIncoming = balance !== account.accountIncomings?.[0]?.balance;
-              }
+                let needUpdateIncoming = false;
+                if (this.useCacheStorage) {
+                  const recentIncoming = await this.getRecentAccountIncoming(account.id);
+                  needUpdateIncoming = !recentIncoming || balance !== recentIncoming.balance;
+                } else {
+                  needUpdateIncoming = balance !== account.accountIncomings?.[0]?.balance;
+                }
 
-              if (needUpdateIncoming) {
-                try {
-                  const incoming = await this.prisma.accountIncoming.create({
-                    data: {
-                      accountId: account.id,
-                      balance: balance,
-                      trackedAt: new Date(),
-                    },
-                  });
+                if (needUpdateIncoming) {
+                  try {
+                    const incoming = await this.prisma.accountIncoming.create({
+                      data: {
+                        accountId: account.id,
+                        balance: balance,
+                        trackedAt: new Date(),
+                      },
+                    });
 
-                  this.invalidateCacheRecentIncoming(account.id);
-                  this.logger.log(
-                    `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
-                  );
-                } catch (error) {
-                  const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${balance}`;
-                  Sentry.captureMessage(errorMsg, error);
-                  this.logger.error(errorMsg, error?.stack);
+                    this.invalidateCacheRecentIncoming(account.id);
+                    this.logger.log(
+                      `updated balance: ${response.title} (${account.trackId}) - ${incoming.balance} (added ${Math.ceil((incoming.balance - account.accountIncomings?.[0]?.balance) / 100)})`
+                    );
+                  } catch (error) {
+                    const errorMsg = `could not create incoming: ${account.trackId}, ${response.title}, ${balance}`;
+                    Sentry.captureMessage(errorMsg, error);
+                    this.logger.error(errorMsg, error?.stack);
+                  }
                 }
               }
-            }
-            break;
-          case AccountType.PRIVAT:
-            this.logger.warn(`Type is not yet supported: ${account.type}`);
-            break;
-          default:
-            this.logger.warn(`Invalid type: ${account.type}`);
-            break;
+              break;
+            case AccountType.PRIVAT:
+              this.logger.warn(`Type is not yet supported: ${account.type}`);
+              break;
+            default:
+              this.logger.warn(`Invalid type: ${account.type}`);
+              break;
+          }
+        } catch (err: any) {
+          this.logger.error(
+            `Error syncing account #${account.id} (${account.trackId}): ${err.message}`,
+            err.stack
+          );
         }
       })
     );
