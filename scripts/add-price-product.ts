@@ -4,6 +4,7 @@ import { PrismaClient, PriceProductStatus } from '@prisma/client';
 import { SafeFetchService } from '../src/prices/fetcher/safe-fetch.service';
 import { JsonLdExtractor } from '../src/prices/extractors/json-ld.extractor';
 import { MetaExtractor } from '../src/prices/extractors/meta.extractor';
+import { normalizeProductUrl } from '../src/prices/url-normalizer';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -24,14 +25,15 @@ async function main() {
   const dropIndex = args.indexOf('--drop');
   const dropPercent = dropIndex !== -1 && args[dropIndex + 1] ? parseFloat(args[dropIndex + 1]) : null;
 
-  console.log(`Adding product to price tracking: ${url}`);
+  const { normalizedUrl, domain } = normalizeProductUrl(url);
+  console.log(`Adding product to price tracking: ${normalizedUrl}`);
 
   const fetcher = new SafeFetchService();
   const jsonLd = new JsonLdExtractor();
   const meta = new MetaExtractor();
 
   console.log('Fetching and analyzing product page...');
-  const html = await fetcher.fetchHtml(url);
+  const html = await fetcher.fetchHtml(normalizedUrl);
 
   const extracted = (await jsonLd.extract(html)) || (await meta.extract(html));
   if (!extracted || !extracted.price) {
@@ -46,11 +48,10 @@ async function main() {
 
   const prisma = new PrismaClient();
   try {
-    const domain = new URL(url).hostname;
     const now = new Date();
     const nextCheckAt = new Date(now.getTime() + 6 * 60 * 60 * 1000);
 
-    const existing = await prisma.priceProduct.findUnique({ where: { url } });
+    const existing = await prisma.priceProduct.findUnique({ where: { url: normalizedUrl } });
     if (existing) {
       const updated = await prisma.priceProduct.update({
         where: { id: existing.id },
