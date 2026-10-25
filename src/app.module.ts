@@ -27,6 +27,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { DateModule } from './date/date.module';
 import { HumanAssistModule } from './human-assist/human-assist.module';
 import { ProxyModule } from './proxy/proxy.module';
+import { PricesModule } from './prices/prices.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { ProxyModule } from './proxy/proxy.module';
     FuelModule,
     CnapModule,
     LlmModule,
+    PricesModule,
   ],
 
   controllers: [AppController],

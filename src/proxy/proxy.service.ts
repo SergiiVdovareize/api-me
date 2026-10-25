@@ -11,7 +11,9 @@ export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
   private readonly allowedHosts = ['zetvideo.net', 'uafix.net'];
 
-  async proxyUrl(targetUrl: string): Promise<{ data: string; contentType: string; status: number }> {
+  async proxyUrl(
+    targetUrl: string
+  ): Promise<{ data: string; contentType: string; status: number }> {
     if (!targetUrl || typeof targetUrl !== 'string' || targetUrl.trim() === '') {
       throw new BadRequestException({ error: 'Missing "url" query parameter' });
     }
@@ -25,7 +27,7 @@ export class ProxyService {
 
     const hostname = parsedUrl.hostname.toLowerCase();
     const isAllowed = this.allowedHosts.some(
-      (host) => hostname === host || hostname.endsWith(`.${host}`)
+      host => hostname === host || hostname.endsWith(`.${host}`)
     );
 
     if (!isAllowed) {
@@ -44,8 +46,7 @@ export class ProxyService {
       });
 
       const data = await upstreamRes.text();
-      const contentType =
-        upstreamRes.headers.get('content-type') || 'text/html; charset=utf-8';
+      const contentType = upstreamRes.headers.get('content-type') || 'text/html; charset=utf-8';
 
       return {
         data,

@@ -38,7 +38,12 @@ export class HumanAssistService {
       throw new BadRequestException({ error: 'Invalid parameter: userId is required' });
     }
 
-    if (!payload || !payload.data || typeof payload.data !== 'object' || Array.isArray(payload.data)) {
+    if (
+      !payload ||
+      !payload.data ||
+      typeof payload.data !== 'object' ||
+      Array.isArray(payload.data)
+    ) {
       throw new BadRequestException({ error: 'Invalid payload: data object is required' });
     }
 

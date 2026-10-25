@@ -87,7 +87,9 @@ describe('HumanAssistService', () => {
     });
 
     it('should throw BadRequestException if payload data is missing or not an object', async () => {
-      await expect(service.saveSyncData('964486', null as any)).rejects.toThrow(BadRequestException);
+      await expect(service.saveSyncData('964486', null as any)).rejects.toThrow(
+        BadRequestException
+      );
       await expect(service.saveSyncData('964486', { data: null } as any)).rejects.toThrow(
         BadRequestException
       );

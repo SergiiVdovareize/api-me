@@ -114,3 +114,40 @@ model HumanAssistSync {
 
   @@map("human_assist_sync")
 }
+
+enum PriceProductStatus {
+  ACTIVE
+  UNSUPPORTED
+  ERROR
+}
+
+model PriceProduct {
+  id                Int                @id @default(autoincrement())
+  url               String             @unique
+  domain            String
+  title             String
+  lastPrice         Float?
+  currency          String             @default("UAH") @db.VarChar(10)
+  inStock           Boolean            @default(true)
+  status            PriceProductStatus @default(ACTIVE)
+  targetPrice       Float?
+  dropPercent       Float?
+  notifyOnRestock   Boolean            @default(false)
+  lastNotifiedPrice Float?
+  chatId            String?            @default("1252877") @db.VarChar(64)
+  selector          String?            @db.Text
+  sizes             Json?              // e.g. ["XXS", "XS", "S", "M", "L"]
+  colors            Json?              // e.g. ["світло-сірий", "чорний"]
+  desiredSize       String?            @db.VarChar(32)
+  desiredColor      String?            @db.VarChar(64)
+  failCount         Int                @default(0)
+  history           Json?              @default("[]")
+  lastCheckedAt     DateTime?
+  nextCheckAt       DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([status, nextCheckAt])
+  @@index([domain])
+}
+
