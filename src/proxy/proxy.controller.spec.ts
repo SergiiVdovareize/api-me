@@ -49,7 +49,7 @@ describe('ProxyController', () => {
       expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
       expect(res.setHeader).toHaveBeenCalledWith(
         'Access-Control-Allow-Methods',
-        'GET, HEAD, OPTIONS'
+        'GET, POST, HEAD, OPTIONS'
       );
       expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Headers', '*');
       expect(res.setHeader).toHaveBeenCalledWith(
@@ -62,6 +62,15 @@ describe('ProxyController', () => {
   });
 
   describe('getProxy', () => {
+    it('should call proxyService.handleProxy with req and res on POST', async () => {
+      const req = { method: 'POST', query: { url: 'https://club.uakino.fun/search/' } } as unknown as Request;
+      const res = {} as unknown as Response;
+
+      await controller.postProxy(req, res);
+
+      expect(service.handleProxy).toHaveBeenCalledWith(req, res);
+    });
+
     it('should call proxyService.handleProxy with req and res', async () => {
       const req = { query: { url: 'https://ashdi.vip/playlist.m3u8' } } as unknown as Request;
       const res = createMockResponse();

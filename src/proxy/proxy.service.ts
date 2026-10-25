@@ -84,9 +84,35 @@ export class ProxyService {
         }
       }
 
+      const method = (req.method || 'GET').toUpperCase();
+      let bodyPayload: string | Buffer | null = null;
+      if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+        const ct = (req.headers['content-type'] || '').toString();
+        if (ct) {
+          outboundHeaders['Content-Type'] = ct;
+        }
+        if (req.body && (typeof req.body === 'object' || typeof req.body === 'string' || Buffer.isBuffer(req.body))) {
+          if (Buffer.isBuffer(req.body) || typeof req.body === 'string') {
+            bodyPayload = req.body;
+          } else if (typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+            if (ct.toLowerCase().includes('application/x-www-form-urlencoded')) {
+              bodyPayload = new URLSearchParams(req.body as Record<string, string>).toString();
+            } else {
+              bodyPayload = JSON.stringify(req.body);
+              if (!outboundHeaders['Content-Type']) {
+                outboundHeaders['Content-Type'] = 'application/json';
+              }
+            }
+          }
+        }
+        if (bodyPayload) {
+          outboundHeaders['Content-Length'] = Buffer.byteLength(bodyPayload).toString();
+        }
+      }
+
       const upstreamReq = client.request(
         targetUrl,
-        { method: 'GET', headers: outboundHeaders },
+        { method, headers: outboundHeaders },
         upstreamRes => {
           // Handle redirects (301, 302, 307, 308)
           if (
@@ -159,7 +185,14 @@ export class ProxyService {
         resolve();
       });
 
-      upstreamReq.end();
+      if (bodyPayload) {
+        upstreamReq.write(bodyPayload);
+        upstreamReq.end();
+      } else if (method === 'POST' && req.readable) {
+        req.pipe(upstreamReq);
+      } else {
+        upstreamReq.end();
+      }
     });
   }
 }
