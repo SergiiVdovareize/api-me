@@ -12,7 +12,7 @@ export interface SafeFetchOptions {
 export class SafeFetchService {
   private readonly logger = new Logger(SafeFetchService.name);
 
-  private readonly defaultTimeoutMs = 8000;
+  private readonly defaultTimeoutMs = 15000;
   private readonly defaultMaxRedirects = 3;
   private readonly defaultMaxSizeBytes = 2 * 1024 * 1024; // 2 MB
 
@@ -56,6 +56,14 @@ export class SafeFetchService {
             Accept:
               'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Sec-Ch-Ua': '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"macOS"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
             'Cache-Control': 'no-cache',
           },
         });
