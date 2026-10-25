@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 interface SentryIssue {
   id: string;
@@ -31,21 +31,65 @@ const STATUS_TODO_OPTION_ID = 'f75ad846';
 const PROJECT_FIELD_ID = 'PVTSSF_lAHOADkqQ84BosFczhnK_X0';
 const PROJECT_API_ME_OPTION_ID = 'ebe4d189';
 
-async function fetchSentryIssues(): Promise<SentryIssue[]> {
-  const token = process.env.SENTRY_AUTH_TOKEN || process.env.SENTRY_API_TOKEN;
+function getSentryToken(): string {
+  let token =
+    process.env.SENTRY_USER_TOKEN ||
+    process.env.SENTRY_API_TOKEN ||
+    process.env.SENTRY_AUTH_TOKEN;
+
+  // If token is org-level sntrys_ (only scoped for CI/sourcemaps), check if a user token sntryu_ exists in .env
+  if (!token || token.startsWith('sntrys_')) {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync('.env')) {
+        const envContent = fs.readFileSync('.env', 'utf-8');
+        const match = envContent.match(/SENTRY_AUTH_TOKEN=(sntryu_[a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    } catch {}
+  }
+
   if (!token) {
     throw new Error(
       'SENTRY_AUTH_TOKEN is not set. Please provide a valid Sentry token with event:read / issue:read scopes.'
     );
   }
+  return token;
+}
 
-  const org = process.env.SENTRY_ORG || 'home-sr9';
-  const project = process.env.SENTRY_PROJECT || 'api-me';
+async function fetchSentryIssues(): Promise<SentryIssue[]> {
+  const token = getSentryToken();
   const defaultHost = process.env.SENTRY_URL || 'https://de.sentry.io';
+  const targetProject = process.env.SENTRY_PROJECT || 'api-me';
+  let org = process.env.SENTRY_ORG || 'home-api';
+
+  // Attempt auto-discovery of org & project via /api/0/projects/
+  try {
+    const listRes = await fetch(`${defaultHost}/api/0/projects/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (listRes.ok) {
+      const projects = (await listRes.json()) as any[];
+      const found = projects.find(
+        (p) => p.slug === targetProject || p.name === targetProject
+      );
+      if (found?.organization?.slug) {
+        org = found.organization.slug;
+        console.log(`Auto-detected Sentry organization: "${org}" for project "${targetProject}"`);
+      }
+    }
+  } catch (err: any) {
+    // ignore auto-discovery error and proceed with defaults
+  }
 
   const urlsToTry = [
-    `${defaultHost}/api/0/projects/${org}/${project}/issues/?query=is:unresolved`,
-    `https://sentry.io/api/0/projects/${org}/${project}/issues/?query=is:unresolved`,
+    `${defaultHost}/api/0/projects/${org}/${targetProject}/issues/?query=is:unresolved`,
+    `https://sentry.io/api/0/projects/${org}/${targetProject}/issues/?query=is:unresolved`,
   ];
 
   let lastError: Error | null = null;
@@ -69,7 +113,6 @@ async function fetchSentryIssues(): Promise<SentryIssue[]> {
       return data;
     } catch (err: any) {
       lastError = err;
-      // If 404 or auth error on first host, try fallback
     }
   }
 
@@ -133,29 +176,71 @@ ${details}
   }
 
   console.log(`Creating GitHub Issue for Sentry ID: ${issue.id}...`);
-  // Escape body for shell or write via temporary buffer/command
-  const escapedTitle = title.replace(/"/g, '\\"');
-  const escapedBody = body.replace(/"/g, '\\"');
-
-  const createCmd = `gh issue create --repo ${REPO_NAME} --title "${escapedTitle}" --body "${escapedBody}" --label "sentry,bug"`;
-  const issueUrl = execSync(createCmd, { encoding: 'utf-8' }).trim();
+  const issueUrl = execFileSync(
+    'gh',
+    [
+      'issue',
+      'create',
+      '--repo',
+      REPO_NAME,
+      '--title',
+      title,
+      '--body',
+      body,
+      '--label',
+      'sentry,bug',
+    ],
+    { encoding: 'utf-8' }
+  ).trim();
   console.log(`Created GitHub Issue: ${issueUrl}`);
 
   // Add to Project Board
   try {
-    const addCmd = `gh project item-add ${PROJECT_NUMBER} --owner ${PROJECT_OWNER} --url ${issueUrl} --format json`;
-    const addResult = JSON.parse(execSync(addCmd, { encoding: 'utf-8' }));
+    const addResultRaw = execFileSync(
+      'gh',
+      [
+        'project',
+        'item-add',
+        String(PROJECT_NUMBER),
+        '--owner',
+        PROJECT_OWNER,
+        '--url',
+        issueUrl,
+        '--format',
+        'json',
+      ],
+      { encoding: 'utf-8' }
+    );
+    const addResult = JSON.parse(addResultRaw);
     const itemId = addResult.id;
 
     if (itemId) {
       // Set Status to Todo
-      execSync(
-        `gh project item-edit --project-id ${PROJECT_BOARD_ID} --id ${itemId} --field-id ${STATUS_FIELD_ID} --single-select-option-id ${STATUS_TODO_OPTION_ID}`
-      );
+      execFileSync('gh', [
+        'project',
+        'item-edit',
+        '--project-id',
+        PROJECT_BOARD_ID,
+        '--id',
+        itemId,
+        '--field-id',
+        STATUS_FIELD_ID,
+        '--single-select-option-id',
+        STATUS_TODO_OPTION_ID,
+      ]);
       // Set Project to api-me
-      execSync(
-        `gh project item-edit --project-id ${PROJECT_BOARD_ID} --id ${itemId} --field-id ${PROJECT_FIELD_ID} --single-select-option-id ${PROJECT_API_ME_OPTION_ID}`
-      );
+      execFileSync('gh', [
+        'project',
+        'item-edit',
+        '--project-id',
+        PROJECT_BOARD_ID,
+        '--id',
+        itemId,
+        '--field-id',
+        PROJECT_FIELD_ID,
+        '--single-select-option-id',
+        PROJECT_API_ME_OPTION_ID,
+      ]);
       console.log(`Added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: api-me)`);
     }
   } catch (err: any) {
