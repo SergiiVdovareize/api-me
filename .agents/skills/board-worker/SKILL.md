@@ -1,10 +1,10 @@
 ---
 name: board-worker
-description: Pick, implement, test, and update tasks from GitHub Dev Backlog Project Board (#4).
+description: Pick, debate, implement, and update tasks from GitHub Dev Backlog Project Board (#4) using multi-agent deliberation.
 ---
-# Board Worker Skill (Multi-Project)
+# Board Worker Skill (Autonomous Multi-Role Orchestration)
 
-This skill guides the agent in autonomously fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), implementing the requested changes according to repository rules, verifying code quality, and updating the card's status and comments.
+This skill guides the agent in fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), conducting an automated multi-role consensus deliberation, recording the debate in the issue comments, and either autonomously implementing approved tasks or escalating high-risk decisions to the human developer.
 
 ## Project Board Details
 
@@ -18,6 +18,7 @@ This skill guides the agent in autonomously fetching tasks from the multi-projec
 * **Status Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_Jk`
   * `Backlog`: `4b06c0fa`
   * `Todo`: `f75ad846`
+  * `Needs Decision`: `561cabe1`
   * `In Progress`: `47fc9ee4`
   * `Done`: `98236657`
 * **Project Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_X0`
@@ -27,9 +28,21 @@ This skill guides the agent in autonomously fetching tasks from the multi-projec
 
 ---
 
+## Autonomous Triage Roles
+
+Before touching any code, the agent sequentially assumes four distinct perspectives:
+1. 🔍 **Investigator:** Scans the codebase, inspects stacktraces/functions, and identifies the objective root cause or feature scope.
+2. 📐 **System Architect:** Formulates the technical solution, ensures API compatibility, and outlines the unit testing strategy.
+3. 🛡️ **Risk Evaluator:** Challenges the design, checks for breaking changes or edge cases, and evaluates risk level (**LOW**, **MEDIUM**, or **HIGH**).
+4. ⚖️ **Task Orchestrator:** Weighs consensus, posts the deliberation report to the GitHub issue comments, and issues the verdict:
+   * **🟢 AUTO-APPROVED:** Low/Medium risk, clear solution -> Proceed to implementation.
+   * **🟡 ESCALATED TO HUMAN:** High risk, architectural dilemma, or missing business requirements -> Move to `Needs Decision` and request user input.
+
+---
+
 ## Workflow
 
-### 1. Identify Context and Fetch Tasks
+### 1. Identify Context and Fetch Next Task
 1. Detect current project repository:
    ```bash
    gh repo view --json nameWithOwner,name -q '.name'
@@ -41,81 +54,71 @@ This skill guides the agent in autonomously fetching tasks from the multi-projec
 3. Filter items where:
    * Status is `Todo` (`f75ad846`)
    * Project field matches the current repository (`api-me`, `tizen-flix`, or `general`)
-4. **Sequential Processing (FIFO):** Always take the very first/top task in the list in order. Do not skip tasks unless explicitly instructed.
+4. **Sequential Processing (FIFO):** Take the very first task in order.
 
-### 2. Mark as In Progress
-Move the task card to `In Progress`:
-```bash
-gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 47fc9ee4
-```
-
-### 3. Read Task Details
-* If the item is a repository **Issue**:
-  ```bash
-  gh issue view <ISSUE_NUMBER> --comments
-  ```
-* If the item is a **Draft Issue**:
-  Read the title and body directly from the `item-list` JSON.
-
-### 4. Implement the Solution
-* Carefully plan and execute the code modifications.
-* Follow all repository rules:
-  - Do not edit `.env` files directly.
-  - Watch for typos in identifiers and database models.
-  - Maintain documentation and existing comments.
-* Write corresponding unit tests and test coverage where applicable.
-
-### 5. Verify Quality
-1. Verify TypeScript types:
+### 2. Autonomous Multi-Role Deliberation
+1. Read the issue details:
    ```bash
-   npx tsc --noEmit
+   gh issue view <ISSUE_NUMBER> --comments
    ```
-2. **Important Rule:** Do NOT run automated test suites (`npm run test`, `jest`) or linters (`eslint`, `npm run validate`) automatically unless the user explicitly asks. The user runs validation and tests manually before pushing (per `AGENTS.md`).
+2. Conduct the automated debate (Investigator -> Architect -> Risk Evaluator -> Orchestrator).
+3. Post the deliberation comment directly to the GitHub Issue:
+   ```bash
+   gh issue comment <ISSUE_NUMBER> --body "### 🤖 Autonomous Task Triage & Consensus
 
-### 6. Update Card and Move to Done
-1. If the item is a GitHub Issue, post a comment summarizing what was done:
-   ```bash
-   gh issue comment <ISSUE_NUMBER> --body "✅ **Completed by AI Agent**\n\n- Summary of changes...\n- Verified with TypeScript check."
-   ```
-2. Close the GitHub Issue:
-   ```bash
-   gh issue close <ISSUE_NUMBER> --reason completed
-   ```
-3. Move the board item to `Done`:
-   ```bash
-   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
-   ```
+**🔍 Investigator:**
+...
+
+**📐 Architect:**
+...
+
+**🛡️ Risk Evaluator:**
+Risk Level: **LOW** | **MEDIUM** | **HIGH**
+...
 
 ---
-
-## Sentry Error Triage & Auto-Remediation
-
-When a task has the `sentry` label or title starting with `[Sentry]`:
-
-### 1. Identify Sentry Metadata
-* Extract the **Sentry Issue ID** from the issue body:
-  `<!-- sentry-issue-id: <ID> -->` or `Sentry Issue [ID: <ID>]`
-* Check the culprit file/line and error details provided in the issue description.
-
-### 2. Triage & Decision
-* **Actionable Bug:** An unhandled error, null pointer exception, crash, or unexpected API failure in `src/`.
-  -> Implement fix in source code, create unit test.
-* **Benign / Non-Actionable Noise:** Bot scanning 404s, malformed client requests already handled by HTTP filters, or intentional behavior.
-  -> Explain why in a comment on the GitHub issue, close it, and resolve or ignore in Sentry:
-  ```bash
-  npm run sentry:resolve -- <SENTRY_ISSUE_ID> ignored
-  ```
-
-### 3. Implement Fix & Resolve in Sentry
-1. Modify the relevant file in `src/`.
-2. Add or update unit tests for the component.
-3. Verify TypeScript types:
-   ```bash
-   npx tsc --noEmit
+**⚖️ Orchestrator Verdict:** **🟢 AUTO-APPROVED** | **🟡 ESCALATED TO HUMAN**
+..."
    ```
-4. Resolve the issue in Sentry REST API:
+
+### 3. Handle Orchestrator Verdict
+
+#### Path A: 🟡 ESCALATED TO HUMAN
+1. Move the board card to **`Needs Decision`**:
+   ```bash
+   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
+   ```
+2. Inform the user in chat with the specific decision needed.
+3. **Do not block the queue:** Move on to the next `Todo` task if instructed.
+
+#### Path B: 🟢 AUTO-APPROVED
+1. Move the board card to **`In Progress`**:
+   ```bash
+   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 47fc9ee4
+   ```
+2. Implement the solution according to the Architect's approved plan.
+3. Follow all repository rules (`AGENTS.md`):
+   - Never write directly to `.env` files.
+   - Do not run automated test suites/linters unless allowed.
+   - Always verify types (`npx tsc --noEmit`).
+4. Write unit tests for the changes.
+5. If the issue has label `sentry`, resolve in Sentry REST API:
    ```bash
    npm run sentry:resolve -- <SENTRY_ISSUE_ID> resolved
    ```
-5. Comment on GitHub Issue, close it, and move board card to `Done`.
-
+   Or via curl directly:
+   ```bash
+   curl -s -X PUT -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" -H "Content-Type: application/json" -d '{"status":"resolved"}' "https://de.sentry.io/api/0/issues/<SENTRY_ISSUE_ID>/"
+   ```
+6. Post completion comment:
+   ```bash
+   gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**\n\n- Summary of changes...\n- Verified with unit tests."
+   ```
+7. Close the issue:
+   ```bash
+   gh issue close <ISSUE_NUMBER> --reason completed
+   ```
+8. Move the board card to **`Done`**:
+   ```bash
+   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
+   ```
