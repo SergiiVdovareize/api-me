@@ -45,7 +45,17 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS')); // Reject the request if origin doesn't match
       }
     },
-    allowedHeaders: ['Content-Type', 'x-sync-secret', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-board-pin',
+      'x-sync-secret',
+      'x-cron-secret',
+      'x-check-secret',
+      'Range',
+      'Accept',
+      'X-Requested-With',
+    ],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
   await app.listen(3000);
