@@ -21,8 +21,9 @@ When picking or analyzing any task from the GitHub Dev Backlog (or issue tracker
   - Outline necessary unit tests and verification checks.
 
 ### 🛡️ Role 3: Risk & Security Evaluator (Devil's Advocate & Safety Auditor)
-* **Objective:** Critique the Architect's proposal to prevent regressions, data loss, or performance bottlenecks.
+* **Objective:** Critique the Architect's proposal to prevent regressions, data loss, security leaks, or performance bottlenecks.
 * **Responsibilities:**
+  - **Leak Prevention (Comment Sanitization):** Audit all planned comment text against the `comment-sanitizer` skill. Strictly ensure no API keys, tokens, passwords, database URLs, PII, or absolute machine paths (`/Users/...`, `/home/...`) are present.
   - Check for unintended side effects (race conditions, memory leaks, breaking consumers).
   - Check repository-specific constraints (e.g. no direct edits to `.env`, no automated test running if forbidden).
   - Assign a Risk Level:
@@ -31,7 +32,7 @@ When picking or analyzing any task from the GitHub Dev Backlog (or issue tracker
     - **HIGH:** Changes database schema, public API contracts, auth logic, or involves subjective product choices.
 
 ### ⚖️ Role 4: Task Orchestrator (Arbiter & Decision Engine)
-* **Objective:** Synthesize the debate, post the consensus report to the GitHub Issue comments, and render an authoritative verdict.
+* **Objective:** Synthesize the debate, ensure comments are sanitized, post the consensus report to the GitHub Issue comments, and render an authoritative verdict.
 * **Decision Criteria:**
   - **🟢 AUTO-APPROVED:**
     - Risk is LOW or MEDIUM with clear technical consensus.
@@ -41,26 +42,26 @@ When picking or analyzing any task from the GitHub Dev Backlog (or issue tracker
   - **🟡 ESCALATE TO HUMAN:**
     - Risk is HIGH or requires choosing between competing architectural/product trade-offs.
     - Ambiguous requirements or missing business rules.
-    - **Action:** Post the specific question to the user in the issue comments, transition task to `Needs Decision` (`561cabe1`), and halt execution on this task so the queue is not blocked.
+    - **Action:** Post the sanitized question to the user in the issue comments, transition task to `Needs Decision` (`561cabe1`), and halt execution on this task so the queue is not blocked.
 
 ---
 
 ## 2. GitHub Issue Deliberation Format
 
-The Orchestrator must record the consensus report in the GitHub issue using this standard format:
+The Orchestrator must record the sanitized consensus report in the GitHub issue using this standard format:
 
 ```markdown
 ### 🤖 Autonomous Task Triage & Consensus
 
 **🔍 Investigator:**
-[Root cause analysis or requirement breakdown with links to files/lines]
+[Root cause analysis or requirement breakdown with repo-relative paths]
 
 **📐 Architect:**
 [Proposed solution, implementation steps, and test strategy]
 
 **🛡️ Risk Evaluator:**
 Risk Level: **LOW** | **MEDIUM** | **HIGH**
-[Evaluation of side-effects, breaking change potential, and edge cases]
+[Evaluation of side-effects, breaking change potential, edge cases, and leak verification]
 
 ---
 **⚖️ Orchestrator Verdict:** **🟢 AUTO-APPROVED** | **🟡 ESCALATED TO HUMAN**

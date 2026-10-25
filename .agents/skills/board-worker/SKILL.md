@@ -4,7 +4,7 @@ description: Pick, debate, implement, and update tasks from GitHub Dev Backlog P
 ---
 # Board Worker Skill (Autonomous Multi-Role Orchestration)
 
-This skill guides the agent in fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), conducting an automated multi-role consensus deliberation, recording the debate in the issue comments, and either autonomously implementing approved tasks or escalating high-risk decisions to the human developer.
+This skill guides the agent in fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), conducting an automated multi-role consensus deliberation, sanitizing content to prevent data leaks, recording the debate in the issue comments, and either autonomously implementing approved tasks or escalating high-risk decisions to the human developer.
 
 ## Project Board Details
 
@@ -31,10 +31,10 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
 ## Autonomous Triage Roles
 
 Before touching any code, the agent sequentially assumes four distinct perspectives:
-1. 🔍 **Investigator:** Scans the codebase, inspects stacktraces/functions, and identifies the objective root cause or feature scope.
+1. 🔍 **Investigator:** Scans the codebase, inspects stacktraces/functions, and identifies the objective root cause or feature scope (using repository-relative file paths).
 2. 📐 **System Architect:** Formulates the technical solution, ensures API compatibility, and outlines the unit testing strategy.
-3. 🛡️ **Risk Evaluator:** Challenges the design, checks for breaking changes or edge cases, and evaluates risk level (**LOW**, **MEDIUM**, or **HIGH**).
-4. ⚖️ **Task Orchestrator:** Weighs consensus, posts the deliberation report to the GitHub issue comments, and issues the verdict:
+3. 🛡️ **Risk Evaluator:** Challenges the design, audits comment text via `comment-sanitizer` for any secrets, tokens, passwords, PII, or absolute paths, and evaluates risk level (**LOW**, **MEDIUM**, or **HIGH**).
+4. ⚖️ **Task Orchestrator:** Weighs consensus, posts the sanitized deliberation report to the GitHub issue comments, and issues the verdict:
    * **🟢 AUTO-APPROVED:** Low/Medium risk, clear solution -> Proceed to implementation.
    * **🟡 ESCALATED TO HUMAN:** High risk, architectural dilemma, or missing business requirements -> Move to `Needs Decision` and request user input.
 
@@ -62,7 +62,8 @@ Before touching any code, the agent sequentially assumes four distinct perspecti
    gh issue view <ISSUE_NUMBER> --comments
    ```
 2. Conduct the automated debate (Investigator -> Architect -> Risk Evaluator -> Orchestrator).
-3. Post the deliberation comment directly to the GitHub Issue:
+3. **Data Leak Audit:** Apply `comment-sanitizer` to scrub all secrets, passwords, tokens, and replace absolute file paths with relative paths.
+4. Post the sanitized deliberation comment directly to the GitHub Issue:
    ```bash
    gh issue comment <ISSUE_NUMBER> --body "### 🤖 Autonomous Task Triage & Consensus
 
@@ -115,7 +116,8 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
    COMMIT_SHA=$(git rev-parse HEAD)
    REPO_NWO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
    ```
-7. **Post completion comment with commit link**:
+7. **Post sanitized completion comment with commit link**:
+   Verify content through `comment-sanitizer` before posting:
    ```bash
    gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
 
