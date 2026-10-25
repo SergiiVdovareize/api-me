@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../models/prisma/prisma.module';
 import { RedisModule } from '../common/redis.module';
 import { LlmModule } from '../llm/llm.module';
-import { SeriesTrackerModule } from '../series-tracker/series-tracker.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { PricesController } from './prices.controller';
 import { ProductsController } from './products.controller';
 import { PricesService } from './prices.service';
@@ -15,7 +15,7 @@ import { AiExtractor } from './extractors/ai.extractor';
 import { NotificationService } from './notification.service';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, RedisModule, LlmModule, SeriesTrackerModule],
+  imports: [ConfigModule, PrismaModule, RedisModule, LlmModule, OutboxModule],
   controllers: [PricesController, ProductsController],
   providers: [
     PricesService,

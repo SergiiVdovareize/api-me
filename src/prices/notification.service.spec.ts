@@ -1,10 +1,10 @@
 import { NotificationService } from './notification.service';
-import { GoogleSheetsService } from '../series-tracker/services/google-sheets.service';
+import { OutboxQueueService } from '../outbox/outbox-queue.service';
 import { PriceProduct, PriceProductStatus } from '@prisma/client';
 
 describe('NotificationService', () => {
   let service: NotificationService;
-  let mockGoogleSheetsService: jest.Mocked<Partial<GoogleSheetsService>>;
+  let mockOutboxQueueService: jest.Mocked<Partial<OutboxQueueService>>;
 
   const mockProduct: PriceProduct = {
     id: 1,
@@ -34,10 +34,10 @@ describe('NotificationService', () => {
   };
 
   beforeEach(() => {
-    mockGoogleSheetsService = {
+    mockOutboxQueueService = {
       appendMessageToOutbox: jest.fn().mockResolvedValue(undefined),
     };
-    service = new NotificationService(mockGoogleSheetsService as unknown as GoogleSheetsService);
+    service = new NotificationService(mockOutboxQueueService as unknown as OutboxQueueService);
   });
 
   describe('checkConditions', () => {
@@ -100,12 +100,12 @@ describe('NotificationService', () => {
         newSizes: ['M'],
       });
 
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledTimes(1);
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledTimes(1);
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining("З'явився новий розмір: M!"),
         '1252877'
       );
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining('Розміри в наявності:</b> XXS, XS, S, M, L'),
         '1252877'
       );
@@ -117,36 +117,36 @@ describe('NotificationService', () => {
         colors: ['червоний', 'синій', 'чорний'],
       });
 
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining("З'явився новий колір: червоний!"),
         '1252877'
       );
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining('також є: синій, чорний'),
         '1252877'
       );
 
       await service.sendPriceAlert(mockProduct, 800, true, 'DROP_PERCENT');
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining('Ціна впала на'),
         '1252877'
       );
 
       await service.sendPriceAlert(mockProduct, 850, true, 'TARGET_PRICE');
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining('Досягнуто бажаної ціни!'),
         '1252877'
       );
 
       await service.sendPriceAlert(mockProduct, 1000, true, 'RESTOCK');
-      expect(mockGoogleSheetsService.appendMessageToOutbox).toHaveBeenCalledWith(
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
         expect.stringContaining('Товар знову в наявності!'),
         '1252877'
       );
     });
 
     it('should catch error when appendMessageToOutbox throws', async () => {
-      mockGoogleSheetsService.appendMessageToOutbox!.mockRejectedValueOnce(
+      mockOutboxQueueService.appendMessageToOutbox!.mockRejectedValueOnce(
         new Error('Outbox write failure')
       );
 

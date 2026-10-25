@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as Sentry from '@sentry/nestjs';
-import { GoogleSheetsService } from '../series-tracker/services/google-sheets.service';
+import { OutboxQueueService } from '../outbox/outbox-queue.service';
 import { PriceProduct } from '@prisma/client';
 
 export type AlertReason = 'TARGET_PRICE' | 'DROP_PERCENT' | 'RESTOCK' | 'NEW_SIZE' | 'NEW_COLOR';
@@ -24,7 +24,7 @@ export interface VariantAlertData {
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
 
-  constructor(private readonly googleSheetsService: GoogleSheetsService) {}
+  constructor(private readonly outboxQueueService: OutboxQueueService) {}
 
   /**
    * Checks whether subscription conditions are met for a price or variant update.
@@ -188,7 +188,7 @@ export class NotificationService {
     const message = `${header}\n\n🏷 <b>${escapedTitle}</b>${variantsBlock}\n\n${details}\n\n🔗 <a href="${escapedUrl}">Перейти до магазину</a>`;
 
     try {
-      await this.googleSheetsService.appendMessageToOutbox(message, chatId);
+      await this.outboxQueueService.appendMessageToOutbox(message, chatId);
       this.logger.log(
         `Price alert queued for product "${product.title}" (${product.id}) [${reason}]`
       );

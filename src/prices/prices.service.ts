@@ -23,12 +23,13 @@ export interface PriceHistoryItem {
 
 export const PRICES_CONFIG = {
   BATCH_LIMIT: 8,
+  CONCURRENCY_LIMIT: 3,
   DEFAULT_CHECK_INTERVAL_HOURS: 2,
   LONG_STABLE_CHECK_INTERVAL_HOURS: 12,
   MAX_PRICE_SPIKE_PERCENT: 40,
   MAX_FAILURES_BEFORE_ERROR: 3,
   MAX_FAILURES_BEFORE_UNSUPPORTED: 6,
-  MAX_HISTORY_ITEMS: 50,
+  MAX_HISTORY_ITEMS: 100,
 };
 
 @Injectable()
@@ -174,46 +175,65 @@ export class PricesService {
     let changed = 0;
     let failed = 0;
 
-    for (const product of products) {
-      const lockKey = `lock:price-product:${product.id}`;
-      let acquiredLock = false;
+    for (let i = 0; i < products.length; i += PRICES_CONFIG.CONCURRENCY_LIMIT) {
+      const chunk = products.slice(i, i + PRICES_CONFIG.CONCURRENCY_LIMIT);
+      const settled = await Promise.allSettled(
+        chunk.map(product => this.processProductWithLock(product))
+      );
 
-      try {
-        if (this.redisReader.redis) {
-          const res = await this.redisReader.redis.set(lockKey, '1', {
-            nx: true,
-            ex: 120, // 2-minute lock
-          });
-          if (!res) {
-            this.logger.debug(`Skipping product #${product.id}: lock already held`);
-            continue;
+      for (const res of settled) {
+        if (res.status === 'fulfilled') {
+          if (res.value === 'CHANGED') {
+            checked++;
+            changed++;
+          } else if (res.value === 'UNCHANGED') {
+            checked++;
+          } else if (res.value === 'FAILED') {
+            failed++;
           }
-          acquiredLock = true;
-        }
-
-        const result = await this.checkSingleProduct(product);
-        if (result === 'CHANGED') {
-          checked++;
-          changed++;
-        } else if (result === 'UNCHANGED') {
-          checked++;
         } else {
           failed++;
-        }
-      } catch (err: any) {
-        this.logger.error(
-          `Unexpected error checking product #${product.id}: ${err.message}`,
-          err.stack
-        );
-        failed++;
-      } finally {
-        if (acquiredLock && this.redisReader.redis) {
-          await this.redisReader.redis.del(lockKey).catch(() => {});
         }
       }
     }
 
     return { checked, changed, failed };
+  }
+
+  /**
+   * Processes a single product with distributed Redis lock.
+   */
+  private async processProductWithLock(
+    product: PriceProduct
+  ): Promise<'CHANGED' | 'UNCHANGED' | 'FAILED' | 'SKIPPED'> {
+    const lockKey = `lock:price-product:${product.id}`;
+    let acquiredLock = false;
+
+    try {
+      if (this.redisReader.redis) {
+        const res = await this.redisReader.redis.set(lockKey, '1', {
+          nx: true,
+          ex: 120, // 2-minute lock
+        });
+        if (!res) {
+          this.logger.debug(`Skipping product #${product.id}: lock already held`);
+          return 'SKIPPED';
+        }
+        acquiredLock = true;
+      }
+
+      return await this.checkSingleProduct(product);
+    } catch (err: any) {
+      this.logger.error(
+        `Unexpected error checking product #${product.id}: ${err.message}`,
+        err.stack
+      );
+      return 'FAILED';
+    } finally {
+      if (acquiredLock && this.redisReader.redis) {
+        await this.redisReader.redis.del(lockKey).catch(() => {});
+      }
+    }
   }
 
   /**

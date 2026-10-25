@@ -112,9 +112,7 @@ describe('RedisReader', () => {
   });
 
   it('should nudge all redis pairs successfully and handle failure in one', async () => {
-    mockRedisClient.set
-      .mockResolvedValueOnce('OK')
-      .mockRejectedValueOnce(new Error('Nudge error'));
+    mockRedisClient.set.mockResolvedValueOnce('OK').mockRejectedValueOnce(new Error('Nudge error'));
 
     await reader.nudgeAll();
     expect(mockRedisClient.set).toHaveBeenCalledTimes(2);

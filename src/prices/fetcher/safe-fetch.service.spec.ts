@@ -214,8 +214,6 @@ describe('SafeFetchService', () => {
       headers: { get: () => null },
     } as any);
 
-    await expect(service.fetchHtml('http://example.com/403')).rejects.toThrow(
-      /HTTP 403 Forbidden/
-    );
+    await expect(service.fetchHtml('http://example.com/403')).rejects.toThrow(/HTTP 403 Forbidden/);
   });
 });

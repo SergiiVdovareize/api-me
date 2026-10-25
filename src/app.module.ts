@@ -28,6 +28,7 @@ import { DateModule } from './date/date.module';
 import { HumanAssistModule } from './human-assist/human-assist.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { PricesModule } from './prices/prices.module';
+import { OutboxModule } from './outbox/outbox.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { PricesModule } from './prices/prices.module';
     CnapModule,
     LlmModule,
     PricesModule,
+    OutboxModule,
   ],
 
   controllers: [AppController],

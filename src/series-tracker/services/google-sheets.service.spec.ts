@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { GoogleSheetsService } from './google-sheets.service';
+import { OutboxQueueService } from '../../outbox/outbox-queue.service';
 import { google } from 'googleapis';
 
 jest.mock('googleapis', () => {
@@ -28,6 +29,7 @@ jest.mock('googleapis', () => {
 describe('GoogleSheetsService', () => {
   let service: GoogleSheetsService;
   let configService: { get: jest.Mock };
+  let mockOutboxQueueService: jest.Mocked<Partial<OutboxQueueService>>;
   let mockSheets: any;
 
   beforeEach(async () => {
@@ -46,8 +48,16 @@ describe('GoogleSheetsService', () => {
       }),
     };
 
+    mockOutboxQueueService = {
+      appendMessageToOutbox: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [GoogleSheetsService, { provide: ConfigService, useValue: configService }],
+      providers: [
+        GoogleSheetsService,
+        { provide: ConfigService, useValue: configService },
+        { provide: OutboxQueueService, useValue: mockOutboxQueueService },
+      ],
     }).compile();
 
     service = module.get<GoogleSheetsService>(GoogleSheetsService);
@@ -270,33 +280,12 @@ describe('GoogleSheetsService', () => {
   });
 
   describe('appendTelegramOutbox', () => {
-    it('should append pending message with Toloka link and without poster to queue tab', async () => {
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'queue' } }],
-        },
-      });
-
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'queue!A10:E10' } },
-      });
-
+    it('should format and delegate pending message with Toloka link to OutboxQueueService', async () => {
       await service.appendTelegramOutbox('Таємниця бункера / Silo', 2, 10, 'silo');
 
-      expect(mockSheets.spreadsheets.values.append).toHaveBeenCalledTimes(1);
-      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledTimes(1);
+      const message = mockOutboxQueueService.appendMessageToOutbox.mock.calls[0][0];
 
-      expect(appendCall.spreadsheetId).toBe('custom-outbox-sheet-id');
-      expect(appendCall.range).toBe('queue!A:E');
-
-      const row = appendCall.requestBody.values[0];
-      // Row structure: [timestamp, message, chatId, parseMode, status]
-      expect(row[2]).toBe('1252877');
-      expect(row[3]).toBe('HTML');
-      expect(row[4]).toBe('PENDING');
-
-      // Message content checks (no poster, starts with bell announcement)
-      const message = row[1];
       expect(message).not.toContain('&#8205;');
       expect(message.startsWith('🔔 <b>Вийшла нова серія</b>')).toBe(true);
       expect(message).toContain('🎬 <b>Таємниця бункера / Silo</b>');
@@ -306,114 +295,40 @@ describe('GoogleSheetsService', () => {
     });
 
     it('should format message correctly without seriesId', async () => {
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'queue' } }],
-        },
-      });
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'queue!A11:E11' } },
-      });
-
       await service.appendTelegramOutbox('Severance', 2, 10);
 
-      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
-      const message = appendCall.requestBody.values[0][1];
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledTimes(1);
+      const message = mockOutboxQueueService.appendMessageToOutbox.mock.calls[0][0];
 
       expect(message).not.toContain('&#8205;');
       expect(message).toContain('🔔 <b>Вийшла нова серія</b>');
       expect(message).toContain('🎬 <b>Severance</b>');
     });
-
-    it('should use cached outbox sheet name on subsequent calls', async () => {
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'queue' } }],
-        },
-      });
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'queue!A12:E12' } },
-      });
-
-      // First call resolves and caches
-      await service.appendTelegramOutbox('Silo', 2, 11);
-      // Second call uses cachedOutboxSheetName without calling get again
-      await service.appendTelegramOutbox('Silo', 2, 12);
-
-      expect(mockSheets.spreadsheets.get).toHaveBeenCalledTimes(1);
-    });
-
-    it('should fallback to first sheet title or default queue when no tab matches regex', async () => {
-      (service as any).cachedOutboxSheetName = null;
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'CustomTab' } }],
-        },
-      });
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'CustomTab!A1:E1' } },
-      });
-
-      await service.appendTelegramOutbox('Test Show', 1, 1);
-      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
-      expect(appendCall.range).toBe('CustomTab!A:E');
-    });
-
-    it('should default to queue when resolveOutboxSheetName encounters an error', async () => {
-      (service as any).cachedOutboxSheetName = null;
-      mockSheets.spreadsheets.get.mockRejectedValue(new Error('Cannot read sheets'));
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'queue!A1:E1' } },
-      });
-
-      await service.appendTelegramOutbox('Test Show', 1, 1);
-      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
-      expect(appendCall.range).toBe('queue!A:E');
-    });
   });
 
   describe('appendMessageToOutbox', () => {
-    it('should append custom message with custom chatId', async () => {
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'queue' } }],
-        },
-      });
-      mockSheets.spreadsheets.values.append.mockResolvedValue({
-        data: { updates: { updatedRange: 'queue!A15:E15' } },
-      });
-
+    it('should delegate custom message with custom chatId to OutboxQueueService', async () => {
       await service.appendMessageToOutbox('Custom message', '987654');
 
-      expect(mockSheets.spreadsheets.values.append).toHaveBeenCalled();
-      const appendCall = mockSheets.spreadsheets.values.append.mock.calls[0][0];
-      const row = appendCall.requestBody.values[0];
-      expect(row[1]).toBe('Custom message');
-      expect(row[2]).toBe('987654');
-      expect(row[3]).toBe('HTML');
-      expect(row[4]).toBe('PENDING');
+      expect(mockOutboxQueueService.appendMessageToOutbox).toHaveBeenCalledWith(
+        'Custom message',
+        '987654'
+      );
     });
 
-    it('should throw error when append fails', async () => {
-      mockSheets.spreadsheets.get.mockResolvedValue({
-        data: {
-          sheets: [{ properties: { title: 'queue' } }],
-        },
-      });
-      mockSheets.spreadsheets.values.append.mockRejectedValue(new Error('Append error'));
+    it('should propagate error when OutboxQueueService throws', async () => {
+      mockOutboxQueueService.appendMessageToOutbox.mockRejectedValue(new Error('Append error'));
 
       await expect(service.appendMessageToOutbox('Message')).rejects.toThrow('Append error');
     });
   });
 
   describe('configuration and credential branches', () => {
-    it('should use default spreadsheet IDs when config returns undefined', () => {
+    it('should use default series spreadsheet ID when config returns undefined', () => {
       configService.get.mockReturnValue(undefined);
       const defaultSeriesId = (service as any).getSeriesSpreadsheetId();
-      const defaultOutboxId = (service as any).getOutboxSpreadsheetId();
 
       expect(defaultSeriesId).toBe('1TXXFR1MpAsUqcmOVRwf-2lZTPpYE3CVzCCmYuilbOLU');
-      expect(defaultOutboxId).toBe('1zbsVKCvuaFgN4cbn9KNeRKSq3EOT5tsMq2yp6Mpd9dI');
     });
 
     it('should throw error when credentials are missing', () => {

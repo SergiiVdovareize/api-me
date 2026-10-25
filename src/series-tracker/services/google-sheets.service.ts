@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
+import { OutboxQueueService } from '../../outbox/outbox-queue.service';
 import { TrackedSeriesItem } from '../types';
 
 @Injectable()
@@ -8,14 +9,15 @@ export class GoogleSheetsService {
   private readonly logger = new Logger(GoogleSheetsService.name);
   private sheets: sheets_v4.Sheets | null = null;
 
-  // Default IDs for the two separate spreadsheets
+  // Default IDs for the series spreadsheet
   private readonly defaultSeriesSpreadsheetId = '1TXXFR1MpAsUqcmOVRwf-2lZTPpYE3CVzCCmYuilbOLU';
-  private readonly defaultOutboxSpreadsheetId = '1zbsVKCvuaFgN4cbn9KNeRKSq3EOT5tsMq2yp6Mpd9dI';
 
-  private cachedOutboxSheetName: string | null = null;
   private resolvedSeriesTabName = 'Series';
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly outboxQueueService: OutboxQueueService
+  ) {}
 
   /**
    * Spreadsheet holding the tracked series list
@@ -23,16 +25,6 @@ export class GoogleSheetsService {
   private getSeriesSpreadsheetId(): string {
     const id =
       this.configService.get<string>('SERIES_SPREADSHEET_ID') || this.defaultSeriesSpreadsheetId;
-    return id.trim();
-  }
-
-  /**
-   * Spreadsheet holding the Telegram Outbox queue
-   */
-  private getOutboxSpreadsheetId(): string {
-    const id =
-      this.configService.get<string>('TELEGRAM_OUTBOX_SPREADSHEET_ID') ||
-      this.defaultOutboxSpreadsheetId;
     return id.trim();
   }
 
@@ -66,44 +58,6 @@ export class GoogleSheetsService {
     this.sheets = google.sheets({ version: 'v4', auth });
     this.logger.log(`Google Sheets API client successfully initialized for ${clientEmail}`);
     return this.sheets;
-  }
-
-  /**
-   * Identifies the outbox sheet name dynamically in the outbox spreadsheet (matches 'queue' or 'outbox')
-   */
-  private async resolveOutboxSheetName(): Promise<string> {
-    if (this.cachedOutboxSheetName) {
-      return this.cachedOutboxSheetName;
-    }
-
-    const sheets = this.getSheetsClient();
-    const spreadsheetId = this.getOutboxSpreadsheetId();
-
-    this.logger.debug(`Resolving Outbox sheet tab in spreadsheet ${spreadsheetId}...`);
-
-    try {
-      const meta = await sheets.spreadsheets.get({ spreadsheetId });
-      const sheetTitles = (meta.data.sheets || [])
-        .map(s => s.properties?.title)
-        .filter((t): t is string => Boolean(t));
-
-      this.logger.debug(`Found tabs in Outbox spreadsheet: [${sheetTitles.join(', ')}]`);
-
-      const matched = sheetTitles.find(t => /telegram.*outbox|outbox|queue/i.test(t));
-
-      if (matched) {
-        this.cachedOutboxSheetName = matched;
-        this.logger.log(`Resolved Outbox sheet tab: "${matched}"`);
-        return matched;
-      }
-
-      this.cachedOutboxSheetName = sheetTitles[0] || 'queue';
-      this.logger.log(`Using default Outbox tab name: "${this.cachedOutboxSheetName}"`);
-      return this.cachedOutboxSheetName;
-    } catch (error) {
-      this.logger.warn(`Could not fetch Outbox metadata: ${error.message}. Defaulting to 'queue'`);
-      return 'queue';
-    }
   }
 
   /**
@@ -362,36 +316,10 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Appends an arbitrary pending HTML message to the Telegram Outbox spreadsheet
+   * Appends an arbitrary pending HTML message to the Telegram Outbox spreadsheet via OutboxQueueService
    */
   async appendMessageToOutbox(message: string, chatId = '1252877'): Promise<void> {
-    const sheets = this.getSheetsClient();
-    const spreadsheetId = this.getOutboxSpreadsheetId();
-    const outboxSheetName = await this.resolveOutboxSheetName();
-
-    const timestamp = this.formatGmt3(new Date());
-    const rowValues = [timestamp, message, chatId, 'HTML', 'PENDING'];
-
-    this.logger.log(
-      `Appending to Telegram Outbox sheet "${outboxSheetName}" (${spreadsheetId}): [Timestamp: ${timestamp}, Chat: ${chatId}, Status: PENDING]`
-    );
-
-    try {
-      const result = await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: `${outboxSheetName}!A:E`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [rowValues],
-        },
-      });
-      this.logger.log(
-        `Successfully appended Telegram Outbox row. Range: ${result.data.updates?.updatedRange}`
-      );
-    } catch (error) {
-      this.logger.error(`Failed to append to Telegram Outbox: ${error.message}`, error.stack);
-      throw error;
-    }
+    return this.outboxQueueService.appendMessageToOutbox(message, chatId);
   }
 
   /**

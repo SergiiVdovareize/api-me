@@ -92,7 +92,9 @@ describe('Price Extractors', () => {
     });
 
     it('should ignore invalid json or product without offers', async () => {
-      expect(await extractor.extract('<script type="application/ld+json">invalid</script>')).toBeNull();
+      expect(
+        await extractor.extract('<script type="application/ld+json">invalid</script>')
+      ).toBeNull();
       expect(
         await extractor.extract(
           '<script type="application/ld+json">{"@type":"Product","name":"Test"}</script>'
@@ -201,7 +203,11 @@ describe('Price Extractors', () => {
       const html = `<div>Price: 100 UAH</div>`;
       expect(await extractor.extract(html)).toBeNull();
       expect(await extractor.extract(html, { selector: '.non-existent' })).toBeNull();
-      expect(await extractor.extract('<div><span class="bad">Not a price</span></div>', { selector: '.bad' })).toBeNull();
+      expect(
+        await extractor.extract('<div><span class="bad">Not a price</span></div>', {
+          selector: '.bad',
+        })
+      ).toBeNull();
     });
   });
 });

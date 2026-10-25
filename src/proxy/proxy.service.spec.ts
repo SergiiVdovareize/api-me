@@ -5,6 +5,7 @@ import { Request, Response } from 'express';
 import { EventEmitter } from 'events';
 import * as https from 'https';
 import * as http from 'http';
+import { isAllowedProxyDomain, getDomainHeaders } from './proxy.constants';
 
 class MockUpstreamResponse extends EventEmitter {
   statusCode: number;
@@ -23,6 +24,7 @@ class MockUpstreamResponse extends EventEmitter {
 class MockUpstreamRequest extends EventEmitter {
   end = jest.fn();
   destroy = jest.fn();
+  setTimeout = jest.fn();
 }
 
 describe('ProxyService', () => {
@@ -228,6 +230,26 @@ describe('ProxyService', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
+    it('should ignore malformed Range header', async () => {
+      const req = createMockRequest('https://ashdi.vip/video.ts', {
+        range: 'malformed_range_value',
+      });
+      const res = createMockResponse();
+
+      const mockUpstreamReq = new MockUpstreamRequest();
+      const mockUpstreamRes = new MockUpstreamResponse(200, {});
+
+      jest.spyOn(https, 'request').mockImplementation((_url: any, opts: any, callback: any) => {
+        expect(opts.headers['Range']).toBeUndefined();
+        callback(mockUpstreamRes);
+        return mockUpstreamReq as any;
+      });
+
+      const handlePromise = service.handleProxy(req, res);
+      mockUpstreamRes.emit('end');
+      await handlePromise;
+    });
+
     it('should use http.request when URL is http protocol', async () => {
       const req = createMockRequest('http://ashdi.vip/video.ts');
       const res = createMockResponse();
@@ -266,18 +288,20 @@ describe('ProxyService', () => {
       });
 
       let callCount = 0;
-      jest.spyOn(https, 'request').mockImplementation((targetUrl: any, _opts: any, callback: any) => {
-        callCount++;
-        if (callCount === 1) {
-          expect(targetUrl).toBe('https://ashdi.vip/old-stream.m3u8');
-          callback(mockRedirectRes);
-          return mockRedirectReq as any;
-        } else {
-          expect(targetUrl).toBe('https://ashdi.vip/node2/stream.m3u8');
-          callback(mockFinalRes);
-          return mockFinalReq as any;
-        }
-      });
+      jest
+        .spyOn(https, 'request')
+        .mockImplementation((targetUrl: any, _opts: any, callback: any) => {
+          callCount++;
+          if (callCount === 1) {
+            expect(targetUrl).toBe('https://ashdi.vip/old-stream.m3u8');
+            callback(mockRedirectRes);
+            return mockRedirectReq as any;
+          } else {
+            expect(targetUrl).toBe('https://ashdi.vip/node2/stream.m3u8');
+            callback(mockFinalRes);
+            return mockFinalReq as any;
+          }
+        });
 
       const handlePromise = service.handleProxy(req, res);
       mockFinalRes.emit('end');
@@ -304,7 +328,9 @@ describe('ProxyService', () => {
       await service.handleProxy(req, res);
 
       expect(res.status).toHaveBeenCalledWith(502);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Too many redirects' }));
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: 'Too many redirects' })
+      );
     });
 
     it('should respond with 502 when upstream request emits error', async () => {
@@ -405,11 +431,37 @@ describe('ProxyService', () => {
       (req as any).emit('close');
       expect(mockReq.destroy).toHaveBeenCalled();
     });
+
+    it('should respond with 504 when upstream socket times out', async () => {
+      const req = createMockRequest('https://ashdi.vip/hang');
+      const res = createMockResponse();
+
+      const mockReq = new MockUpstreamRequest();
+      mockReq.setTimeout.mockImplementation((_ms: number, cb: () => void) => {
+        setTimeout(cb, 5);
+        return mockReq;
+      });
+
+      mockReq.destroy.mockImplementation((err: Error) => {
+        mockReq.emit('error', err);
+      });
+
+      jest.spyOn(https, 'request').mockImplementation(() => {
+        return mockReq as any;
+      });
+
+      const handlePromise = service.handleProxy(req, res);
+      await handlePromise;
+
+      expect(res.status).toHaveBeenCalledWith(504);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: 'Socket timeout while waiting for upstream' })
+      );
+    });
   });
 
   describe('proxy.constants helpers', () => {
     it('isAllowedProxyDomain should correctly identify whitelisted domains and subdomains', () => {
-      const { isAllowedProxyDomain } = require('./proxy.constants');
       expect(isAllowedProxyDomain('ashdi.vip')).toBe(true);
       expect(isAllowedProxyDomain('node1.ashdi.vip')).toBe(true);
       expect(isAllowedProxyDomain('club.uakino.fun')).toBe(true);
@@ -420,7 +472,6 @@ describe('ProxyService', () => {
     });
 
     it('getDomainHeaders should return default ashdi headers for unknown hostname', () => {
-      const { getDomainHeaders } = require('./proxy.constants');
       const headers = getDomainHeaders('unknown-domain.com');
       expect(headers).toEqual({
         referer: 'https://ashdi.vip/',

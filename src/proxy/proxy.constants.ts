@@ -43,10 +43,13 @@ export const ALLOWED_PROXY_DOMAINS: readonly string[] = PROXY_DOMAIN_RULES.flatM
   rule => rule.matchDomains
 );
 
+export const HTTP_RANGE_HEADER_REGEX = /^bytes=\d*-\d*$/;
+
 export const PROXY_CONFIG = {
   MAX_REDIRECTS: 5,
   QUERY_PARAM_URL: 'url',
   ROUTES: ['proxy', 'api/proxy'],
+  SOCKET_TIMEOUT_MS: 30000,
 } as const;
 
 export const FORWARDED_RESPONSE_HEADERS: readonly {
@@ -68,6 +71,7 @@ export const PROXY_ERROR_MESSAGES = {
   TOO_MANY_REDIRECTS: 'Too many redirects',
   PROXY_FAILED: 'Proxy request failed',
   STREAM_ERROR: 'Stream error',
+  SOCKET_TIMEOUT: 'Socket timeout while waiting for upstream',
 } as const;
 
 export function isAllowedProxyDomain(hostname: string): boolean {

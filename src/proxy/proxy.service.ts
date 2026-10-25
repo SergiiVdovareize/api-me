@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as http from 'http';
 import * as https from 'https';
@@ -10,6 +6,7 @@ import { URL } from 'url';
 import {
   DEFAULT_OUTBOUND_HEADERS,
   FORWARDED_RESPONSE_HEADERS,
+  HTTP_RANGE_HEADER_REGEX,
   PROXY_CONFIG,
   PROXY_ERROR_MESSAGES,
   applyProxyCorsHeaders,
@@ -35,9 +32,7 @@ export class ProxyService {
     }
 
     if (!isAllowedProxyDomain(parsedUrl.hostname)) {
-      throw new BadRequestException(
-        PROXY_ERROR_MESSAGES.DOMAIN_NOT_ALLOWED(parsedUrl.hostname)
-      );
+      throw new BadRequestException(PROXY_ERROR_MESSAGES.DOMAIN_NOT_ALLOWED(parsedUrl.hostname));
     }
 
     return this.forwardStream(rawTarget.trim(), req, res);
@@ -81,7 +76,12 @@ export class ProxyService {
 
       const incomingRange = req.headers['range'];
       if (incomingRange) {
-        outboundHeaders['Range'] = Array.isArray(incomingRange) ? incomingRange[0] : incomingRange;
+        const rawRange = Array.isArray(incomingRange) ? incomingRange[0] : incomingRange;
+        if (typeof rawRange === 'string' && HTTP_RANGE_HEADER_REGEX.test(rawRange.trim())) {
+          outboundHeaders['Range'] = rawRange.trim();
+        } else {
+          this.logger.debug(`Ignoring invalid or malformed Range header: "${rawRange}"`);
+        }
       }
 
       const upstreamReq = client.request(
@@ -135,6 +135,11 @@ export class ProxyService {
         }
       );
 
+      upstreamReq.setTimeout(PROXY_CONFIG.SOCKET_TIMEOUT_MS, () => {
+        this.logger.warn(`Upstream request timed out after ${PROXY_CONFIG.SOCKET_TIMEOUT_MS}ms`);
+        upstreamReq.destroy(new Error(PROXY_ERROR_MESSAGES.SOCKET_TIMEOUT));
+      });
+
       req.on('close', () => {
         upstreamReq.destroy();
       });
@@ -143,8 +148,11 @@ export class ProxyService {
         this.logger.error(`Upstream proxy request failed: ${err.message}`);
         if (!res.headersSent) {
           applyProxyCorsHeaders(res);
-          res.status(502).json({
-            error: PROXY_ERROR_MESSAGES.PROXY_FAILED,
+          const isTimeout = err.message === PROXY_ERROR_MESSAGES.SOCKET_TIMEOUT;
+          res.status(isTimeout ? 504 : 502).json({
+            error: isTimeout
+              ? PROXY_ERROR_MESSAGES.SOCKET_TIMEOUT
+              : PROXY_ERROR_MESSAGES.PROXY_FAILED,
             details: err.message,
           });
         }

@@ -213,6 +213,90 @@ describe('PricesService', () => {
       );
     });
 
+    it('should cap price history to MAX_HISTORY_ITEMS (100 entries)', async () => {
+      const initialHistory = Array.from({ length: 105 }, (_, i) => ({
+        price: 1000 + i,
+        inStock: true,
+        checkedAt: new Date(Date.now() - (105 - i) * 60000).toISOString(),
+      }));
+
+      const mockProduct = {
+        id: 11,
+        url: 'https://shop.ua/item-history',
+        domain: 'shop.ua',
+        title: 'History Test Item',
+        lastPrice: 1104,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 0,
+        history: initialHistory,
+        chatId: '1252877',
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([mockProduct]);
+      mockJsonLdExtractor.extract.mockResolvedValue({
+        title: 'History Test Item',
+        price: 1200,
+        currency: 'UAH',
+        inStock: true,
+        strategy: 'JSON_LD',
+      });
+      mockNotificationService.checkConditions.mockReturnValue({
+        shouldNotify: false,
+      });
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      await service.checkDuePrices();
+
+      expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 11 },
+          data: expect.objectContaining({
+            lastPrice: 1200,
+            history: expect.any(Array),
+          }),
+        })
+      );
+
+      const updateCall = mockPrisma.priceProduct.update.mock.calls.find(
+        (call: any) => call[0]?.where?.id === 11
+      );
+      expect(updateCall[0].data.history.length).toBe(100);
+      expect(updateCall[0].data.history[99].price).toBe(1200);
+    });
+
+    it('should process multiple due products in concurrent chunks', async () => {
+      const mockProducts = [1, 2, 3, 4, 5].map(id => ({
+        id,
+        url: `https://shop.ua/item-${id}`,
+        domain: 'shop.ua',
+        title: `Item ${id}`,
+        lastPrice: 1000,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 0,
+        history: [],
+      }));
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue(mockProducts);
+      mockJsonLdExtractor.extract.mockImplementation(async () => ({
+        title: `Item`,
+        price: 1000,
+        currency: 'UAH',
+        inStock: true,
+        strategy: 'JSON_LD',
+      }));
+      mockNotificationService.checkConditions.mockReturnValue({ shouldNotify: false });
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      const summary = await service.checkDuePrices();
+
+      expect(summary).toEqual({ checked: 5, changed: 0, failed: 0 });
+      expect(mockPrisma.priceProduct.update).toHaveBeenCalledTimes(5);
+    });
+
     it('should increment failCount and set backoff on parsing failure', async () => {
       const mockProduct = {
         id: 2,
