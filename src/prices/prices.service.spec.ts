@@ -159,6 +159,19 @@ describe('PricesService', () => {
         })
       );
     });
+
+    it('should throw BadRequestException when upstream returns HTTP 403 Forbidden', async () => {
+      mockPrisma.priceProduct.findUnique.mockResolvedValue(null);
+      mockSafeFetch.fetchHtml.mockRejectedValue(
+        new Error('HTTP 403 Forbidden for https://goodwine.com.ua/item')
+      );
+
+      await expect(
+        service.createProduct({
+          url: 'https://goodwine.com.ua/item',
+        })
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('checkDuePrices', () => {

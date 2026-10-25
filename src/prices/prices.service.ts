@@ -94,7 +94,16 @@ export class PricesService {
     }
 
     // 2. Initial extraction
-    const extracted = await this.extractProductData(normalizedUrl, domain);
+    let extracted: ExtractedProductData | null = null;
+    try {
+      extracted = await this.extractProductData(normalizedUrl, domain);
+    } catch (err: any) {
+      this.logger.warn(`Failed initial fetch for ${normalizedUrl}: ${err.message}`);
+      throw new BadRequestException(
+        `Failed to fetch product from ${domain}: ${err.message}`
+      );
+    }
+
     if (!extracted || !extracted.price) {
       throw new BadRequestException('PRICE_NOT_FOUND');
     }
