@@ -4,7 +4,7 @@ description: Pick, debate, implement, and update tasks from GitHub Dev Backlog P
 ---
 # Board Worker Skill (Autonomous Multi-Role Orchestration)
 
-This skill guides the agent in fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `tizen-flix`, etc.), conducting an automated multi-role consensus deliberation, sanitizing content to prevent data leaks, recording the debate in the issue comments, and either autonomously implementing approved tasks or escalating high-risk decisions to the human developer.
+This skill guides the agent in fetching tasks from the multi-project GitHub Dev Backlog board across any repository (`api-me`, `catcast`, `alphadate`, etc.), conducting an automated multi-role consensus deliberation, sanitizing content to prevent data leaks, recording the debate in the issue comments, and either autonomously implementing approved tasks or escalating high-risk decisions to the human developer.
 
 ## Project Board Details
 
@@ -23,7 +23,8 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
   * `Done`: `98236657`
 * **Project Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_X0`
   * `api-me`: `ebe4d189`
-  * `tizen-flix`: `fae40303`
+  * `catcast`: `fae40303`
+  * `alphadate`: `455f0b17`
   * `general`: `f5917314`
 
 ---
@@ -53,11 +54,25 @@ Before touching any code, the agent sequentially assumes four distinct perspecti
    ```
 3. Filter items where:
    * Status is `Todo` (`f75ad846`)
-   * Project field matches the current repository (`api-me`, `tizen-flix`, or `general`)
+   * Project field matches the current repository (`api-me`, `catcast`, `alphadate`, or `general`)
 4. **Sequential Processing (FIFO):** Take the very first task in order.
 
+### 1.5. Pre-Flight Task Refinement (`task-refiner`)
+Before starting deliberation, improve and structure the task title and description into professional English:
+1. Read the raw issue title and body.
+2. Translate and structure into `## Overview`, `## Objectives`, `## Acceptance Criteria`.
+3. Append the mandatory attribution footer:
+   ```markdown
+   ---
+   *Task title and description refined with AI.*
+   ```
+4. Audit for sensitive data via `comment-sanitizer` and update the issue:
+   ```bash
+   gh issue edit <ISSUE_NUMBER> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
+   ```
+
 ### 2. Autonomous Multi-Role Deliberation
-1. Read the issue details:
+1. Read the updated issue details:
    ```bash
    gh issue view <ISSUE_NUMBER> --comments
    ```

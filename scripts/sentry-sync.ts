@@ -49,8 +49,11 @@ function getProjectOptionId(repoName: string): string {
   if (shortName.includes('api-me')) {
     return 'ebe4d189'; // api-me
   }
-  if (shortName.includes('tizen')) {
-    return 'fae40303'; // tizen-flix
+  if (shortName.includes('catcast') || shortName.includes('tizen')) {
+    return 'fae40303'; // catcast
+  }
+  if (shortName.includes('alphadate')) {
+    return '455f0b17'; // alphadate
   }
   return 'f5917314'; // general
 }
