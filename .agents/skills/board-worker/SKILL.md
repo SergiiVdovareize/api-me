@@ -140,11 +140,16 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
 - Commit: https://github.com/${REPO_NWO}/commit/${COMMIT_SHA}
 - Verified with type checks and unit tests."
    ```
-8. Close the issue:
+8. **Check off Acceptance Criteria in the Issue Description**:
+   Before closing the issue, update the issue body to mark all completed Acceptance Criteria checkboxes as checked (`- [x]`):
+   ```bash
+   gh issue edit <ISSUE_NUMBER> --body "<UPDATED_BODY_WITH_CHECKED_BOXES>"
+   ```
+9. **Close the issue**:
    ```bash
    gh issue close <ISSUE_NUMBER> --reason completed
    ```
-9. Move the board card to **`Done`**:
+10. **Move the board card to `Done`**:
    ```bash
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
    ```
