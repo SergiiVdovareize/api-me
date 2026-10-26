@@ -1,6 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
+import { TelegramService } from './telegram.service';
+
+export interface OutboxProcessDetail {
+  row: number;
+  chatId?: string;
+  status: 'SENT' | 'ERROR';
+  error?: string;
+}
+
+export interface OutboxProcessResult {
+  totalRows: number;
+  processed: number;
+  sent: number;
+  errors: number;
+  details: OutboxProcessDetail[];
+}
 
 @Injectable()
 export class OutboxQueueService {
@@ -9,7 +25,10 @@ export class OutboxQueueService {
   private readonly defaultOutboxSpreadsheetId = '1zbsVKCvuaFgN4cbn9KNeRKSq3EOT5tsMq2yp6Mpd9dI';
   private cachedOutboxSheetName: string | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly telegramService: TelegramService
+  ) {}
 
   /**
    * Appends an arbitrary pending HTML message to the Telegram Outbox queue spreadsheet.
@@ -42,6 +61,102 @@ export class OutboxQueueService {
       this.logger.error(`Failed to append to Telegram Outbox: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  /**
+   * Reads pending messages from the Outbox spreadsheet, sends them via Telegram,
+   * and updates row status to SENT or ERROR.
+   */
+  async processOutboxQueue(): Promise<OutboxProcessResult> {
+    const sheets = this.getSheetsClient();
+    const spreadsheetId = this.getOutboxSpreadsheetId();
+    const outboxSheetName = await this.resolveOutboxSheetName();
+
+    this.logger.log(
+      `Fetching pending Telegram messages from "${outboxSheetName}" (${spreadsheetId})...`
+    );
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${outboxSheetName}!A:F`,
+    });
+
+    const rows = res.data.values || [];
+    this.logger.log(`Found ${rows.length} total rows in Telegram Outbox`);
+
+    let sent = 0;
+    let errors = 0;
+    const details: OutboxProcessDetail[] = [];
+
+    // Skip row 0 (header row)
+    for (let i = 1; i < rows.length; i++) {
+      const rowIndex = i + 1; // 1-indexed in Google Sheets
+      const [timeCol, messageCol, chatCol, modeCol, statusCol] = rows[i] || [];
+      const message = messageCol ? String(messageCol).trim() : '';
+      const chatId = chatCol ? String(chatCol).trim() : undefined;
+      const parseMode = modeCol ? String(modeCol).trim() : 'HTML';
+      const status = statusCol ? String(statusCol).trim() : '';
+
+      if (status === 'PENDING' && message) {
+        this.logger.log(
+          `Sending message at row ${rowIndex} to chat: ${chatId || 'DEFAULT'} (parseMode: ${parseMode})`
+        );
+        try {
+          await this.telegramService.sendMessage(message, chatId, parseMode);
+          const sentAt = this.formatGmt3(new Date());
+
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${outboxSheetName}!E${rowIndex}:F${rowIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+              values: [['SENT', sentAt]],
+            },
+          });
+
+          this.logger.log(`Row ${rowIndex} successfully sent to Telegram`);
+          sent++;
+          details.push({ row: rowIndex, chatId, status: 'SENT' });
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to send row ${rowIndex} to Telegram: ${error.message}`,
+            error.stack
+          );
+
+          try {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `${outboxSheetName}!E${rowIndex}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: {
+                values: [['ERROR']],
+              },
+            });
+          } catch (updateErr: any) {
+            this.logger.error(
+              `Failed to update status to ERROR for row ${rowIndex}: ${updateErr.message}`
+            );
+          }
+
+          errors++;
+          details.push({ row: rowIndex, chatId, status: 'ERROR', error: error.message });
+        }
+      }
+    }
+
+    const summary: OutboxProcessResult = {
+      totalRows: rows.length,
+      processed: sent + errors,
+      sent,
+      errors,
+      details,
+    };
+
+    this.logger.log(
+      `Finished Telegram Outbox processing. Processed: ${summary.processed}, Sent: ${summary.sent}, Errors: ${summary.errors}`
+    );
+
+    return summary;
   }
 
   /**

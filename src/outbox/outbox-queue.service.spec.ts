@@ -1,10 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import { OutboxQueueService } from './outbox-queue.service';
+import { TelegramService } from './telegram.service';
 import { google } from 'googleapis';
 
 jest.mock('googleapis', () => {
   const mockValues = {
     append: jest.fn(),
+    get: jest.fn(),
+    update: jest.fn(),
   };
   const mockSpreadsheets = {
     get: jest.fn(),
@@ -25,6 +28,7 @@ jest.mock('googleapis', () => {
 describe('OutboxQueueService', () => {
   let service: OutboxQueueService;
   let configService: jest.Mocked<ConfigService>;
+  let telegramService: jest.Mocked<TelegramService>;
   let mockSheets: any;
 
   beforeEach(() => {
@@ -40,7 +44,11 @@ describe('OutboxQueueService', () => {
       }),
     } as any;
 
-    service = new OutboxQueueService(configService);
+    telegramService = {
+      sendMessage: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
+    service = new OutboxQueueService(configService, telegramService);
     mockSheets = (google.sheets as jest.Mock)();
   });
 
@@ -101,6 +109,98 @@ describe('OutboxQueueService', () => {
       mockSheets.spreadsheets.values.append.mockRejectedValue(new Error('Append error'));
 
       await expect(service.appendMessageToOutbox('Message')).rejects.toThrow('Append error');
+    });
+  });
+
+  describe('processOutboxQueue', () => {
+    beforeEach(() => {
+      mockSheets.spreadsheets.get.mockResolvedValue({
+        data: {
+          sheets: [{ properties: { title: 'queue' } }],
+        },
+      });
+    });
+
+    it('should process pending messages, send to Telegram, and update status to SENT', async () => {
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            ['Timestamp', 'Message', 'Chat ID', 'Parse Mode', 'Status', 'Sent At'],
+            ['2026-10-26 12:00:00', 'Episode 1 released', '1252877', 'HTML', 'PENDING', ''],
+            ['2026-10-26 11:00:00', 'Old message', '1252877', 'HTML', 'SENT', '2026-10-26 11:00:05'],
+          ],
+        },
+      });
+      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+
+      const result = await service.processOutboxQueue();
+
+      expect(result.totalRows).toBe(3);
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(1);
+      expect(result.errors).toBe(0);
+      expect(telegramService.sendMessage).toHaveBeenCalledWith(
+        'Episode 1 released',
+        '1252877',
+        'HTML'
+      );
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          range: 'queue!E2:F2',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: {
+            values: [['SENT', expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)]],
+          },
+        })
+      );
+    });
+
+    it('should mark row as ERROR if telegram sending fails', async () => {
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: [
+            ['Timestamp', 'Message', 'Chat ID', 'Parse Mode', 'Status'],
+            ['2026-10-26 12:00:00', 'Failing message', '999', 'HTML', 'PENDING'],
+          ],
+        },
+      });
+      telegramService.sendMessage.mockRejectedValue(new Error('Network error'));
+      mockSheets.spreadsheets.values.update.mockResolvedValue({});
+
+      const result = await service.processOutboxQueue();
+
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(result.errors).toBe(1);
+      expect(result.details[0]).toEqual({
+        row: 2,
+        chatId: '999',
+        status: 'ERROR',
+        error: 'Network error',
+      });
+      expect(mockSheets.spreadsheets.values.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          range: 'queue!E2',
+          requestBody: {
+            values: [['ERROR']],
+          },
+        })
+      );
+    });
+
+    it('should handle empty rows gracefully', async () => {
+      mockSheets.spreadsheets.values.get.mockResolvedValue({
+        data: {
+          values: null,
+        },
+      });
+
+      const result = await service.processOutboxQueue();
+
+      expect(result.totalRows).toBe(0);
+      expect(result.processed).toBe(0);
+      expect(result.sent).toBe(0);
+      expect(result.errors).toBe(0);
     });
   });
 

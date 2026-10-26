@@ -35,7 +35,8 @@
     "cnap:browser": "ts-node -r tsconfig-paths/register scripts/check-cnap-slots.ts",
     "alphadate:backfill-players": "ts-node -r tsconfig-paths/register scripts/backfill-partner-player-ids.ts",
     "alphadate:suggestions": "ts-node -r tsconfig-paths/register scripts/test-suggestions.ts",
-    "llm:test": "ts-node -r tsconfig-paths/register scripts/test-llm.ts"
+    "llm:test": "ts-node -r tsconfig-paths/register scripts/test-llm.ts",
+    "outbox:process": "ts-node -r tsconfig-paths/register scripts/process-outbox.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.6",
