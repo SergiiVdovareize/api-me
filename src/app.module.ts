@@ -29,6 +29,7 @@ import { HumanAssistModule } from './human-assist/human-assist.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { PricesModule } from './prices/prices.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { OutboxModule } from './outbox/outbox.module';
     LlmModule,
     PricesModule,
     OutboxModule,
+    WhatsappModule,
   ],
 
   controllers: [AppController],
