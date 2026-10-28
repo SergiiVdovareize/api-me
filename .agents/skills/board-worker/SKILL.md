@@ -22,10 +22,10 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
   * `In Progress`: `47fc9ee4`
   * `Done`: `98236657`
 * **Project Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_X0`
-  * `api-me`: `ebe4d189`
-  * `catcast`: `fae40303`
-  * `alphadate`: `455f0b17`
-  * `general`: `f5917314`
+  * `api-me`: `ebe4d189` — Backend services, NestJS, Prisma ORM, PostgreSQL, Redis, Outbox notification pipeline (Telegram, WhatsApp), price monitoring scrapers, Sentry error monitoring, backend cron jobs.
+  * `catcast`: `fae40303` — Video streaming web and Smart TV (Tizen/webOS) client, torrent streaming, player UI, Lampa / Lampaua player integrations.
+  * `alphadate`: `455f0b17` — Dating application, frontend UI/UX, user profiles, matching flows, chat screens, avatar icons, modal loaders.
+  * `general`: `f5917314` — Cross-repository tooling, organization-wide scripts, GitHub project board workflows, agent skills and guidelines.
 
 ---
 
@@ -52,10 +52,43 @@ Before touching any code, the agent sequentially assumes four distinct perspecti
    ```bash
    gh project item-list 4 --owner SergiiVdovareize --format json
    ```
-3. Filter items where:
-   * Status is `Todo` (`f75ad846`)
-   * Project field matches the current repository (`api-me`, `catcast`, `alphadate`, or `general`)
-4. **Sequential Processing (FIFO):** Take the very first task in order.
+3. Inspect candidates in `Todo` (`f75ad846`).
+
+### 1.2. Repository Alignment & Board Metadata Synchronization
+Before task refinement or code modifications, analyze the task's context against the repository taxonomy:
+
+1. **Evaluate Task Alignment:**
+   - Inspect issue repository (`content.repository`), issue title, and body.
+   - Match against domain keywords and architectural scope (`api-me`, `catcast`, `alphadate`, `general`).
+   - Determine detected target project (`DETECTED_PROJECT`).
+
+2. **Synchronize Board `Project` Field:**
+   - If the item's `Project` field on the board is unset (`null`), set the matching option ID:
+     ```bash
+     gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_X0 --single-select-option-id <PROJECT_OPTION_ID>
+     ```
+
+3. **Handle Repository Discrepancies & Mismatches:**
+   - **Case A: Issue repository matches detected repository**:
+     - If the repository matches the active workspace, proceed to Step 1.5 (Task Refinement).
+   - **Case B: Issue repository does NOT match detected repository** (e.g., issue filed under `api-me` but describes `catcast` player or `alphadate` UI):
+     - Update the board `Project` field to the detected target project.
+     - Post an advisory comment on the issue:
+       ```bash
+       gh issue comment <ISSUE_NUMBER> --body "⚠️ **Repository Alignment Conflict Detected**
+
+- **Current Issue Repository:** \`<CURRENT_REPO>\`
+- **Detected Target Project:** \`<DETECTED_PROJECT>\` (based on domain keywords and task scope)
+
+The task appears to belong to another project repository. Moving board card to **Needs Decision** for human review and potential transfer/re-creation in the correct repository."
+       ```
+     - Move the board card to **`Needs Decision`** (`561cabe1`):
+       ```bash
+       gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
+       ```
+     - Do not implement in the current workspace. Pick the next valid task matching the current repository.
+   - **Case C: Issue belongs to another repository**:
+     - If an issue is correctly filed in another repository (e.g. `cat-cast`), the agent in `api-me` must skip it. Only work on tasks matching the current workspace repository (or `general`).
 
 ### 1.5. Pre-Flight Task Refinement (`task-refiner`)
 Before starting deliberation, improve and structure the task title and description into professional English:
