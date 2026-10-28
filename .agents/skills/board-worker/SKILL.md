@@ -25,7 +25,7 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
   * `api-me`: `ebe4d189` — Backend services, NestJS, Prisma ORM, PostgreSQL, Redis, Outbox notification pipeline (Telegram, WhatsApp), price monitoring scrapers, Sentry error monitoring, backend cron jobs.
   * `catcast`: `fae40303` — Video streaming web and Smart TV (Tizen/webOS) client, torrent streaming, player UI, Lampa / Lampaua player integrations.
   * `alphadate`: `455f0b17` — Dating application, frontend UI/UX, user profiles, matching flows, chat screens, avatar icons, modal loaders.
-  * `general`: `f5917314` — Cross-repository tooling, organization-wide scripts, GitHub project board workflows, agent skills and guidelines.
+  * `general`: `f5917314` — Cross-repository tooling, organization-wide scripts, GitHub project board workflows, agent skills and guidelines, repository-agnostic research, Draft Items without assigned repository, shared DevOps/infrastructure.
 * **Execution Time Field ID:** `PVTF_lAHOADkqQ84BosFczhnjoZs` (TEXT, e.g. "15m", "1h 10m")
 * **Tokens Spent Field ID:** `PVTF_lAHOADkqQ84BosFczhnjobQ` (NUMBER, e.g. 35000)
 
@@ -116,31 +116,51 @@ Please add **\`<NEW_PROJECT_NAME>\`** to the \`Project\` field options on GitHub
           gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
           ```
        4. Escalate to the human developer and do not proceed with implementation.
+   - **Case E: Task is classified as `general`**:
+     - Markers for `general`:
+       * Item is a Draft Item with no repository attached (`content.repository == null`, `content.type == "DraftIssue"`).
+       * Scope targets cross-repo developer tooling, agent skills (`.agents/skills/*`), board automations, or organization standards.
+       * Pure R&D, market/technology spike, or architectural blueprint not yet tied to a specific codebase.
+       * Organization-level infrastructure, DNS, or global DevOps policies.
+     - Action:
+       1. Assign board `Project` field to `general` (`f5917314`):
+          ```bash
+          gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_X0 --single-select-option-id f5917314
+          ```
+       2. If the task is non-code (research, board configuration, agent skills): Any workspace agent can execute it.
+       3. If the task is a Draft Item requiring new code in a specific repository: Convert it by creating an issue in that repository (`gh issue create --repo ...`), add it to the project (`gh project item-add 4 ...`), and archive the draft item.
 
 ### 1.5. Pre-Flight Task Refinement (`task-refiner`)
 Before starting deliberation, improve and structure the task title and description into professional English:
-1. Read the raw issue title and body.
+1. Read the raw task title and body:
+   - For regular issues: read via `gh issue view <ISSUE_NUMBER> --json title,body`.
+   - For Draft Items: read directly from `gh project item-list` JSON output.
 2. Translate and structure into `## Overview`, `## Objectives`, `## Acceptance Criteria`.
 3. Append the mandatory attribution footer:
    ```markdown
    ---
    *Task title and description refined with AI.*
    ```
-4. Audit for sensitive data via `comment-sanitizer` and update the issue:
-   ```bash
-   gh issue edit <ISSUE_NUMBER> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
-   ```
+4. Audit for sensitive data via `comment-sanitizer` and update:
+   - For regular issues:
+     ```bash
+     gh issue edit <ISSUE_NUMBER> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
+     ```
+   - For Draft Items:
+     ```bash
+     gh project item-edit --id <ITEM_ID> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
+     ```
 
 ### 2. Autonomous Multi-Role Deliberation
-1. Read the updated issue details:
-   ```bash
-   gh issue view <ISSUE_NUMBER> --comments
-   ```
+1. Read the updated task details:
+   - Regular issue: `gh issue view <ISSUE_NUMBER> --comments`
+   - Draft item: inspect item fields and updated body.
 2. Conduct the automated debate (Investigator -> Architect -> Risk Evaluator -> Orchestrator).
 3. **Data Leak Audit:** Apply `comment-sanitizer` to scrub all secrets, passwords, tokens, and replace absolute file paths with relative paths.
-4. Post the sanitized deliberation comment directly to the GitHub Issue:
-   ```bash
-   gh issue comment <ISSUE_NUMBER> --body "### 🤖 Autonomous Task Triage & Consensus
+4. Record the sanitized deliberation:
+   - **For regular issue:** Post directly to the GitHub Issue comments:
+     ```bash
+     gh issue comment <ISSUE_NUMBER> --body "### 🤖 Autonomous Task Triage & Consensus
 
 **🔍 Investigator:**
 ...
@@ -155,7 +175,14 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
 ---
 **⚖️ Orchestrator Verdict:** **🟢 AUTO-APPROVED** | **🟡 ESCALATED TO HUMAN**
 ..."
-   ```
+     ```
+   - **For Draft item:** Append the consensus report directly to the draft item body:
+     ```bash
+     gh project item-edit --id <ITEM_ID> --body "<ORIGINAL_BODY>
+
+### 🤖 Autonomous Task Triage & Consensus
+..."
+     ```
 
 ### 3. Handle Orchestrator Verdict
 
