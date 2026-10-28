@@ -256,14 +256,17 @@ Please approve an option in the comments and move this card back to \`Todo\` whe
    Evaluate: Does this feature require external human action (secrets, third-party accounts, webhooks, hardware, external credentials) to be fully functional?
 
    * **Branch 1: Requires External Human Setup / Credentials (e.g. Vercel env secrets, Meta WhatsApp Webhooks, third-party dashboards, manual DB migrations):**
-     1. **Add Persistent Checklist to Issue Body:** Append a structured `## 🛠️ Required Human Setup & Activation Checklist` section to the issue body with specific checkable items (`- [ ]`).
+     1. **Add Persistent Checklist & Testing Instructions to Issue Body:** Append a structured `## 🛠️ Required Human Setup & Activation Checklist` section to the issue body. It MUST include:
+        - Checkable configuration steps (`- [ ]`) for environment variables, secrets, portal URLs, and permissions.
+        - **Step-by-Step Testing & Verification Instructions:** Concrete, copy-pasteable commands (e.g. `curl`, test scripts, CLI invocations, or exact mobile/UI triggers) to verify that the implementation and credentials work end-to-end.
+        - **Expected Output / Result:** Exactly what response code, payload, or board state confirms success.
      2. **Post Handoff Comment:** Post comment with commit link, execution metrics, and a clear notification that manual configuration is needed.
      3. **DO NOT close the issue:** Keep the issue open.
      4. **Move the board card to `Action Required` (`561cabe1`):**
         ```bash
         gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
         ```
-     5. **Human Lifecycle:** The human completes the external setup, checks off the boxes in the issue body, closes the issue, and moves the card to **`Done`** (`98236657`).
+     5. **Human Lifecycle:** The human completes the external setup, runs the test commands, checks off the boxes in the issue body, closes the issue, and moves the card to **`Done`** (`98236657`).
 
    * **Branch 2: 100% Self-Contained Task (no external setup required):**
      1. **Check off Acceptance Criteria:** Mark all `- [x]` in the issue description.
