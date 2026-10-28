@@ -216,4 +216,29 @@ describe('SafeFetchService', () => {
 
     await expect(service.fetchHtml('http://example.com/403')).rejects.toThrow(/HTTP 403 Forbidden/);
   });
+
+  it('should retry transient errors when maxRetries is provided and succeed', async () => {
+    mockDnsLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as any);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { get: () => null },
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (h: string) => (h === 'content-type' ? 'text/html' : null),
+        },
+        text: jest.fn().mockResolvedValue('<html>Success on retry</html>'),
+      } as any);
+
+    const html = await service.fetchHtml('http://example.com/retry', { maxRetries: 1 });
+    expect(html).toContain('Success on retry');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
 });

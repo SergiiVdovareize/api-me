@@ -16,14 +16,14 @@ export class SafeFetchService {
   private readonly defaultTimeoutMs = 15000;
   private readonly defaultMaxRedirects = 3;
   private readonly defaultMaxSizeBytes = 2 * 1024 * 1024; // 2 MB
-  private readonly defaultMaxRetries = 2;
+  private readonly defaultMaxRetries = 0;
 
   private readonly userAgent =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 
   /**
    * Performs an SSRF-safe HTTP GET request, checking DNS against private/local ranges,
-   * enforcing redirects limit, response size limit, and timeout. Retries on transient errors.
+   * enforcing redirects limit, response size limit, and timeout. Retries on transient errors if maxRetries > 0.
    */
   async fetchHtml(url: string, options?: SafeFetchOptions): Promise<string> {
     const maxRetries = options?.maxRetries ?? this.defaultMaxRetries;
@@ -34,9 +34,9 @@ export class SafeFetchService {
         return await this.fetchHtmlOnce(url, options);
       } catch (err: any) {
         lastError = err;
-        const msg = String(err.message || '');
+        const msg = String(err?.message || '');
         const isTransient =
-          err.name === 'AbortError' ||
+          err?.name === 'AbortError' ||
           msg.includes('timed out') ||
           msg.includes('fetch failed') ||
           msg.includes('HTTP 429') ||
@@ -110,6 +110,10 @@ export class SafeFetchService {
         throw err;
       } finally {
         clearTimeout(timeoutId);
+      }
+
+      if (!response) {
+        throw new Error(`Failed to fetch ${currentUrl}: No response received`);
       }
 
       // 3. Handle redirects manually

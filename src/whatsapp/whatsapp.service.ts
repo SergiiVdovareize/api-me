@@ -53,8 +53,14 @@ export class WhatsappService {
     const hmac = crypto.createHmac('sha256', appSecret);
     hmac.update(rawBody);
     const expectedSignature = hmac.digest('hex');
+    const sigBuf = Buffer.from(signature, 'hex');
+    const expectedBuf = Buffer.from(expectedSignature, 'hex');
 
-    return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSignature, 'hex'));
+    if (sigBuf.length !== expectedBuf.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(sigBuf, expectedBuf);
   }
 
   /**

@@ -447,7 +447,7 @@ export class PricesService {
       // keep original url if normalization fails
     }
 
-    const html = await this.safeFetch.fetchHtml(targetUrl);
+    const html = await this.safeFetch.fetchHtml(targetUrl, { maxRetries: 2 });
 
     let extracted: ExtractedProductData | null = null;
 
