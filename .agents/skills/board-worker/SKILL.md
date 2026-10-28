@@ -26,6 +26,8 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
   * `catcast`: `fae40303` — Video streaming web and Smart TV (Tizen/webOS) client, torrent streaming, player UI, Lampa / Lampaua player integrations.
   * `alphadate`: `455f0b17` — Dating application, frontend UI/UX, user profiles, matching flows, chat screens, avatar icons, modal loaders.
   * `general`: `f5917314` — Cross-repository tooling, organization-wide scripts, GitHub project board workflows, agent skills and guidelines.
+* **Execution Time Field ID:** `PVTF_lAHOADkqQ84BosFczhnjoZs` (TEXT, e.g. "15m", "1h 10m")
+* **Tokens Spent Field ID:** `PVTF_lAHOADkqQ84BosFczhnjobQ` (NUMBER, e.g. 35000)
 
 ---
 
@@ -53,6 +55,13 @@ Before touching any code, the agent sequentially assumes four distinct perspecti
    gh project item-list 4 --owner SergiiVdovareize --format json
    ```
 3. Inspect candidates in `Todo` (`f75ad846`).
+4. **Intelligent Task Prioritization:**
+   Instead of naive FIFO processing, analyze all candidate tasks in the queue and prioritize:
+   - **P0 (Foundational / Tooling & Blockers):** Skills, CI/CD, project automation, or tasks that unblock subsequent work.
+   - **P1 (Critical Bugs & Outages):** Sentry errors, runtime exceptions, data corruption.
+   - **P2 (Core Features):** Implementation of functional roadmap requirements.
+   - **P3 (R&D & Spike Investigations):** Exploratory audits, technology assessments.
+   Select the highest-priority actionable task that aligns with the active workspace.
 
 ### 1.2. Repository Alignment & Board Metadata Synchronization
 Before task refinement or code modifications, analyze the task's context against the repository taxonomy:
@@ -151,12 +160,38 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
 ### 3. Handle Orchestrator Verdict
 
 #### Path A: 🟡 ESCALATED TO HUMAN
-1. Move the board card to **`Needs Decision`**:
+When high risk, architectural dilemma, or missing business requirements require human approval:
+1. **No Trivial Chat Ping-Pong:** Do not ask superficial or fragmented questions in IDE chat.
+2. **Comprehensive Decision Package:** Post an all-in-one, fully articulated decision request directly to the GitHub issue comments:
+   - **Context:** Core technical problem, architectural constraints, and current blockers.
+   - **Options & Trade-offs:** Concrete choices (Option 1 vs Option 2) with advantages, drawbacks, and system impacts.
+   - **Agent Recommendation:** Clear recommendation with technical justification.
+   - **Action Item:** Exact confirmation required from the human.
+   ```bash
+   gh issue comment <ISSUE_NUMBER> --body "### 🟡 Decision Required
+
+#### Context
+...
+
+#### Options
+- **Option 1: [Title]**
+  - *Pros:* ...
+  - *Cons:* ...
+- **Option 2: [Title]**
+  - *Pros:* ...
+  - *Cons:* ...
+
+#### Agent Recommendation
+...
+
+#### Action Required
+Please approve an option in the comments or move back to \`Todo\` when decided."
+   ```
+3. Move the board card to **`Needs Decision`**:
    ```bash
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
    ```
-2. Inform the user in chat with the specific decision needed.
-3. **Do not block the queue:** Move on to the next `Todo` task if instructed.
+4. **Never Block the Queue:** Notify the user concisely in chat and immediately proceed to the next unblocked task.
 
 #### Path B: 🟢 AUTO-APPROVED
 1. Move the board card to **`In Progress`**:
@@ -182,12 +217,14 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
    COMMIT_SHA=$(git rev-parse HEAD)
    REPO_NWO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
    ```
-7. **Post sanitized completion comment with commit link**:
+7. **Post sanitized completion comment with commit link and metrics**:
    Verify content through `comment-sanitizer` before posting:
    ```bash
    gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
 
 - Summary of changes...
+- Execution Time: <DURATION>
+- Tokens Spent: <TOKENS_COUNT>
 - Commit: https://github.com/${REPO_NWO}/commit/${COMMIT_SHA}
 - Verified with type checks and unit tests."
    ```
@@ -199,6 +236,15 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
 9. **Close the issue**:
    ```bash
    gh issue close <ISSUE_NUMBER> --reason completed
+   ```
+9.5. **Populate Execution Metrics (Time & Tokens)**:
+   Record measured or estimated duration and token consumption on the project board:
+   ```bash
+   # Set Execution Time (TEXT)
+   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTF_lAHOADkqQ84BosFczhnjoZs --text "<DURATION>"
+
+   # Set Tokens Spent (NUMBER)
+   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTF_lAHOADkqQ84BosFczhnjobQ --number <TOKENS_COUNT>
    ```
 10. **Move the board card to `Done`**:
    ```bash
