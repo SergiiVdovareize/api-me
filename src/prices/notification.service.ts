@@ -208,6 +208,7 @@ export class NotificationService {
     const msg = `[PriceTracker Error] Product #${product.id} (${product.domain}): ${errorReason}`;
     this.logger.error(msg);
     Sentry.captureMessage(msg, {
+      fingerprint: ['price-tracker-error', String(product.id)],
       extra: {
         productId: product.id,
         url: product.url,

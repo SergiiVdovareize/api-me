@@ -6,6 +6,7 @@ export interface SafeFetchOptions {
   timeoutMs?: number;
   maxRedirects?: number;
   maxSizeBytes?: number;
+  maxRetries?: number;
 }
 
 @Injectable()
@@ -15,15 +16,50 @@ export class SafeFetchService {
   private readonly defaultTimeoutMs = 15000;
   private readonly defaultMaxRedirects = 3;
   private readonly defaultMaxSizeBytes = 2 * 1024 * 1024; // 2 MB
+  private readonly defaultMaxRetries = 2;
 
   private readonly userAgent =
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
 
   /**
    * Performs an SSRF-safe HTTP GET request, checking DNS against private/local ranges,
-   * enforcing redirects limit, response size limit, and timeout.
+   * enforcing redirects limit, response size limit, and timeout. Retries on transient errors.
    */
   async fetchHtml(url: string, options?: SafeFetchOptions): Promise<string> {
+    const maxRetries = options?.maxRetries ?? this.defaultMaxRetries;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.fetchHtmlOnce(url, options);
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err.message || '');
+        const isTransient =
+          err.name === 'AbortError' ||
+          msg.includes('timed out') ||
+          msg.includes('fetch failed') ||
+          msg.includes('HTTP 429') ||
+          msg.includes('HTTP 502') ||
+          msg.includes('HTTP 503') ||
+          msg.includes('HTTP 504');
+
+        if (attempt < maxRetries && isTransient) {
+          const delayMs = 500 * Math.pow(2, attempt);
+          this.logger.warn(
+            `Transient error fetching ${url} (attempt ${attempt + 1}/${maxRetries + 1}): ${msg}. Retrying in ${delayMs}ms...`
+          );
+          await new Promise(res => setTimeout(res, delayMs));
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastError || new Error(`Failed to fetch HTML from ${url}`);
+  }
+
+  private async fetchHtmlOnce(url: string, options?: SafeFetchOptions): Promise<string> {
     const timeoutMs = options?.timeoutMs ?? this.defaultTimeoutMs;
     const maxRedirects = options?.maxRedirects ?? this.defaultMaxRedirects;
     const maxSizeBytes = options?.maxSizeBytes ?? this.defaultMaxSizeBytes;
@@ -56,7 +92,7 @@ export class SafeFetchService {
             Accept:
               'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Sec-Ch-Ua': '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+            'Sec-Ch-Ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"macOS"',
             'Sec-Fetch-Dest': 'document',

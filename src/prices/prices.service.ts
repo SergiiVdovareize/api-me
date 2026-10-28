@@ -173,7 +173,7 @@ export class PricesService {
 
     const products = await this.prisma.priceProduct.findMany({
       where: {
-        status: PriceProductStatus.ACTIVE,
+        status: { in: [PriceProductStatus.ACTIVE, PriceProductStatus.ERROR] },
         nextCheckAt: { lte: now },
       },
       orderBy: { nextCheckAt: 'asc' },
@@ -281,10 +281,12 @@ export class PricesService {
         );
       } else if (newFailCount >= PRICES_CONFIG.MAX_FAILURES_BEFORE_ERROR) {
         newStatus = PriceProductStatus.ERROR;
-        await this.notificationService.notifyAdminError(
-          product,
-          `Extraction failed ${newFailCount} times in a row`
-        );
+        if (newFailCount === PRICES_CONFIG.MAX_FAILURES_BEFORE_ERROR) {
+          await this.notificationService.notifyAdminError(
+            product,
+            `Extraction failed ${newFailCount} times in a row`
+          );
+        }
       }
 
       await this.prisma.priceProduct.update({
@@ -437,7 +439,15 @@ export class PricesService {
     knownSelector?: string | null,
     allowAi = true
   ): Promise<ExtractedProductData | null> {
-    const html = await this.safeFetch.fetchHtml(url);
+    let targetUrl = url;
+    try {
+      const normalized = normalizeProductUrl(url);
+      targetUrl = normalized.normalizedUrl;
+    } catch {
+      // keep original url if normalization fails
+    }
+
+    const html = await this.safeFetch.fetchHtml(targetUrl);
 
     let extracted: ExtractedProductData | null = null;
 
