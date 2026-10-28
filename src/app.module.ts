@@ -30,6 +30,7 @@ import { ProxyModule } from './proxy/proxy.module';
 import { PricesModule } from './prices/prices.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     PricesModule,
     OutboxModule,
     WhatsappModule,
+    TelegramModule,
   ],
 
   controllers: [AppController],
