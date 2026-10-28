@@ -77,6 +77,14 @@ describe('TelegramService', () => {
     it('should reject unauthorized user', () => {
       expect(service.isAuthorized(99999, 'random_person')).toBe(false);
     });
+
+    it('should authorize user matching BOARD_TELEGRAM_AUTHORIZED_USERNAMES', () => {
+      (configService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'BOARD_TELEGRAM_AUTHORIZED_USERNAMES') return 'board_owner';
+        return undefined;
+      });
+      expect(service.isAuthorized(88888, 'board_owner')).toBe(true);
+    });
   });
 
   describe('handleIncomingUpdate', () => {

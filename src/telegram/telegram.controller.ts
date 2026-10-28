@@ -43,11 +43,19 @@ export class TelegramController {
     @Body() update: TelegramUpdate,
     @Headers('x-telegram-bot-api-secret-token') secretToken?: string
   ) {
-    const configuredSecret = this.configService.get<string>('TELEGRAM_BOT_SECRET_TOKEN')?.trim();
+    const configuredSecret =
+      this.configService.get<string>('BOARD_TELEGRAM_BOT_SECRET_TOKEN')?.trim() ||
+      this.configService.get<string>('TELEGRAM_BOT_SECRET_TOKEN')?.trim();
 
-    if (configuredSecret && secretToken !== configuredSecret) {
-      this.logger.warn('Rejected incoming Telegram webhook: invalid secret token header.');
-      throw new ForbiddenException('Invalid Telegram secret token');
+    if (configuredSecret) {
+      if (secretToken && secretToken !== configuredSecret) {
+        this.logger.warn('Rejected incoming Telegram webhook: invalid secret token header.');
+        throw new ForbiddenException('Invalid Telegram secret token');
+      } else if (!secretToken) {
+        this.logger.debug(
+          'Incoming Telegram webhook has no secret token header; delegating sender authorization to TelegramService.'
+        );
+      }
     }
 
     try {

@@ -75,6 +75,12 @@ describe('TelegramController', () => {
       expect(telegramService.handleIncomingUpdate).toHaveBeenCalledWith(mockUpdate);
     });
 
+    it('should process webhook without secret token header when delegating authorization to service', async () => {
+      const res = await controller.handleWebhook(mockUpdate);
+      expect(res.status).toBe('ok');
+      expect(res.result?.processed).toBe(1);
+    });
+
     it('should return error status without throwing if service throws', async () => {
       (telegramService.handleIncomingUpdate as jest.Mock).mockRejectedValueOnce(
         new Error('Processing failure')

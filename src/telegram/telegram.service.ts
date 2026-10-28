@@ -25,8 +25,12 @@ export class TelegramService {
    * Verifies if a sender ID or username is permitted to interact with the bot.
    */
   isAuthorized(senderId?: number, username?: string): boolean {
-    const authorizedIdsStr = this.configService.get<string>('TELEGRAM_AUTHORIZED_USER_IDS')?.trim();
-    const authorizedUsernamesStr = this.configService.get<string>('TELEGRAM_AUTHORIZED_USERNAMES')?.trim();
+    const authorizedIdsStr =
+      this.configService.get<string>('BOARD_TELEGRAM_AUTHORIZED_USER_IDS')?.trim() ||
+      this.configService.get<string>('TELEGRAM_AUTHORIZED_USER_IDS')?.trim();
+    const authorizedUsernamesStr =
+      this.configService.get<string>('BOARD_TELEGRAM_AUTHORIZED_USERNAMES')?.trim() ||
+      this.configService.get<string>('TELEGRAM_AUTHORIZED_USERNAMES')?.trim();
 
     // If no whitelist is configured, allow all
     if (!authorizedIdsStr && !authorizedUsernamesStr) {
@@ -170,10 +174,20 @@ You MUST output ONLY a valid JSON object matching this structure:
   }
 
   /**
+   * Returns the configured bot token, checking both BOARD_TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN.
+   */
+  private getBotToken(): string | undefined {
+    return (
+      this.configService.get<string>('BOARD_TELEGRAM_BOT_TOKEN')?.trim() ||
+      this.configService.get<string>('TELEGRAM_BOT_TOKEN')?.trim()
+    );
+  }
+
+  /**
    * Downloads a binary file (such as voice memo audio) from Telegram Bot API.
    */
   async downloadFile(fileId: string): Promise<Buffer> {
-    const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN')?.trim();
+    const token = this.getBotToken();
     if (!token) {
       this.logger.warn('TELEGRAM_BOT_TOKEN not configured. Returning mock audio buffer.');
       return Buffer.from('mock-audio-buffer');
@@ -216,9 +230,9 @@ You MUST output ONLY a valid JSON object matching this structure:
     text: string,
     options: { parse_mode?: string } = { parse_mode: 'Markdown' }
   ): Promise<void> {
-    const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN')?.trim();
+    const token = this.getBotToken();
     if (!token) {
-      this.logger.warn(`TELEGRAM_BOT_TOKEN not configured. Skipping sendMessage to chat ${chatId}.`);
+      this.logger.warn(`Neither BOARD_TELEGRAM_BOT_TOKEN nor TELEGRAM_BOT_TOKEN configured. Skipping sendMessage to chat ${chatId}.`);
       return;
     }
 
