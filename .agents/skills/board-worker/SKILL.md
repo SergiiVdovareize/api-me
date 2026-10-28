@@ -18,7 +18,7 @@ This skill guides the agent in fetching tasks from the multi-project GitHub Dev 
 * **Status Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_Jk`
   * `Backlog`: `4b06c0fa`
   * `Todo`: `f75ad846`
-  * `Needs Decision`: `561cabe1`
+  * `Action Required`: `561cabe1` — Awaiting human input, decision, or external setup/activation
   * `In Progress`: `47fc9ee4`
   * `Done`: `98236657`
 * **Project Field ID:** `PVTSSF_lAHOADkqQ84BosFczhnK_X0`
@@ -39,7 +39,7 @@ Before touching any code, the agent sequentially assumes four distinct perspecti
 3. 🛡️ **Risk Evaluator:** Challenges the design, audits comment text via `comment-sanitizer` for any secrets, tokens, passwords, PII, or absolute paths, and evaluates risk level (**LOW**, **MEDIUM**, or **HIGH**).
 4. ⚖️ **Task Orchestrator:** Weighs consensus, posts the sanitized deliberation report to the GitHub issue comments, and issues the verdict:
    * **🟢 AUTO-APPROVED:** Low/Medium risk, clear solution -> Proceed to implementation.
-   * **🟡 ESCALATED TO HUMAN:** High risk, architectural dilemma, or missing business requirements -> Move to `Needs Decision` and request user input.
+   * **🟡 ESCALATED TO HUMAN:** High risk, architectural dilemma, or missing business requirements -> Move to `Action Required` and request user input.
 
 ---
 
@@ -89,9 +89,9 @@ Before task refinement or code modifications, analyze the task's context against
 - **Current Issue Repository:** \`<CURRENT_REPO>\`
 - **Detected Target Project:** \`<DETECTED_PROJECT>\` (based on domain keywords and task scope)
 
-The task appears to belong to another project repository. Moving board card to **Needs Decision** for human review and potential transfer/re-creation in the correct repository."
+The task appears to belong to another project repository. Moving board card to **Action Required** for human review and potential transfer/re-creation in the correct repository."
        ```
-     - Move the board card to **`Needs Decision`** (`561cabe1`):
+     - Move the board card to **`Action Required`** (`561cabe1`):
        ```bash
        gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
        ```
@@ -109,9 +109,9 @@ The task appears to belong to another project repository. Moving board card to *
 - **Detected Project:** \`<NEW_PROJECT_NAME>\`
 - **Reasoning:** The task scope corresponds to a project/repository that is not currently an available option in the board's \`Project\` single-select field (\`api-me\`, \`catcast\`, \`alphadate\`, \`general\`).
 
-Please add **\`<NEW_PROJECT_NAME>\`** to the \`Project\` field options on GitHub Project #4. Moving card to **Needs Decision**."
+Please add **\`<NEW_PROJECT_NAME>\`** to the \`Project\` field options on GitHub Project #4. Moving card to **Action Required**."
           ```
-       3. Move the board card to **`Needs Decision`** (`561cabe1`):
+       3. Move the board card to **`Action Required`** (`561cabe1`):
           ```bash
           gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
           ```
@@ -183,7 +183,7 @@ Risk Level: **LOW** | **MEDIUM** | **HIGH**
 
 ### 3. Handle Orchestrator Verdict
 
-#### Path A: 🟡 ESCALATED TO HUMAN
+#### Path A: 🟡 ESCALATED TO HUMAN (Action Required before/during implementation)
 When high risk, architectural dilemma, or missing business requirements require human approval:
 1. **No Trivial Chat Ping-Pong:** Do not ask superficial or fragmented questions in IDE chat.
 2. **Comprehensive Decision Package:** Post an all-in-one, fully articulated decision request directly to the GitHub issue comments:
@@ -209,15 +209,16 @@ When high risk, architectural dilemma, or missing business requirements require 
 ...
 
 #### Action Required
-Please approve an option in the comments or move back to \`Todo\` when decided."
+Please approve an option in the comments and move this card back to \`Todo\` when decided."
    ```
-3. Move the board card to **`Needs Decision`**:
+3. **Move the board card to `Action Required` (`561cabe1`):**
    ```bash
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
    ```
-4. **Never Block the Queue:** Notify the user concisely in chat and immediately proceed to the next unblocked task.
+4. **Human Resolution Lifecycle:** The human reads the package, makes the decision, posts their choice in the issue comment, and moves the card back to **`Todo`** (`f75ad846`).
+5. **Never Block the Queue:** Notify the user concisely in chat and immediately proceed to the next unblocked task.
 
-#### Path B: 🟢 AUTO-APPROVED
+#### Path B: 🟢 AUTO-APPROVED (Implementation & Completion Routing)
 1. Move the board card to **`In Progress`**:
    ```bash
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 47fc9ee4
@@ -233,7 +234,7 @@ Please approve an option in the comments or move back to \`Todo\` when decided."
    ```bash
    npm run --if-present sentry:resolve -- <SENTRY_ISSUE_ID> resolved
    ```
-6. **Commit changes and obtain commit link (if code was modified)**:
+6. **Commit changes and obtain commit link**:
    Stage, commit, and push changes to the repository:
    ```bash
    git add <FILES>
@@ -242,40 +243,7 @@ Please approve an option in the comments or move back to \`Todo\` when decided."
    COMMIT_SHA=$(git rev-parse HEAD)
    REPO_NWO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
    ```
-7. **Post sanitized completion report with metrics**:
-   Verify content through `comment-sanitizer` before posting:
-   - **For regular issue:** Post comment via `gh issue comment`:
-     ```bash
-     gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
-
-- Summary of changes...
-- Execution Time: <DURATION>
-- Tokens Spent: <TOKENS_COUNT>
-- Commit: https://github.com/${REPO_NWO}/commit/${COMMIT_SHA}
-- Verified with type checks and unit tests."
-     ```
-   - **For Draft item:** Update draft body with completion summary:
-     ```bash
-     gh project item-edit --id <ITEM_ID> --body "<BODY_WITH_CHECKED_BOXES>
-
-✅ **Completed Autonomously by AI Agent**
-- Summary of outcome...
-- Execution Time: <DURATION>
-- Tokens Spent: <TOKENS_COUNT>"
-     ```
-8. **Check off Acceptance Criteria in Description**:
-   - For regular issue:
-     ```bash
-     gh issue edit <ISSUE_NUMBER> --body "<UPDATED_BODY_WITH_CHECKED_BOXES>"
-     ```
-   - For Draft item: Handled during Step 7.
-9. **Close Issue (if applicable)**:
-   - For regular issue:
-     ```bash
-     gh issue close <ISSUE_NUMBER> --reason completed
-     ```
-   - For Draft item: Skip (Draft Items close via the board status column).
-9.5. **Populate Execution Metrics (Time & Tokens)**:
+7. **Populate Execution Metrics (Time & Tokens)**:
    Record measured or estimated duration and token consumption on the project board:
    ```bash
    # Set Execution Time (TEXT)
@@ -284,7 +252,27 @@ Please approve an option in the comments or move back to \`Todo\` when decided."
    # Set Tokens Spent (NUMBER)
    gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTF_lAHOADkqQ84BosFczhnjobQ --number <TOKENS_COUNT>
    ```
-10. **Move the board card to `Done`**:
-   ```bash
-   gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
-   ```
+8. **Post-Implementation Completion Routing (CRITICAL):**
+   Evaluate: Does this feature require external human action (secrets, third-party accounts, webhooks, hardware, external credentials) to be fully functional?
+
+   * **Branch 1: Requires External Human Setup / Credentials (e.g. Vercel env secrets, Meta WhatsApp Webhooks, third-party dashboards, manual DB migrations):**
+     1. **Add Persistent Checklist to Issue Body:** Append a structured `## 🛠️ Required Human Setup & Activation Checklist` section to the issue body with specific checkable items (`- [ ]`).
+     2. **Post Handoff Comment:** Post comment with commit link, execution metrics, and a clear notification that manual configuration is needed.
+     3. **DO NOT close the issue:** Keep the issue open.
+     4. **Move the board card to `Action Required` (`561cabe1`):**
+        ```bash
+        gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
+        ```
+     5. **Human Lifecycle:** The human completes the external setup, checks off the boxes in the issue body, closes the issue, and moves the card to **`Done`** (`98236657`).
+
+   * **Branch 2: 100% Self-Contained Task (no external setup required):**
+     1. **Check off Acceptance Criteria:** Mark all `- [x]` in the issue description.
+     2. **Post Completion Report:** Post sanitized completion report comment with commit link and metrics.
+     3. **Close Issue:**
+        ```bash
+        gh issue close <ISSUE_NUMBER> --reason completed
+        ```
+     4. **Move the board card to `Done` (`98236657`):**
+        ```bash
+        gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 98236657
+        ```
