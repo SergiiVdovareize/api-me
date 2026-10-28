@@ -131,22 +131,18 @@ Please add **\`<NEW_PROJECT_NAME>\`** to the \`Project\` field options on GitHub
        3. If the task is a Draft Item requiring new code in a specific repository: Convert it by creating an issue in that repository (`gh issue create --repo ...`), add it to the project (`gh project item-add 4 ...`), and archive the draft item.
 
 ### 1.5. Pre-Flight Task Refinement (`task-refiner`)
-Before starting deliberation, improve and structure the task title and description into professional English:
-1. Read the raw task title and body:
-   - For regular issues: read via `gh issue view <ISSUE_NUMBER> --json title,body`.
-   - For Draft Items: read directly from `gh project item-list` JSON output.
-2. Translate and structure into `## Overview`, `## Objectives`, `## Acceptance Criteria`.
-3. Append the mandatory attribution footer:
-   ```markdown
-   ---
-   *Task title and description refined with AI.*
-   ```
-4. Audit for sensitive data via `comment-sanitizer` and update:
-   - For regular issues:
+Before starting deliberation, invoke the `task-refiner` skill to translate and structure the task title and description into professional English (`## Overview`, `## Objectives`, `## Acceptance Criteria`, and attribution footer):
+1. **Fetch Raw Content:**
+   - Regular Issue: Read title and body via `gh issue view <ISSUE_NUMBER> --json title,body`.
+   - Draft Item: Read title and body from `gh project item-list` JSON output.
+2. **Apply `task-refiner` & `comment-sanitizer`:**
+   - Format per `task-refiner` guidelines and scrub sensitive data via `comment-sanitizer`.
+3. **Save Refined Task:**
+   - Regular Issue:
      ```bash
      gh issue edit <ISSUE_NUMBER> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
      ```
-   - For Draft Items:
+   - Draft Item:
      ```bash
      gh project item-edit --id <ITEM_ID> --title "<REFINED_TITLE>" --body "<REFINED_BODY>"
      ```
@@ -231,11 +227,12 @@ Please approve an option in the comments or move back to \`Todo\` when decided."
    - Do not run automated test suites/linters unless allowed.
    - Always verify types (`npx tsc --noEmit`).
 4. Write unit tests for the changes.
-5. If the issue has label `sentry`, resolve in Sentry REST API:
+5. **Conditional Sentry Resolution:**
+   If the issue has label `sentry` and the repository provides a Sentry resolution script (e.g. in `api-me`):
    ```bash
-   npm run sentry:resolve -- <SENTRY_ISSUE_ID> resolved
+   npm run --if-present sentry:resolve -- <SENTRY_ISSUE_ID> resolved
    ```
-6. **Commit changes and obtain commit link**:
+6. **Commit changes and obtain commit link (if code was modified)**:
    Stage, commit, and push changes to the repository:
    ```bash
    git add <FILES>
@@ -244,26 +241,39 @@ Please approve an option in the comments or move back to \`Todo\` when decided."
    COMMIT_SHA=$(git rev-parse HEAD)
    REPO_NWO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
    ```
-7. **Post sanitized completion comment with commit link and metrics**:
+7. **Post sanitized completion report with metrics**:
    Verify content through `comment-sanitizer` before posting:
-   ```bash
-   gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
+   - **For regular issue:** Post comment via `gh issue comment`:
+     ```bash
+     gh issue comment <ISSUE_NUMBER> --body "✅ **Completed Autonomously by AI Agent**
 
 - Summary of changes...
 - Execution Time: <DURATION>
 - Tokens Spent: <TOKENS_COUNT>
 - Commit: https://github.com/${REPO_NWO}/commit/${COMMIT_SHA}
 - Verified with type checks and unit tests."
-   ```
-8. **Check off Acceptance Criteria in the Issue Description**:
-   Before closing the issue, update the issue body to mark all completed Acceptance Criteria checkboxes as checked (`- [x]`):
-   ```bash
-   gh issue edit <ISSUE_NUMBER> --body "<UPDATED_BODY_WITH_CHECKED_BOXES>"
-   ```
-9. **Close the issue**:
-   ```bash
-   gh issue close <ISSUE_NUMBER> --reason completed
-   ```
+     ```
+   - **For Draft item:** Update draft body with completion summary:
+     ```bash
+     gh project item-edit --id <ITEM_ID> --body "<BODY_WITH_CHECKED_BOXES>
+
+✅ **Completed Autonomously by AI Agent**
+- Summary of outcome...
+- Execution Time: <DURATION>
+- Tokens Spent: <TOKENS_COUNT>"
+     ```
+8. **Check off Acceptance Criteria in Description**:
+   - For regular issue:
+     ```bash
+     gh issue edit <ISSUE_NUMBER> --body "<UPDATED_BODY_WITH_CHECKED_BOXES>"
+     ```
+   - For Draft item: Handled during Step 7.
+9. **Close Issue (if applicable)**:
+   - For regular issue:
+     ```bash
+     gh issue close <ISSUE_NUMBER> --reason completed
+     ```
+   - For Draft item: Skip (Draft Items close via the board status column).
 9.5. **Populate Execution Metrics (Time & Tokens)**:
    Record measured or estimated duration and token consumption on the project board:
    ```bash
