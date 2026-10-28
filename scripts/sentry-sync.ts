@@ -185,14 +185,41 @@ function getExistingGithubSentryIssues(): Map<string, ExistingGithubIssue> {
 function getProjectBoardIssueUrls(): Set<string> {
   const boardUrls = new Set<string>();
   try {
-    const raw = execSync(
-      `gh project item-list ${PROJECT_NUMBER} --owner ${PROJECT_OWNER} --format json --limit 100`,
+    const query = `
+      query($projectId: ID!) {
+        node(id: $projectId) {
+          ... on ProjectV2 {
+            items(first: 100) {
+              nodes {
+                content {
+                  ... on Issue {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    const raw = execFileSync(
+      'gh',
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-f',
+        `projectId=${PROJECT_BOARD_ID}`,
+        '--jq',
+        '.data.node.items.nodes[]?.content?.url // empty',
+      ],
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
     );
-    const data = JSON.parse(raw);
-    for (const item of data.items || []) {
-      if (item.content?.url) {
-        boardUrls.add(item.content.url);
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed) {
+        boardUrls.add(trimmed);
       }
     }
   } catch (err: any) {
@@ -201,47 +228,52 @@ function getProjectBoardIssueUrls(): Set<string> {
   return boardUrls;
 }
 
+function getIssueNodeId(issueUrl: string): string | null {
+  try {
+    const id = execFileSync('gh', ['issue', 'view', issueUrl, '--json', 'id', '-q', '.id'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    return id || null;
+  } catch {
+    return null;
+  }
+}
+
 function linkIssueToProjectBoard(issueUrl: string): boolean {
   console.log(`Linking issue to Project Board #${PROJECT_NUMBER} (${issueUrl})...`);
   try {
-    let addResultRaw: string;
-    try {
-      addResultRaw = execFileSync(
-        'gh',
-        [
-          'project',
-          'item-add',
-          String(PROJECT_NUMBER),
-          '--owner',
-          PROJECT_OWNER,
-          '--url',
-          issueUrl,
-          '--format',
-          'json',
-        ],
-        { encoding: 'utf-8' }
-      );
-    } catch {
-      // Fallback with --owner @me if explicit owner failed
-      addResultRaw = execFileSync(
-        'gh',
-        [
-          'project',
-          'item-add',
-          String(PROJECT_NUMBER),
-          '--owner',
-          '@me',
-          '--url',
-          issueUrl,
-          '--format',
-          'json',
-        ],
-        { encoding: 'utf-8' }
-      );
+    const contentId = getIssueNodeId(issueUrl);
+    if (!contentId) {
+      throw new Error(`Could not retrieve GraphQL node ID for ${issueUrl}`);
     }
 
-    const addResult = JSON.parse(addResultRaw);
-    const itemId = addResult.id;
+    const mutation = `
+      mutation($projectId: ID!, $contentId: ID!) {
+        addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+          item {
+            id
+          }
+        }
+      }
+    `;
+
+    const itemId = execFileSync(
+      'gh',
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${mutation}`,
+        '-f',
+        `projectId=${PROJECT_BOARD_ID}`,
+        '-f',
+        `contentId=${contentId}`,
+        '--jq',
+        '.data.addProjectV2ItemById.item.id',
+      ],
+      { encoding: 'utf-8' }
+    ).trim();
 
     if (itemId) {
       execFileSync('gh', [
