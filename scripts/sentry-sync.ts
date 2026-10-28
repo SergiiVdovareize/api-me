@@ -147,11 +147,18 @@ async function fetchSentryIssues(): Promise<SentryIssue[]> {
   throw lastError || new Error('Failed to fetch issues from Sentry');
 }
 
-function getExistingGithubSentryIssueIds(): Set<string> {
-  const existingIds = new Set<string>();
+interface ExistingGithubIssue {
+  sentryId: string;
+  number: number;
+  url: string;
+  state: string;
+}
+
+function getExistingGithubSentryIssues(): Map<string, ExistingGithubIssue> {
+  const existingMap = new Map<string, ExistingGithubIssue>();
   try {
     const raw = execSync(
-      `gh issue list --repo ${REPO_NAME} --label sentry --state all --limit 100 --json number,title,body`,
+      `gh issue list --repo ${REPO_NAME} --label sentry --state all --limit 100 --json number,title,body,url,state`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
     );
     const issues = JSON.parse(raw);
@@ -161,13 +168,113 @@ function getExistingGithubSentryIssueIds(): Set<string> {
         item.body?.match(/<!--\s*sentry-issue-id:\s*(\S+?)\s*-->/) ||
         item.body?.match(/Sentry Issue\s*\[ID:\s*(\S+?)\]/i);
       if (match && match[1]) {
-        existingIds.add(match[1]);
+        existingMap.set(match[1], {
+          sentryId: match[1],
+          number: item.number,
+          url: item.url,
+          state: item.state,
+        });
       }
     }
   } catch (err: any) {
     console.warn(`Warning: Could not fetch existing issues via gh: ${err.message}`);
   }
-  return existingIds;
+  return existingMap;
+}
+
+function getProjectBoardIssueUrls(): Set<string> {
+  const boardUrls = new Set<string>();
+  try {
+    const raw = execSync(
+      `gh project item-list ${PROJECT_NUMBER} --owner ${PROJECT_OWNER} --format json --limit 100`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
+    );
+    const data = JSON.parse(raw);
+    for (const item of data.items || []) {
+      if (item.content?.url) {
+        boardUrls.add(item.content.url);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`Warning: Could not fetch project board items: ${err.message}`);
+  }
+  return boardUrls;
+}
+
+function linkIssueToProjectBoard(issueUrl: string): boolean {
+  console.log(`Linking issue to Project Board #${PROJECT_NUMBER} (${issueUrl})...`);
+  try {
+    let addResultRaw: string;
+    try {
+      addResultRaw = execFileSync(
+        'gh',
+        [
+          'project',
+          'item-add',
+          String(PROJECT_NUMBER),
+          '--owner',
+          PROJECT_OWNER,
+          '--url',
+          issueUrl,
+          '--format',
+          'json',
+        ],
+        { encoding: 'utf-8' }
+      );
+    } catch {
+      // Fallback with --owner @me if explicit owner failed
+      addResultRaw = execFileSync(
+        'gh',
+        [
+          'project',
+          'item-add',
+          String(PROJECT_NUMBER),
+          '--owner',
+          '@me',
+          '--url',
+          issueUrl,
+          '--format',
+          'json',
+        ],
+        { encoding: 'utf-8' }
+      );
+    }
+
+    const addResult = JSON.parse(addResultRaw);
+    const itemId = addResult.id;
+
+    if (itemId) {
+      execFileSync('gh', [
+        'project',
+        'item-edit',
+        '--project-id',
+        PROJECT_BOARD_ID,
+        '--id',
+        itemId,
+        '--field-id',
+        STATUS_FIELD_ID,
+        '--single-select-option-id',
+        STATUS_TODO_OPTION_ID,
+      ]);
+      execFileSync('gh', [
+        'project',
+        'item-edit',
+        '--project-id',
+        PROJECT_BOARD_ID,
+        '--id',
+        itemId,
+        '--field-id',
+        PROJECT_FIELD_ID,
+        '--single-select-option-id',
+        PROJECT_OPTION_ID,
+      ]);
+      console.log(`Successfully added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: ${REPO_NAME})`);
+      return true;
+    }
+  } catch (err: any) {
+    console.warn(`Warning: Could not link issue to project board: ${err.message}`);
+  }
+  return false;
 }
 
 function createGithubIssue(issue: SentryIssue, dryRun: boolean): string | null {
@@ -222,57 +329,7 @@ ${details}
   ).trim();
   console.log(`Created GitHub Issue: ${issueUrl}`);
 
-  // Add to Project Board
-  try {
-    const addResultRaw = execFileSync(
-      'gh',
-      [
-        'project',
-        'item-add',
-        String(PROJECT_NUMBER),
-        '--owner',
-        PROJECT_OWNER,
-        '--url',
-        issueUrl,
-        '--format',
-        'json',
-      ],
-      { encoding: 'utf-8' }
-    );
-    const addResult = JSON.parse(addResultRaw);
-    const itemId = addResult.id;
-
-    if (itemId) {
-      // Set Status to Todo
-      execFileSync('gh', [
-        'project',
-        'item-edit',
-        '--project-id',
-        PROJECT_BOARD_ID,
-        '--id',
-        itemId,
-        '--field-id',
-        STATUS_FIELD_ID,
-        '--single-select-option-id',
-        STATUS_TODO_OPTION_ID,
-      ]);
-      execFileSync('gh', [
-        'project',
-        'item-edit',
-        '--project-id',
-        PROJECT_BOARD_ID,
-        '--id',
-        itemId,
-        '--field-id',
-        PROJECT_FIELD_ID,
-        '--single-select-option-id',
-        PROJECT_OPTION_ID,
-      ]);
-      console.log(`Added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: ${REPO_NAME})`);
-    }
-  } catch (err: any) {
-    console.warn(`Warning: Could not link issue to project board: ${err.message}`);
-  }
+  linkIssueToProjectBoard(issueUrl);
 
   return issueUrl;
 }
@@ -289,7 +346,6 @@ async function main() {
     console.log(`Found ${sentryIssues.length} unresolved issue(s) in Sentry.`);
   } catch (err: any) {
     console.error(`Sentry query error: ${err.message}`);
-    // If running in CI without token configured yet, don't fail the workflow hard
     if (process.env.GITHUB_ACTIONS) {
       console.log('Skipping sync: Sentry credentials need to be configured in GitHub Secrets.');
       process.exit(0);
@@ -302,22 +358,48 @@ async function main() {
     return;
   }
 
-  const existingIds = getExistingGithubSentryIssueIds();
-  console.log(`Found ${existingIds.size} already tracked Sentry issue(s) on GitHub.`);
+  const existingMap = getExistingGithubSentryIssues();
+  console.log(`Found ${existingMap.size} already tracked Sentry issue(s) on GitHub.`);
+
+  const boardUrls = getProjectBoardIssueUrls();
+  console.log(`Found ${boardUrls.size} item(s) on Project Board #${PROJECT_NUMBER}.`);
 
   let newCount = 0;
+  let reconciledCount = 0;
+
   for (const issue of sentryIssues) {
-    if (existingIds.has(issue.id)) {
-      console.log(`Skipping Sentry ID ${issue.id} (already tracked on GitHub).`);
+    const existing = existingMap.get(issue.id);
+
+    if (existing) {
+      if (existing.state.toUpperCase() === 'OPEN' && !boardUrls.has(existing.url)) {
+        console.log(`Sentry ID ${issue.id} has open issue #${existing.number} (${existing.url}) but is MISSING from Project #${PROJECT_NUMBER}. Linking now...`);
+        if (!dryRun) {
+          const linked = linkIssueToProjectBoard(existing.url);
+          if (linked) {
+            boardUrls.add(existing.url);
+            reconciledCount++;
+          }
+        }
+      } else {
+        console.log(`Skipping Sentry ID ${issue.id} (already tracked on GitHub and project board).`);
+      }
       continue;
     }
 
-    createGithubIssue(issue, dryRun);
-    existingIds.add(issue.id);
+    const createdUrl = createGithubIssue(issue, dryRun);
+    if (createdUrl) {
+      boardUrls.add(createdUrl);
+    }
+    existingMap.set(issue.id, {
+      sentryId: issue.id,
+      number: 0,
+      url: createdUrl || '',
+      state: 'OPEN',
+    });
     newCount++;
   }
 
-  console.log(`Sync completed. Added ${newCount} new task(s) to Dev Backlog.`);
+  console.log(`Sync completed. Added ${newCount} new issue(s), reconciled ${reconciledCount} missing board item(s).`);
 }
 
 main().catch((err) => {
