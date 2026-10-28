@@ -136,6 +136,7 @@ Before starting deliberation, invoke the `task-refiner` skill to translate and s
    - Regular Issue: Read title and body via `gh issue view <ISSUE_NUMBER> --json title,body`.
    - Draft Item: Read title and body from `gh project item-list` JSON output.
 2. **Apply `task-refiner` & `comment-sanitizer`:**
+   - **Preserve Automated Templates:** If the issue was created automatically (e.g. Sentry issues with `## Sentry Issue [ID: ...]`, URLs, error details), **NEVER** delete or overwrite the original template. Keep the original diagnostic content at the top and **append** the refined sections below separated by `---`.
    - Format per `task-refiner` guidelines and scrub sensitive data via `comment-sanitizer`.
 3. **Save Refined Task:**
    - Regular Issue:
