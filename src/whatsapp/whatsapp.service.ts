@@ -221,6 +221,13 @@ You MUST output ONLY a valid JSON object matching this structure:
    * Sends an outbound text message back to the sender via Meta Graph API.
    */
   async sendReply(phoneNumberId: string, recipientPhone: string, messageText: string): Promise<void> {
+    if (phoneNumberId === '123456123' || recipientPhone === '16315551181') {
+      this.logger.log(
+        `Skipping WhatsApp outbound reply for Meta test event placeholder (phone ID: ${phoneNumberId}, recipient: ${recipientPhone}).`
+      );
+      return;
+    }
+
     const accessToken = this.configService.get<string>('WHATSAPP_ACCESS_TOKEN')?.trim();
     if (!accessToken) {
       this.logger.warn(`WHATSAPP_ACCESS_TOKEN not configured. Skipping outbound reply to ${recipientPhone}.`);

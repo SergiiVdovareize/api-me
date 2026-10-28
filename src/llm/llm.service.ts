@@ -77,7 +77,12 @@ export class LlmService {
           cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
         }
 
-        return JSON.parse(cleaned) as T;
+        try {
+          return JSON.parse(cleaned) as T;
+        } catch (initialParseErr: any) {
+          const sanitized = this.sanitizeJsonControlCharacters(cleaned);
+          return JSON.parse(sanitized) as T;
+        }
       } catch (err: any) {
         if (attempt <= retries) {
           this.logger.warn(
@@ -94,5 +99,45 @@ export class LlmService {
     }
 
     throw new Error('Call to AI failed to return valid JSON.');
+  }
+
+  /**
+   * Sanitizes unescaped control characters (such as raw newlines or tabs) inside JSON string literals.
+   */
+  private sanitizeJsonControlCharacters(jsonStr: string): string {
+    let inString = false;
+    let isEscaped = false;
+    let result = '';
+
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+
+      if (char === '"' && !isEscaped) {
+        inString = !inString;
+        result += char;
+      } else if (inString) {
+        if (char === '\n') {
+          result += '\\n';
+        } else if (char === '\r') {
+          result += '\\r';
+        } else if (char === '\t') {
+          result += '\\t';
+        } else if (char.charCodeAt(0) < 0x20) {
+          result += '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0');
+        } else {
+          result += char;
+        }
+      } else {
+        result += char;
+      }
+
+      if (char === '\\' && !isEscaped) {
+        isEscaped = true;
+      } else {
+        isEscaped = false;
+      }
+    }
+
+    return result;
   }
 }
