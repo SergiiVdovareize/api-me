@@ -89,6 +89,24 @@ The task appears to belong to another project repository. Moving board card to *
      - Do not implement in the current workspace. Pick the next valid task matching the current repository.
    - **Case C: Issue belongs to another repository**:
      - If an issue is correctly filed in another repository (e.g. `cat-cast`), the agent in `api-me` must skip it. Only work on tasks matching the current workspace repository (or `general`).
+   - **Case D: Detected project is NOT in the list of `Project` field options**:
+     - If the task pertains to a new repository, service, or domain that is not currently represented in the `Project` field options (`api-me`, `catcast`, `alphadate`, `general`):
+       1. Do not set an arbitrary option.
+       2. Post an advisory comment on the issue requesting the addition of the new project option:
+          ```bash
+          gh issue comment <ISSUE_NUMBER> --body "⚠️ **New Project Option Required**
+
+- **Current Issue Repository:** \`<CURRENT_REPO>\`
+- **Detected Project:** \`<NEW_PROJECT_NAME>\`
+- **Reasoning:** The task scope corresponds to a project/repository that is not currently an available option in the board's \`Project\` single-select field (\`api-me\`, \`catcast\`, \`alphadate\`, \`general\`).
+
+Please add **\`<NEW_PROJECT_NAME>\`** to the \`Project\` field options on GitHub Project #4. Moving card to **Needs Decision**."
+          ```
+       3. Move the board card to **`Needs Decision`** (`561cabe1`):
+          ```bash
+          gh project item-edit --project-id PVT_kwHOADkqQ84BosFc --id <ITEM_ID> --field-id PVTSSF_lAHOADkqQ84BosFczhnK_Jk --single-select-option-id 561cabe1
+          ```
+       4. Escalate to the human developer and do not proceed with implementation.
 
 ### 1.5. Pre-Flight Task Refinement (`task-refiner`)
 Before starting deliberation, improve and structure the task title and description into professional English:
