@@ -10,6 +10,12 @@ import { AiExtractor } from './extractors/ai.extractor';
 import { NotificationService } from './notification.service';
 import { BadRequestException } from '@nestjs/common';
 import { PriceProductStatus } from '@prisma/client';
+import * as Sentry from '@sentry/nestjs';
+
+jest.mock('@sentry/nestjs', () => ({
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+}));
 
 describe('PricesService', () => {
   let service: PricesService;
@@ -81,6 +87,7 @@ describe('PricesService', () => {
     }).compile();
 
     service = module.get<PricesService>(PricesService);
+    jest.clearAllMocks();
   });
 
   describe('createProduct', () => {
@@ -211,6 +218,7 @@ describe('PricesService', () => {
       const summary = await service.checkDuePrices();
 
       expect(summary).toEqual({ checked: 1, changed: 1, failed: 0 });
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
       expect(mockNotificationService.sendPriceAlert).toHaveBeenCalledWith(
         mockProduct,
         850,
@@ -330,6 +338,20 @@ describe('PricesService', () => {
       const summary = await service.checkDuePrices();
 
       expect(summary).toEqual({ checked: 0, changed: 0, failed: 1 });
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.stringContaining('[PriceTracker Batch] 1 product price check(s) failed'),
+        expect.objectContaining({
+          level: 'warning',
+          tags: { component: 'price-tracker', operation: 'checkDuePrices' },
+          fingerprint: ['price-tracker-batch-failures'],
+          extra: expect.objectContaining({
+            checked: 0,
+            changed: 0,
+            failed: 1,
+            failedProductIds: [2],
+          }),
+        })
+      );
       expect(mockPrisma.priceProduct.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 2 },

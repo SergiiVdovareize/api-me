@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import * as Sentry from '@sentry/nestjs';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { SafeFetchService } from './fetcher/safe-fetch.service';
@@ -183,6 +184,13 @@ export class PricesService {
     let checked = 0;
     let changed = 0;
     let failed = 0;
+    const failedProducts: Array<{
+      id: number;
+      domain: string;
+      url: string;
+      failCount: number;
+      reason?: string;
+    }> = [];
 
     for (let i = 0; i < products.length; i += PRICES_CONFIG.CONCURRENCY_LIMIT) {
       const chunk = products.slice(i, i + PRICES_CONFIG.CONCURRENCY_LIMIT);
@@ -190,7 +198,10 @@ export class PricesService {
         chunk.map(product => this.processProductWithLock(product))
       );
 
-      for (const res of settled) {
+      for (let j = 0; j < chunk.length; j++) {
+        const product = chunk[j];
+        const res = settled[j];
+
         if (res.status === 'fulfilled') {
           if (res.value === 'CHANGED') {
             checked++;
@@ -199,11 +210,45 @@ export class PricesService {
             checked++;
           } else if (res.value === 'FAILED') {
             failed++;
+            failedProducts.push({
+              id: product.id,
+              domain: product.domain,
+              url: product.url,
+              failCount: product.failCount + 1,
+            });
           }
         } else {
           failed++;
+          failedProducts.push({
+            id: product.id,
+            domain: product.domain,
+            url: product.url,
+            failCount: product.failCount + 1,
+            reason: (res as PromiseRejectedResult).reason?.message,
+          });
         }
       }
+    }
+
+    if (failed > 0) {
+      const msg = `[PriceTracker Batch] ${failed} product price check(s) failed out of ${products.length} due products`;
+      this.logger.warn(msg);
+      Sentry.captureMessage(msg, {
+        level: 'warning',
+        tags: {
+          component: 'price-tracker',
+          operation: 'checkDuePrices',
+        },
+        fingerprint: ['price-tracker-batch-failures'],
+        extra: {
+          checked,
+          changed,
+          failed,
+          total: products.length,
+          failedProductIds: failedProducts.map(p => p.id),
+          failedProducts,
+        },
+      });
     }
 
     return { checked, changed, failed };
