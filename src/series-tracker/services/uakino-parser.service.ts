@@ -10,19 +10,32 @@ export class UakinoParserService {
   constructor(private readonly configService: ConfigService) {}
 
   /**
-   * Fetches URL content, routing through ScraperAPI if an API key is provided
+   * Fetches URL content, routing through Scrape.do or ScrapingAnt proxy if configured
    */
   async fetchPage(targetUrl: string): Promise<string> {
-    const apiKey = this.configService.get<string>('SCRAPERAPI_KEY')?.trim();
+    const scrapeDoToken =
+      this.configService.get<string>('SCRAPEDO_API_KEY')?.trim() ||
+      this.configService.get<string>('SCRAPE_DO_TOKEN')?.trim();
+    const scrapingAntKey = this.configService.get<string>('SCRAPINGANT_API_KEY')?.trim();
 
     let requestUrl = targetUrl;
-    if (apiKey) {
-      const maskedKey = apiKey.length > 6 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-2)}` : '***';
-      this.logger.debug(`[ScraperAPI] Using key ${maskedKey} to proxy: ${targetUrl}`);
-      requestUrl = `https://api.scraperapi.com/?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(targetUrl)}`;
+    let proxyName = '';
+
+    if (scrapeDoToken) {
+      proxyName = '[Scrape.do] ';
+      const maskedKey =
+        scrapeDoToken.length > 6 ? `${scrapeDoToken.slice(0, 4)}...${scrapeDoToken.slice(-2)}` : '***';
+      this.logger.debug(`[Scrape.do] Using key ${maskedKey} to proxy: ${targetUrl}`);
+      requestUrl = `https://api.scrape.do/?token=${encodeURIComponent(scrapeDoToken)}&url=${encodeURIComponent(targetUrl)}`;
+    } else if (scrapingAntKey) {
+      proxyName = '[ScrapingAnt] ';
+      const maskedKey =
+        scrapingAntKey.length > 6 ? `${scrapingAntKey.slice(0, 4)}...${scrapingAntKey.slice(-2)}` : '***';
+      this.logger.debug(`[ScrapingAnt] Using key ${maskedKey} to proxy: ${targetUrl}`);
+      requestUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(targetUrl)}&x-api-key=${encodeURIComponent(scrapingAntKey)}`;
     } else {
       this.logger.warn(
-        `SCRAPERAPI_KEY is not set. Making direct request to ${targetUrl} (may be blocked by Cloudflare).`
+        `No proxy key set (SCRAPEDO_API_KEY / SCRAPINGANT_API_KEY). Making direct request to ${targetUrl} (may be blocked by Cloudflare).`
       );
     }
 
@@ -59,11 +72,10 @@ export class UakinoParserService {
         }
       }
 
-      const isScraperApi = Boolean(apiKey);
-      const prefix = isScraperApi ? '[ScraperAPI] ' : '';
+      const prefix = proxyName;
       const hint =
-        isScraperApi && (response.status === 401 || response.status === 403)
-          ? ' (Check SCRAPERAPI_KEY in GitHub Secrets: key is invalid, expired, or out of credits)'
+        proxyName && (response.status === 401 || response.status === 403)
+          ? ' (Check proxy API key in GitHub Secrets: key is invalid, expired, or out of credits)'
           : '';
       const detail = errorBody ? `: ${errorBody.slice(0, 300).trim()}` : '';
 

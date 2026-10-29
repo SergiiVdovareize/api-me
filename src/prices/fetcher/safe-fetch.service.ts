@@ -52,6 +52,46 @@ export class SafeFetchService {
           await new Promise(res => setTimeout(res, delayMs));
           continue;
         }
+
+        // If direct fetch is blocked by WAF/Cloudflare (HTTP 403), check for ScrapingAnt or Scrape.do fallback
+        const isWafBlock =
+          msg.includes('403') ||
+          msg.toLowerCase().includes('forbidden') ||
+          msg.includes('Cloudflare');
+
+        if (isWafBlock) {
+          const scrapingAntKey = process.env.SCRAPINGANT_API_KEY?.trim();
+          const scrapeDoToken =
+            process.env.SCRAPEDO_API_KEY?.trim() || process.env.SCRAPE_DO_TOKEN?.trim();
+
+          // 1. Try ScrapingAnt first if configured (10,000 monthly credits)
+          if (scrapingAntKey) {
+            this.logger.warn(
+              `Direct fetch for ${url} was blocked by WAF (${msg}). Trying ScrapingAnt proxy...`
+            );
+            try {
+              return await this.fetchViaScrapingAnt(url, scrapingAntKey, options);
+            } catch (saErr: any) {
+              this.logger.warn(
+                `ScrapingAnt proxy failed for ${url} (${saErr.message}). Falling back to Scrape.do...`
+              );
+            }
+          }
+
+          // 2. Try Scrape.do fallback (supports geoCode=ua for Ukrainian Cloudflare rules)
+          if (scrapeDoToken) {
+            this.logger.warn(
+              `Direct fetch for ${url} was blocked by WAF (${msg}). Trying Scrape.do proxy (geoCode=ua)...`
+            );
+            try {
+              return await this.fetchViaScrapeDo(url, scrapeDoToken, options);
+            } catch (sdErr: any) {
+              this.logger.error(`Scrape.do proxy failed for ${url}: ${sdErr.message}`);
+              throw sdErr;
+            }
+          }
+        }
+
         throw err;
       }
     }
@@ -131,7 +171,9 @@ export class SafeFetchService {
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText} for ${currentUrl}`);
+        const cfRay = response.headers.get('cf-ray');
+        const cfExtra = cfRay ? ` (Cloudflare Ray: ${cfRay})` : '';
+        throw new Error(`HTTP ${response.status} ${response.statusText}${cfExtra} for ${currentUrl}`);
       }
 
       // 4. Verify Content-Type
@@ -284,5 +326,146 @@ export class SafeFetchService {
 
     const totalBuffer = Buffer.concat(chunks);
     return totalBuffer.toString('utf-8');
+  }
+
+  /**
+   * Fetches the page through ScrapingAnt API proxy to bypass Cloudflare/WAF.
+   */
+  async fetchViaScrapingAnt(
+    url: string,
+    apiKey: string,
+    options?: SafeFetchOptions
+  ): Promise<string> {
+    const timeoutMs = options?.timeoutMs ?? 60000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Try browser=false first (costs only 1 credit instead of 10)
+    const endpoint = new URL('https://api.scrapingant.com/v2/general');
+    endpoint.searchParams.set('url', url);
+    endpoint.searchParams.set('browser', 'false');
+
+    try {
+      this.logger.log(`Fetching ${url} via ScrapingAnt (browser=false)...`);
+      const response = await fetch(endpoint.toString(), {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // If challenged or blocked with browser=false (403, 422, or 423 Locked), retry with browser=true
+        if (response.status === 422 || response.status === 403 || response.status === 423) {
+          this.logger.warn(
+            `ScrapingAnt browser=false returned ${response.status}. Retrying with browser=true...`
+          );
+          const browserEndpoint = new URL('https://api.scrapingant.com/v2/general');
+          browserEndpoint.searchParams.set('url', url);
+          browserEndpoint.searchParams.set('browser', 'true');
+
+          const browserController = new AbortController();
+          const browserTimeoutId = setTimeout(() => browserController.abort(), timeoutMs);
+
+          try {
+            const browserResponse = await fetch(browserEndpoint.toString(), {
+              method: 'GET',
+              headers: {
+                'x-api-key': apiKey,
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              },
+              signal: browserController.signal,
+            });
+
+            if (!browserResponse.ok) {
+              throw new Error(
+                `ScrapingAnt returned HTTP ${browserResponse.status} ${browserResponse.statusText}`
+              );
+            }
+            return await browserResponse.text();
+          } finally {
+            clearTimeout(browserTimeoutId);
+          }
+        }
+
+        throw new Error(`ScrapingAnt returned HTTP ${response.status} ${response.statusText}`);
+      }
+
+      return await response.text();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Fetches the page through Scrape.do API proxy with automated Cloudflare/WAF bypass.
+   */
+  async fetchViaScrapeDo(
+    url: string,
+    token: string,
+    options?: SafeFetchOptions
+  ): Promise<string> {
+    const timeoutMs = options?.timeoutMs ?? 30000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Try default smart routing first (1 credit, fast)
+    const endpoint = new URL('https://api.scrape.do/');
+    endpoint.searchParams.set('token', token);
+    endpoint.searchParams.set('url', url);
+
+    try {
+      this.logger.log(`Fetching ${url} via Scrape.do proxy...`);
+      const response = await fetch(endpoint.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // If challenged without render (403, 422, or 423), retry with render=true
+        if (response.status === 403 || response.status === 422 || response.status === 423) {
+          this.logger.warn(
+            `Scrape.do direct mode returned ${response.status}. Retrying with render=true...`
+          );
+          const renderEndpoint = new URL('https://api.scrape.do/');
+          renderEndpoint.searchParams.set('token', token);
+          renderEndpoint.searchParams.set('url', url);
+          renderEndpoint.searchParams.set('render', 'true');
+
+          const renderController = new AbortController();
+          const renderTimeoutId = setTimeout(() => renderController.abort(), timeoutMs);
+
+          try {
+            const renderResponse = await fetch(renderEndpoint.toString(), {
+              method: 'GET',
+              headers: {
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              },
+              signal: renderController.signal,
+            });
+
+            if (!renderResponse.ok) {
+              throw new Error(
+                `Scrape.do returned HTTP ${renderResponse.status} ${renderResponse.statusText}`
+              );
+            }
+            return await renderResponse.text();
+          } finally {
+            clearTimeout(renderTimeoutId);
+          }
+        }
+
+        throw new Error(`Scrape.do returned HTTP ${response.status} ${response.statusText}`);
+      }
+
+      return await response.text();
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

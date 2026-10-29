@@ -155,7 +155,16 @@ describe('NotificationService', () => {
       ).resolves.not.toThrow();
     });
 
-    it('should send admin error report via notifyAdminError', async () => {
+    it('should send admin error report via notifyAdminError with failure metadata', async () => {
+      await expect(
+        service.notifyAdminError(mockProduct, 'Blocked by WAF/Cloudflare (HTTP 403)', {
+          failureType: 'WAF_BLOCKED',
+          failureReason: 'Blocked by WAF/Cloudflare (HTTP 403)',
+        })
+      ).resolves.not.toThrow();
+    });
+
+    it('should send admin error report via notifyAdminError without optional metadata', async () => {
       await expect(
         service.notifyAdminError(mockProduct, 'Parsing selector failed')
       ).resolves.not.toThrow();

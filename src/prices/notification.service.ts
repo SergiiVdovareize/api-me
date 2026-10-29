@@ -202,18 +202,32 @@ export class NotificationService {
   }
 
   /**
-   * Reports critical parsing errors to Sentry and optionally admin chat.
+   * Reports critical parsing/checking errors to Sentry and optionally admin chat.
    */
-  async notifyAdminError(product: PriceProduct, errorReason: string): Promise<void> {
+  async notifyAdminError(
+    product: PriceProduct,
+    errorReason: string,
+    meta?: { failureType?: string; failureReason?: string }
+  ): Promise<void> {
     const msg = `[PriceTracker Error] Product #${product.id} (${product.domain}): ${errorReason}`;
     this.logger.error(msg);
     Sentry.captureMessage(msg, {
-      fingerprint: ['price-tracker-error', String(product.id)],
+      fingerprint: [
+        'price-tracker-error',
+        String(product.id),
+        meta?.failureType || 'EXTRACTION_FAILED',
+      ],
+      tags: {
+        component: 'price-tracker',
+        domain: product.domain,
+        failureType: meta?.failureType || 'EXTRACTION_FAILED',
+      },
       extra: {
         productId: product.id,
         url: product.url,
         failCount: product.failCount,
         status: product.status,
+        failureReason: meta?.failureReason || errorReason,
       },
     });
   }

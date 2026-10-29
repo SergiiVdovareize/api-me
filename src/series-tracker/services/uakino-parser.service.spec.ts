@@ -190,8 +190,10 @@ describe('UakinoParserService', () => {
   });
 
   describe('fetchPage', () => {
-    it('should route via ScraperAPI when SCRAPERAPI_KEY is provided', async () => {
-      configService.get.mockReturnValue('scraper-key-123');
+    it('should route via Scrape.do when SCRAPEDO_API_KEY is provided', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'SCRAPEDO_API_KEY' ? 'scrapedo-key-123' : undefined
+      );
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         text: jest.fn().mockResolvedValue('<html>Page content</html>'),
@@ -201,12 +203,30 @@ describe('UakinoParserService', () => {
       const html = await service.fetchPage('https://uakino.best/test.html');
       expect(html).toBe('<html>Page content</html>');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.scraperapi.com/?api_key=scraper-key-123&url=https%3A%2F%2Fuakino.best%2Ftest.html',
+        'https://api.scrape.do/?token=scrapedo-key-123&url=https%3A%2F%2Fuakino.best%2Ftest.html',
         expect.any(Object)
       );
     });
 
-    it('should direct fetch when SCRAPERAPI_KEY is not configured', async () => {
+    it('should route via ScrapingAnt when SCRAPINGANT_API_KEY is provided and SCRAPEDO is not set', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'SCRAPINGANT_API_KEY' ? 'ant-key-123' : undefined
+      );
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue('<html>Ant content</html>'),
+      });
+      global.fetch = mockFetch;
+
+      const html = await service.fetchPage('https://uakino.best/test.html');
+      expect(html).toBe('<html>Ant content</html>');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.scrapingant.com/v2/general?url=https%3A%2F%2Fuakino.best%2Ftest.html&x-api-key=ant-key-123',
+        expect.any(Object)
+      );
+    });
+
+    it('should direct fetch when proxy keys are not configured', async () => {
       configService.get.mockReturnValue(undefined);
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
@@ -405,8 +425,10 @@ describe('UakinoParserService', () => {
   });
 
   describe('fetchPage extended branches', () => {
-    it('should mask short SCRAPERAPI_KEY with ***', async () => {
-      configService.get.mockReturnValue('12345');
+    it('should mask short SCRAPEDO_API_KEY with ***', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'SCRAPEDO_API_KEY' ? '12345' : undefined
+      );
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         text: jest.fn().mockResolvedValue('<html>Page</html>'),

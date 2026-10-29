@@ -465,6 +465,101 @@ describe('PricesService', () => {
       );
     });
 
+    it('should classify 403 Forbidden as WAF_BLOCKED and report to notificationService', async () => {
+      const wafProduct = {
+        id: 5,
+        url: 'https://foxtrot.com.ua/item-waf',
+        domain: 'foxtrot.com.ua',
+        title: 'Foxtrot WAF Item',
+        lastPrice: 1000,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 2,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([wafProduct]);
+      mockSafeFetch.fetchHtml.mockRejectedValueOnce(
+        new Error('HTTP 403 Forbidden (Cloudflare Ray: 123) for https://foxtrot.com.ua/item-waf')
+      );
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      await service.checkDuePrices();
+
+      expect(mockNotificationService.notifyAdminError).toHaveBeenCalledWith(
+        wafProduct,
+        expect.stringContaining('Blocked by WAF/Cloudflare (HTTP 403)'),
+        expect.objectContaining({
+          failureType: 'WAF_BLOCKED',
+          failureReason: 'Blocked by WAF/Cloudflare (HTTP 403)',
+        })
+      );
+    });
+
+    it('should classify 404 Not Found as NOT_FOUND and report to notificationService', async () => {
+      const notFoundProduct = {
+        id: 6,
+        url: 'https://goodwine.com.ua/item-404',
+        domain: 'goodwine.com.ua',
+        title: 'Goodwine 404 Item',
+        lastPrice: 500,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 2,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([notFoundProduct]);
+      mockSafeFetch.fetchHtml.mockRejectedValueOnce(
+        new Error('HTTP 404 Not Found for https://goodwine.com.ua/item-404')
+      );
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      await service.checkDuePrices();
+
+      expect(mockNotificationService.notifyAdminError).toHaveBeenCalledWith(
+        notFoundProduct,
+        expect.stringContaining('Product page not found (HTTP 404)'),
+        expect.objectContaining({
+          failureType: 'NOT_FOUND',
+          failureReason: 'Product page not found (HTTP 404)',
+        })
+      );
+    });
+
+    it('should classify timeout and server errors as NETWORK_ERROR', async () => {
+      const timeoutProduct = {
+        id: 8,
+        url: 'https://slow-shop.ua/item',
+        domain: 'slow-shop.ua',
+        title: 'Slow Item',
+        lastPrice: 300,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 2,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([timeoutProduct]);
+      mockSafeFetch.fetchHtml.mockRejectedValueOnce(
+        new Error('Request timed out after 15000ms for https://slow-shop.ua/item')
+      );
+      mockPrisma.priceProduct.update.mockResolvedValue({});
+
+      await service.checkDuePrices();
+
+      expect(mockNotificationService.notifyAdminError).toHaveBeenCalledWith(
+        timeoutProduct,
+        expect.stringContaining('Network/server error'),
+        expect.objectContaining({
+          failureType: 'NETWORK_ERROR',
+        })
+      );
+    });
+
     it('should extract clothing variants (sizes, colors, currentColor) and save them', async () => {
       const htmlWithVariants = `
         <html>

@@ -33,6 +33,18 @@ export const PRICES_CONFIG = {
   MAX_HISTORY_ITEMS: 100,
 };
 
+export type PriceCheckFailureType =
+  | 'WAF_BLOCKED'
+  | 'NOT_FOUND'
+  | 'NETWORK_ERROR'
+  | 'EXTRACTION_FAILED';
+
+export interface CheckProductResult {
+  status: 'CHANGED' | 'UNCHANGED' | 'FAILED' | 'SKIPPED';
+  reason?: string;
+  failureType?: PriceCheckFailureType;
+}
+
 @Injectable()
 export class PricesService {
   private readonly logger = new Logger(PricesService.name);
@@ -192,6 +204,7 @@ export class PricesService {
       reason?: string;
     }> = [];
 
+
     for (let i = 0; i < products.length; i += PRICES_CONFIG.CONCURRENCY_LIMIT) {
       const chunk = products.slice(i, i + PRICES_CONFIG.CONCURRENCY_LIMIT);
       const settled = await Promise.allSettled(
@@ -203,18 +216,24 @@ export class PricesService {
         const res = settled[j];
 
         if (res.status === 'fulfilled') {
-          if (res.value === 'CHANGED') {
+          const outcome: CheckProductResult =
+            typeof res.value === 'string'
+              ? { status: res.value as CheckProductResult['status'] }
+              : res.value;
+
+          if (outcome.status === 'CHANGED') {
             checked++;
             changed++;
-          } else if (res.value === 'UNCHANGED') {
+          } else if (outcome.status === 'UNCHANGED') {
             checked++;
-          } else if (res.value === 'FAILED') {
+          } else if (outcome.status === 'FAILED') {
             failed++;
             failedProducts.push({
               id: product.id,
               domain: product.domain,
               url: product.url,
               failCount: product.failCount + 1,
+              reason: outcome.reason,
             });
           }
         } else {
@@ -259,7 +278,7 @@ export class PricesService {
    */
   private async processProductWithLock(
     product: PriceProduct
-  ): Promise<'CHANGED' | 'UNCHANGED' | 'FAILED' | 'SKIPPED'> {
+  ): Promise<CheckProductResult> {
     const lockKey = `lock:price-product:${product.id}`;
     let acquiredLock = false;
 
@@ -271,7 +290,7 @@ export class PricesService {
         });
         if (!res) {
           this.logger.debug(`Skipping product #${product.id}: lock already held`);
-          return 'SKIPPED';
+          return { status: 'SKIPPED' };
         }
         acquiredLock = true;
       }
@@ -282,7 +301,11 @@ export class PricesService {
         `Unexpected error checking product #${product.id}: ${err.message}`,
         err.stack
       );
-      return 'FAILED';
+      return {
+        status: 'FAILED',
+        reason: err.message,
+        failureType: 'NETWORK_ERROR',
+      };
     } finally {
       if (acquiredLock && this.redisReader.redis) {
         await this.redisReader.redis.del(lockKey).catch(() => {});
@@ -295,8 +318,10 @@ export class PricesService {
    */
   private async checkSingleProduct(
     product: PriceProduct
-  ): Promise<'CHANGED' | 'UNCHANGED' | 'FAILED'> {
+  ): Promise<CheckProductResult> {
     let extracted: ExtractedProductData | null = null;
+    let failureType: PriceCheckFailureType = 'EXTRACTION_FAILED';
+    let failureReason = 'Price not found in page content';
 
     try {
       extracted = await this.extractProductData(
@@ -306,7 +331,32 @@ export class PricesService {
         product.failCount >= 2 // only trigger AI on self-healing retry
       );
     } catch (err: any) {
-      this.logger.warn(`Fetch error for product #${product.id}: ${err.message}`);
+      const msg = String(err?.message || '');
+      this.logger.warn(`Fetch error for product #${product.id}: ${msg}`);
+      if (
+        msg.includes('403') ||
+        msg.toLowerCase().includes('forbidden') ||
+        msg.toLowerCase().includes('challenge')
+      ) {
+        failureType = 'WAF_BLOCKED';
+        failureReason = 'Blocked by WAF/Cloudflare (HTTP 403)';
+      } else if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+        failureType = 'NOT_FOUND';
+        failureReason = 'Product page not found (HTTP 404)';
+      } else if (
+        msg.includes('timed out') ||
+        msg.includes('AbortError') ||
+        msg.includes('502') ||
+        msg.includes('503') ||
+        msg.includes('504') ||
+        msg.includes('fetch failed')
+      ) {
+        failureType = 'NETWORK_ERROR';
+        failureReason = `Network/server error (${msg})`;
+      } else {
+        failureType = 'NETWORK_ERROR';
+        failureReason = `Fetch failed: ${msg}`;
+      }
     }
 
     const now = new Date();
@@ -322,14 +372,16 @@ export class PricesService {
         newStatus = PriceProductStatus.UNSUPPORTED;
         await this.notificationService.notifyAdminError(
           product,
-          `Marked UNSUPPORTED after ${newFailCount} consecutive failures`
+          `Marked UNSUPPORTED after ${newFailCount} consecutive failures: ${failureReason}`,
+          { failureType, failureReason }
         );
       } else if (newFailCount >= PRICES_CONFIG.MAX_FAILURES_BEFORE_ERROR) {
         newStatus = PriceProductStatus.ERROR;
         if (newFailCount === PRICES_CONFIG.MAX_FAILURES_BEFORE_ERROR) {
           await this.notificationService.notifyAdminError(
             product,
-            `Extraction failed ${newFailCount} times in a row`
+            `${failureReason} (${newFailCount} times in a row)`,
+            { failureType, failureReason }
           );
         }
       }
@@ -344,7 +396,7 @@ export class PricesService {
         },
       });
 
-      return 'FAILED';
+      return { status: 'FAILED', reason: failureReason, failureType };
     }
 
     // 2. Price spike validation (> 40% change without intermediate check)
@@ -363,7 +415,7 @@ export class PricesService {
             lastCheckedAt: now,
           },
         });
-        return 'UNCHANGED';
+        return { status: 'UNCHANGED' };
       }
     }
 
@@ -472,7 +524,7 @@ export class PricesService {
       },
     });
 
-    return hasChanged ? 'CHANGED' : 'UNCHANGED';
+    return { status: hasChanged ? 'CHANGED' : 'UNCHANGED' };
   }
 
   /**
