@@ -73,6 +73,54 @@ describe('TranscriptionService', () => {
     );
   });
 
+  it('should call Mistral Voxtral API when MISTRAL_API_KEY is configured', async () => {
+    (configService.get as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'MISTRAL_API_KEY') return 'test-mistral-key';
+      return undefined;
+    });
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce({ text: 'Перевірити статус замовлення' }),
+    } as any);
+
+    const result = await service.transcribeAudio(Buffer.from('audio-bytes'), 'audio/ogg');
+    expect(result).toBe('Перевірити статус замовлення');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.mistral.ai/v1/audio/transcriptions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-mistral-key',
+        }),
+      })
+    );
+  });
+
+  it('should discover indexed MISTRAL_API_KEY_1 when base MISTRAL_API_KEY is absent', async () => {
+    (configService.get as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'MISTRAL_API_KEY_1') return 'indexed-mistral-key-1';
+      return undefined;
+    });
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce({ text: 'Створити баг-репорт' }),
+    } as any);
+
+    const result = await service.transcribeAudio(Buffer.from('audio-bytes'), 'audio/ogg');
+    expect(result).toBe('Створити баг-репорт');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.mistral.ai/v1/audio/transcriptions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer indexed-mistral-key-1',
+        }),
+      })
+    );
+  });
+
   it('should throw an error when Whisper API responds with non-ok status', async () => {
     (configService.get as jest.Mock).mockImplementation((key: string) => {
       if (key === 'GROQ_API_KEY') return 'gsk-test-key';

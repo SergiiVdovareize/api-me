@@ -5,14 +5,42 @@ import { ConfigService } from '@nestjs/config';
 export class TranscriptionService {
   private readonly logger = new Logger(TranscriptionService.name);
 
+  private mistralKeyIndex = 0;
+
   constructor(private readonly configService: ConfigService) {}
 
   /**
+   * Resolves a Mistral API key from MISTRAL_API_KEY or indexed MISTRAL_API_KEY_1..N.
+   * Round-robins across indexed keys if multiple exist.
+   */
+  private getMistralApiKey(): string | undefined {
+    const baseKey = this.configService.get<string>('MISTRAL_API_KEY')?.trim() || process.env.MISTRAL_API_KEY?.trim();
+    if (baseKey) return baseKey;
+
+    const indexedKeys: string[] = [];
+    for (let i = 1; i <= 20; i++) {
+      const key =
+        this.configService.get<string>(`MISTRAL_API_KEY_${i}`)?.trim() ||
+        process.env[`MISTRAL_API_KEY_${i}`]?.trim();
+      if (key) indexedKeys.push(key);
+    }
+
+    if (indexedKeys.length > 0) {
+      const selected = indexedKeys[this.mistralKeyIndex % indexedKeys.length];
+      this.mistralKeyIndex++;
+      return selected;
+    }
+
+    return undefined;
+  }
+
+  /**
    * Transcribes an audio buffer into text.
-   * Prioritizes Groq Whisper (ultra-fast & cost-effective) or OpenAI Whisper API.
+   * Prioritizes Groq Whisper (ultra-fast & cost-effective), Mistral Voxtral, or OpenAI Whisper API.
    */
   async transcribeAudio(audioBuffer: Buffer, mimeType = 'audio/ogg'): Promise<string> {
     const groqApiKey = this.configService.get<string>('GROQ_API_KEY')?.trim();
+    const mistralApiKey = this.getMistralApiKey();
     const openaiApiKey = this.configService.get<string>('OPENAI_API_KEY')?.trim();
 
     if (groqApiKey) {
@@ -21,6 +49,17 @@ export class TranscriptionService {
         'https://api.groq.com/openai/v1/audio/transcriptions',
         groqApiKey,
         'whisper-large-v3',
+        mimeType
+      );
+    }
+
+    if (mistralApiKey) {
+      const model = this.configService.get<string>('MISTRAL_TRANSCRIBE_MODEL')?.trim() || 'voxtral-mini-transcribe-3';
+      return this.transcribeWithWhisperApi(
+        audioBuffer,
+        'https://api.mistral.ai/v1/audio/transcriptions',
+        mistralApiKey,
+        model,
         mimeType
       );
     }
@@ -36,7 +75,7 @@ export class TranscriptionService {
     }
 
     this.logger.warn(
-      'Neither GROQ_API_KEY nor OPENAI_API_KEY is configured. Falling back to mock transcription for testing/development.'
+      'Neither GROQ_API_KEY, MISTRAL_API_KEY nor OPENAI_API_KEY is configured. Falling back to mock transcription for testing/development.'
     );
     return 'Voice memo dictation (transcription pending API key configuration)';
   }
