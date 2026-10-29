@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { CreatedDraftItemResult } from '../interfaces/telegram.interface';
+
 @Injectable()
 export class TelegramProjectBoardService {
   private readonly logger = new Logger(TelegramProjectBoardService.name);
@@ -15,14 +17,17 @@ export class TelegramProjectBoardService {
     title: string,
     body: string,
     projectId: string = this.defaultProjectId
-  ): Promise<string> {
+  ): Promise<CreatedDraftItemResult> {
     const token =
       this.configService.get<string>('GH_PROJECT_TOKEN')?.trim() ||
       this.configService.get<string>('GITHUB_TOKEN')?.trim();
 
     if (!token) {
       this.logger.warn('GH_PROJECT_TOKEN / GITHUB_TOKEN not configured. Skipping live project item creation.');
-      return 'MOCK_ITEM_ID';
+      return {
+        itemId: 'MOCK_ITEM_ID',
+        url: 'https://github.com/users/SergiiVdovareize/projects/4',
+      };
     }
 
     const mutation = `
@@ -34,6 +39,7 @@ export class TelegramProjectBoardService {
         }) {
           projectItem {
             id
+            databaseId
           }
         }
       }
@@ -69,8 +75,18 @@ export class TelegramProjectBoardService {
       throw new Error(`GitHub GraphQL mutation error: ${errMsg}`);
     }
 
-    const itemId = json.data?.addProjectV2DraftIssue?.projectItem?.id;
-    this.logger.log(`Created draft item on Project Board ${projectId}: ${itemId} ("${title}")`);
-    return itemId;
+    const projectItem = json.data?.addProjectV2DraftIssue?.projectItem;
+    const itemId = projectItem?.id || 'MOCK_ITEM_ID';
+    const databaseId = projectItem?.databaseId;
+    const url = databaseId
+      ? `https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=${databaseId}`
+      : `https://github.com/users/SergiiVdovareize/projects/4`;
+
+    this.logger.log(`Created draft item on Project Board ${projectId}: ${itemId} (databaseId: ${databaseId}) ("${title}")`);
+    return {
+      itemId,
+      databaseId,
+      url,
+    };
   }
 }

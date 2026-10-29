@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LlmService } from '../llm/llm.service';
 import { TranscriptionService } from './services/transcription.service';
 import { TelegramProjectBoardService } from './services/telegram-project-board.service';
+import { RedisReader } from '../common/helpers/redisReader';
 import {
   StructuredTaskResult,
   TelegramFileResponse,
@@ -11,15 +12,85 @@ import {
 } from './interfaces/telegram.interface';
 
 @Injectable()
-export class TelegramService {
+export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
+  private readonly inMemoryAwaitingTask = new Map<number | string, number>();
 
   constructor(
     private readonly configService: ConfigService,
     private readonly llmService: LlmService,
     private readonly transcriptionService: TranscriptionService,
-    private readonly projectBoardService: TelegramProjectBoardService
+    private readonly projectBoardService: TelegramProjectBoardService,
+    @Optional() private readonly redisReader?: RedisReader
   ) {}
+
+  async onModuleInit() {
+    await this.registerBotCommands();
+  }
+
+  /**
+   * Registers bot commands with Telegram so they appear in the chat Menu button.
+   */
+  async registerBotCommands(): Promise<void> {
+    const token = this.getBotToken();
+    if (!token) return;
+
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commands: [
+            { command: 'task', description: '➕ Створити нову задачу' },
+            { command: 'cancel', description: '❌ Скасувати створення' },
+            { command: 'help', description: 'ℹ️ Довідка' },
+          ],
+        }),
+      });
+      this.logger.log('Telegram bot menu commands registered successfully.');
+    } catch (err: any) {
+      this.logger.warn(`Failed to set Telegram bot commands: ${err.message}`);
+    }
+  }
+
+  /**
+   * Checks whether a chat is currently in the "awaiting task dictation" state.
+   */
+  async isAwaitingTask(chatId: number | string): Promise<boolean> {
+    const memExpiry = this.inMemoryAwaitingTask.get(chatId);
+    if (memExpiry && memExpiry > Date.now()) {
+      return true;
+    }
+
+    if (this.redisReader) {
+      const val = await this.redisReader.read(`telegram:awaiting_task:${chatId}`);
+      if (val) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Sets the "awaiting task dictation" state for a chat (default 5 minutes TTL).
+   */
+  async setAwaitingTask(chatId: number | string, ttlSeconds = 300): Promise<void> {
+    this.inMemoryAwaitingTask.set(chatId, Date.now() + ttlSeconds * 1000);
+    if (this.redisReader) {
+      await this.redisReader.write(`telegram:awaiting_task:${chatId}`, '1', ttlSeconds);
+    }
+  }
+
+  /**
+   * Clears the "awaiting task dictation" state for a chat.
+   */
+  async clearAwaitingTask(chatId: number | string): Promise<void> {
+    this.inMemoryAwaitingTask.delete(chatId);
+    if (this.redisReader) {
+      await this.redisReader.delete(`telegram:awaiting_task:${chatId}`);
+    }
+  }
 
   /**
    * Verifies if a sender ID or username is permitted to interact with the bot.
@@ -60,7 +131,7 @@ export class TelegramService {
    * Main entry point for processing incoming Telegram updates from the webhook.
    */
   async handleIncomingUpdate(update: TelegramUpdate): Promise<TelegramProcessingResult> {
-    const createdTasks: Array<{ title: string; itemId: string; senderId: string; username?: string }> = [];
+    const createdTasks: Array<{ title: string; itemId: string; senderId: string; username?: string; url?: string }> = [];
     const message = update.message || update.edited_message;
 
     if (!message) {
@@ -82,21 +153,51 @@ export class TelegramService {
       return { processed: 1, createdTasks: [] };
     }
 
-    // 2. Command handling (/start, /help)
     const textTrimmed = message.text?.trim() || '';
+
+    // 2. Command handling: /start, /help
     if (textTrimmed === '/start' || textTrimmed === '/help') {
       const helpMessage =
-        `👋 *Welcome to AI Tasks Bot!*\n\n` +
-        `Send me a **text message** or record a **voice memo**, and I will automatically:\n` +
-        `1. 🎙️ Transcribe your voice with Whisper AI\n` +
-        `2. 🧠 Structure your dictation into an actionable specification\n` +
-        `3. 📌 Create a task card directly on [GitHub Project Board #4](https://github.com/users/SergiiVdovareize/projects/4).\n\n` +
-        `Just speak or type your task idea to get started!`;
+        `👋 *AI Tasks Bot*\n\n` +
+        `Щоб створити нову задачу на GitHub дошці:\n` +
+        `1. Натисніть команду /task у меню або надішліть її в чат\n` +
+        `2. Надішліть текст або надиктуйте голосове повідомлення\n\n` +
+        `Для скасування скористайтесь /cancel.`;
       await this.sendMessage(chatId, helpMessage);
       return { processed: 1, createdTasks: [] };
     }
 
-    // 3. Extract text or transcribe audio
+    // 3. Command handling: /cancel
+    if (textTrimmed === '/cancel') {
+      await this.clearAwaitingTask(chatId);
+      await this.sendMessage(chatId, '❌ *Створення задачі скасовано.*');
+      return { processed: 1, createdTasks: [] };
+    }
+
+    // 4. Command handling: /task (Variant A prompt initiation)
+    if (textTrimmed === '/task' || textTrimmed.startsWith('/task@')) {
+      await this.setAwaitingTask(chatId);
+      await this.sendMessage(
+        chatId,
+        '🎙️ *Записуйте голосове або пишіть текст задачі...*\n\n_(Очікую ваше повідомлення протягом 5 хвилин)_'
+      );
+      return { processed: 1, createdTasks: [] };
+    }
+
+    // 5. Verification of Variant A: is the user currently awaiting task input?
+    const isAwaiting = await this.isAwaitingTask(chatId);
+    if (!isAwaiting) {
+      await this.sendMessage(
+        chatId,
+        'ℹ️ Щоб створити задачу, спочатку виберіть команду /task у меню.'
+      );
+      return { processed: 1, createdTasks: [] };
+    }
+
+    // Clear awaiting state since input is now received
+    await this.clearAwaitingTask(chatId);
+
+    // 6. Extract text or transcribe audio
     let rawContent = '';
 
     if (message.text) {
@@ -116,31 +217,28 @@ export class TelegramService {
 
     if (!rawContent) {
       this.logger.debug(`No actionable text or voice content found in update from ${senderLabel}.`);
+      await this.sendMessage(chatId, '⚠️ Не вдалося розпізнати текст або аудіо. Спробуйте ще раз через /task.');
       return { processed: 1, createdTasks: [] };
     }
 
-    // 4. Send "processing..." feedback message
-    await this.sendMessage(chatId, `⏳ *Processing your task...*\n\n_Dictation:_ "${rawContent.slice(0, 100)}${rawContent.length > 100 ? '...' : ''}"`);
-
-    // 5. Structure task via LLM
+    // 7. Structure task via LLM
     this.logger.log(`Structuring task for ${senderLabel}: "${rawContent.slice(0, 80)}..."`);
     const structured = await this.structureTaskWithLlm(rawContent);
 
-    // 6. Create Draft Item on GitHub Project Board #4
-    const itemId = await this.projectBoardService.createDraftItem(structured.title, structured.body);
+    // 8. Create Draft Item on GitHub Project Board #4
+    const created = await this.projectBoardService.createDraftItem(structured.title, structured.body);
     createdTasks.push({
       title: structured.title,
-      itemId,
+      itemId: created.itemId,
       senderId: senderId?.toString() || '',
       username,
+      url: created.url,
     });
 
-    // 7. Send confirmation back to user
+    // 9. Send concise confirmation back to user (ONLY the title and direct link to the created task)
     const confirmationText =
-      `✅ *Task added to GitHub Project Board!*\n\n` +
       `📌 *${structured.title}*\n\n` +
-      `📋 *Description:*\n${structured.body.slice(0, 500)}${structured.body.length > 500 ? '...' : ''}\n\n` +
-      `🔗 [Open Project Board #4](https://github.com/users/SergiiVdovareize/projects/4)`;
+      `🔗 [Відкрити задачу](${created.url})`;
 
     await this.sendMessage(chatId, confirmationText);
 

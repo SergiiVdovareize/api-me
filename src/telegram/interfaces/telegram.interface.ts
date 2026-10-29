@@ -70,6 +70,12 @@ export interface StructuredTaskResult {
   body: string;
 }
 
+export interface CreatedDraftItemResult {
+  itemId: string;
+  databaseId?: number;
+  url: string;
+}
+
 export interface TelegramProcessingResult {
   processed: number;
   createdTasks: Array<{
@@ -77,5 +83,6 @@ export interface TelegramProcessingResult {
     itemId: string;
     senderId: string;
     username?: string;
+    url?: string;
   }>;
 }

@@ -31,10 +31,11 @@ describe('TelegramProjectBoardService', () => {
   it('should return MOCK_ITEM_ID if token is not configured', async () => {
     (configService.get as jest.Mock).mockReturnValue(undefined);
     const result = await service.createDraftItem('Test Title', 'Test Body');
-    expect(result).toBe('MOCK_ITEM_ID');
+    expect(result.itemId).toBe('MOCK_ITEM_ID');
+    expect(result.url).toBe('https://github.com/users/SergiiVdovareize/projects/4');
   });
 
-  it('should call GitHub GraphQL API and return created project item ID', async () => {
+  it('should call GitHub GraphQL API and return created project item ID and direct URL', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
@@ -42,6 +43,7 @@ describe('TelegramProjectBoardService', () => {
           addProjectV2DraftIssue: {
             projectItem: {
               id: 'PVTI_123456789',
+              databaseId: 1001,
             },
           },
         },
@@ -49,7 +51,9 @@ describe('TelegramProjectBoardService', () => {
     } as any);
 
     const result = await service.createDraftItem('Test Title', 'Test Body');
-    expect(result).toBe('PVTI_123456789');
+    expect(result.itemId).toBe('PVTI_123456789');
+    expect(result.databaseId).toBe(1001);
+    expect(result.url).toBe('https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=1001');
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.github.com/graphql',
       expect.objectContaining({

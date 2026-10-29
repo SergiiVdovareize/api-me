@@ -35,7 +35,10 @@ describe('TelegramService', () => {
     };
 
     projectBoardService = {
-      createDraftItem: jest.fn().mockResolvedValue('PVTI_mock_item_id'),
+      createDraftItem: jest.fn().mockResolvedValue({
+        itemId: 'PVTI_mock_item_id',
+        url: 'https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=123456',
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -50,7 +53,7 @@ describe('TelegramService', () => {
 
     service = module.get<TelegramService>(TelegramService);
 
-    // Mock fetch for sendMessage and downloadFile
+    // Mock fetch for sendMessage, getFile, and downloadFile
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({ ok: true, result: {} }),
@@ -129,12 +132,88 @@ describe('TelegramService', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/sendMessage'),
         expect.objectContaining({
-          body: expect.stringContaining('Welcome to AI Tasks Bot'),
+          body: expect.stringContaining('AI Tasks Bot'),
         })
       );
     });
 
-    it('should process text task and add to project board', async () => {
+    it('should prompt user when /task command is received', async () => {
+      const update: TelegramUpdate = {
+        update_id: 21,
+        message: {
+          message_id: 21,
+          date: 1720000000,
+          chat: { id: 12345, type: 'private' },
+          from: { id: 12345, is_bot: false, first_name: 'Sergii', username: 'admin_user' },
+          text: '/task',
+        },
+      };
+
+      const result = await service.handleIncomingUpdate(update);
+      expect(result.processed).toBe(1);
+      expect(result.createdTasks).toHaveLength(0);
+      expect(await service.isAwaitingTask(12345)).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('Записуйте голосове або пишіть текст задачі'),
+        })
+      );
+    });
+
+    it('should cancel awaiting state when /cancel is received', async () => {
+      await service.setAwaitingTask(12345);
+      expect(await service.isAwaitingTask(12345)).toBe(true);
+
+      const update: TelegramUpdate = {
+        update_id: 22,
+        message: {
+          message_id: 22,
+          date: 1720000000,
+          chat: { id: 12345, type: 'private' },
+          from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+          text: '/cancel',
+        },
+      };
+
+      const result = await service.handleIncomingUpdate(update);
+      expect(result.processed).toBe(1);
+      expect(await service.isAwaitingTask(12345)).toBe(false);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('Створення задачі скасовано'),
+        })
+      );
+    });
+
+    it('should prompt to use /task if message is sent without prior /task invocation', async () => {
+      const update: TelegramUpdate = {
+        update_id: 23,
+        message: {
+          message_id: 23,
+          date: 1720000000,
+          chat: { id: 12345, type: 'private' },
+          from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+          text: 'Random message without /task',
+        },
+      };
+
+      const result = await service.handleIncomingUpdate(update);
+      expect(result.processed).toBe(1);
+      expect(result.createdTasks).toHaveLength(0);
+      expect(projectBoardService.createDraftItem).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('спочатку виберіть команду /task у меню'),
+        })
+      );
+    });
+
+    it('should process text task and reply with only title and direct task link after /task', async () => {
+      await service.setAwaitingTask(12345);
+
       const update: TelegramUpdate = {
         update_id: 3,
         message: {
@@ -154,9 +233,32 @@ describe('TelegramService', () => {
         'feat(core): implement feature',
         expect.any(String)
       );
+
+      // Verify concise confirmation message: title and direct task link
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('feat(core): implement feature'),
+        })
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=123456'),
+        })
+      );
+      // Ensure description is omitted
+      expect(global.fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/sendMessage'),
+        expect.objectContaining({
+          body: expect.stringContaining('📋 *Description:*'),
+        })
+      );
     });
 
-    it('should process voice memo, transcribe, structure, and create draft item', async () => {
+    it('should process voice memo, transcribe, structure, and create draft item after /task', async () => {
+      await service.setAwaitingTask(12345);
+
       // Mock getFile and download
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
@@ -170,12 +272,7 @@ describe('TelegramService', () => {
           ok: true,
           arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(16)),
         })
-        // sendMessage "Processing..."
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValue({ ok: true }),
-        })
-        // sendMessage "Task added..."
+        // sendMessage confirmation
         .mockResolvedValueOnce({
           ok: true,
           json: jest.fn().mockResolvedValue({ ok: true }),
