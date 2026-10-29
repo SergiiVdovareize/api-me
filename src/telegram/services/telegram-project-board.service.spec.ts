@@ -64,4 +64,54 @@ describe('TelegramProjectBoardService', () => {
       })
     );
   });
+
+  it('should fallback to GITHUB_TOKEN and handle missing databaseId', async () => {
+    (configService.get as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'GITHUB_TOKEN') return 'ghp_fallback_token';
+      return undefined;
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: {
+          addProjectV2DraftIssue: {
+            projectItem: {
+              id: 'PVTI_fallback_999',
+            },
+          },
+        },
+      }),
+    } as any);
+
+    const result = await service.createDraftItem('Fallback', 'Body');
+    expect(result.itemId).toBe('PVTI_fallback_999');
+    expect(result.databaseId).toBeUndefined();
+    expect(result.url).toBe('https://github.com/users/SergiiVdovareize/projects/4');
+  });
+
+  it('should throw an error when GitHub returns non-ok HTTP status', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: jest.fn().mockResolvedValue('Bad credentials'),
+    } as any);
+
+    await expect(service.createDraftItem('Test', 'Body')).rejects.toThrow(
+      'Failed to create draft issue: HTTP 401'
+    );
+  });
+
+  it('should throw an error when GitHub returns GraphQL errors', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        errors: [{ message: 'Project not found' }],
+      }),
+    } as any);
+
+    await expect(service.createDraftItem('Test', 'Body')).rejects.toThrow(
+      'GitHub GraphQL mutation error: Project not found'
+    );
+  });
 });

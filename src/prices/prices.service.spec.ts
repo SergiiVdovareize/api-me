@@ -360,6 +360,37 @@ describe('PricesService', () => {
       );
     });
 
+    it('should track failure when a product processing promise rejects', async () => {
+      const mockProduct = {
+        id: 7,
+        url: 'https://shop.ua/item-reject',
+        domain: 'shop.ua',
+        title: 'Reject Item',
+        lastPrice: 500,
+        currency: 'UAH',
+        inStock: true,
+        status: PriceProductStatus.ACTIVE,
+        failCount: 0,
+        history: [],
+      };
+
+      mockPrisma.priceProduct.findMany.mockResolvedValue([mockProduct]);
+      jest.spyOn(service as any, 'processProductWithLock').mockRejectedValueOnce(new Error('Fatal redis crash'));
+
+      const summary = await service.checkDuePrices();
+      expect(summary.failed).toBe(1);
+      expect(Sentry.captureMessage).toHaveBeenCalledWith(
+        expect.stringContaining('[PriceTracker Batch] 1 product price check(s) failed'),
+        expect.objectContaining({
+          extra: expect.objectContaining({
+            failedProducts: expect.arrayContaining([
+              expect.objectContaining({ id: 7, reason: 'Fatal redis crash' }),
+            ]),
+          }),
+        })
+      );
+    });
+
     it('should reschedule re-check in 10 minutes when price spike > 40% is detected', async () => {
       const spikeProduct = {
         id: 3,
