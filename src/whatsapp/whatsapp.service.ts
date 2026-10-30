@@ -152,12 +152,19 @@ export class WhatsappService {
    * Uses LlmService to format unstructured spoken dictation into a standard task specification.
    */
   async structureTaskWithLlm(dictation: string): Promise<StructuredTaskResult> {
-    const systemPrompt = `You are an expert technical product manager and software architect.
-Convert the user's spoken voice note or text dictation into a clear, professional task specification in English.
+    const systemPrompt = `You are an attentive assistant that captures thoughts, ideas, and tasks from spoken voice notes or text dictation.
+Your goal is to clearly record and structure the author's thoughts WITHOUT losing their core idea and WITHOUT over-engineering.
+
+CRITICAL RULES:
+1. LANGUAGE: Keep EVERYTHING in the EXACT SAME LANGUAGE as the user's dictation (e.g. if Ukrainian, output title and body in Ukrainian; if English, in English). Never translate to another language.
+2. NO OVER-ENGINEERING: Do NOT invent edge cases, unit tests, acceptance criteria checklists, or technical specifications that were not explicitly stated. The goal is idea capture, not premature software architecture.
+3. CONCISE TITLE: Create a clear, meaningful title representing the essence of the idea (in the original language).
+4. VERBATIM QUOTE: Include the raw dictation verbatim in the dedicated block so zero original context is lost.
+
 You MUST output ONLY a valid JSON object matching this structure:
 {
-  "title": "Concise task title with conventional commit prefix like feat(...), fix(...), or chore(...)",
-  "body": "## Overview\\n1-2 sentences summarizing the goal.\\n\\n## Objectives\\n- Bulleted concrete deliverables\\n\\n## Acceptance Criteria\\n- [ ] Testable condition 1\\n- [ ] Testable condition 2\\n\\n---\\n*Task dictated via WhatsApp bot.*"
+  "title": "Короткий, змістовний заголовок задачі мовою оригіналу",
+  "body": "## Суть ідеї\\n1-2 чітких речення, що описують мету або задум автора.\\n\\n## Ключові тези\\n- Головна думка або важливий контекст із почутого\\n- Інші озвучені деталі (виключно те, що згадувалось)\\n\\n> [!NOTE]\\n> **Оригінальний запис:**\\n> \\"{user dictation verbatim}\\"\\n\\n---\\n*Task dictated via WhatsApp bot.*"
 }`;
 
     const userPrompt = `User Dictation:\n"""\n${dictation}\n"""`;
@@ -168,8 +175,8 @@ You MUST output ONLY a valid JSON object matching this structure:
       this.logger.error(`Failed to structure task with LLM: ${err.message}. Using fallback formatting.`);
       const firstLine = dictation.split('\n')[0].trim().slice(0, 80);
       return {
-        title: firstLine || 'Voice Task',
-        body: `## Overview\n${dictation}\n\n---\\n*Task dictated via WhatsApp bot.*`,
+        title: firstLine || 'Нова задача',
+        body: `## Суть ідеї\n${dictation}\n\n---\n*Task dictated via WhatsApp bot.*`,
       };
     }
   }
