@@ -24,6 +24,8 @@ import { DateSuggestionsResponse, DateSuggestion } from './interfaces/date-sugge
 import { buildDateSuggestionsPrompt } from './prompts/date-suggestions.prompt';
 import { RedisReader } from '../common/helpers/redisReader';
 import { BlobService } from '../blob/blob.service';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { AnalyticsEvent } from '../analytics/analytics.events';
 import { hashPin, verifyPin } from './utils/pin.util';
 import {
   renderCreationEmail,
@@ -62,7 +64,8 @@ export class AlphadateService {
     private readonly genderizeService: GenderizeService,
     @Optional() private readonly llmService?: LlmService,
     @Optional() private readonly redisReader?: RedisReader,
-    @Optional() private readonly blobService?: BlobService
+    @Optional() private readonly blobService?: BlobService,
+    @Optional() private readonly analyticsService?: AnalyticsService
   ) {}
 
   private generateRandomKey(length: number): string {
@@ -958,6 +961,7 @@ export class AlphadateService {
     const detectedLang: 'en' | 'uk' = isLatin ? 'en' : 'uk';
     const normalizedLetter = trimmed.toUpperCase();
     const cacheKey = `alphadate:suggestions:${trimmedKey}:${normalizedLetter}:${detectedLang}`;
+    const startTime = Date.now();
 
     if (this.redisReader) {
       try {
@@ -966,6 +970,15 @@ export class AlphadateService {
           this.logger.log(
             `Serving date suggestions for board "${trimmedKey}" letter "${normalizedLetter}" (${detectedLang}) from Upstash cache`
           );
+          this.analyticsService?.trackEvent(AnalyticsEvent.DateSuggestionsGenerated, {
+            letter: normalizedLetter,
+            lang: detectedLang,
+            source: 'cache',
+            count: cached.suggestions.length,
+            titles: cached.suggestions.map((s: any) => s.title),
+            details: cached.suggestions,
+            durationMs: Date.now() - startTime,
+          });
           return cached;
         }
       } catch (err: any) {
@@ -1047,6 +1060,23 @@ export class AlphadateService {
       })
       .filter((s): s is DateSuggestion => Boolean(s))
       .filter(s => s.title.trim().toUpperCase().startsWith(normalizedLetter));
+
+    const durationMs = Date.now() - startTime;
+
+    this.analyticsService?.trackEvent(AnalyticsEvent.DateSuggestionsGenerated, {
+      letter: normalizedLetter,
+      lang: detectedLang,
+      source: 'llm',
+      count: sanitized.length,
+      rawCount: rawSuggestions.length,
+      titles: sanitized.map(s => s.title),
+      details: sanitized,
+      durationMs,
+    });
+
+    this.logger.log(
+      `[Suggestions] Generated ${sanitized.length} ideas for letter "${normalizedLetter}" (${detectedLang}) via LLM in ${durationMs}ms: [${sanitized.map(s => s.title).join(', ')}]`
+    );
 
     const response: DateSuggestionsResponse = {
       success: true,

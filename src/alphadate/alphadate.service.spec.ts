@@ -14,6 +14,8 @@ import { GenderizeService } from './genderize.service';
 import { LlmService } from '../llm/llm.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { BlobService } from '../blob/blob.service';
+import { AnalyticsService } from '../analytics/analytics.service';
+import { AnalyticsEvent } from '../analytics/analytics.events';
 
 describe('AlphadateService', () => {
   let service: AlphadateService;
@@ -24,6 +26,7 @@ describe('AlphadateService', () => {
   let mockLlmService: any;
   let mockRedisReader: any;
   let mockBlobService: any;
+  let mockAnalyticsService: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -78,6 +81,11 @@ describe('AlphadateService', () => {
       remove: jest.fn().mockResolvedValue({}),
     };
 
+    mockAnalyticsService = {
+      trackEvent: jest.fn(),
+      trackApiEvent: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlphadateService,
@@ -108,6 +116,10 @@ describe('AlphadateService', () => {
         {
           provide: BlobService,
           useValue: mockBlobService,
+        },
+        {
+          provide: AnalyticsService,
+          useValue: mockAnalyticsService,
         },
       ],
     }).compile();
@@ -990,6 +1002,60 @@ describe('AlphadateService', () => {
 
       await expect(service.getSuggestions('valid-key', 'Д')).rejects.toThrow(
         'Failed to get a response from AI service due to rate limits or temporary unavailability'
+      );
+    });
+
+    it('should track DateSuggestionsGenerated event in PostHog upon fresh LLM generation', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
+      mockLlmService.callAndParseJSON.mockResolvedValue({
+        letter: 'А',
+        suggestions: [
+          {
+            title: 'Аквапарк',
+            description: 'Водні гірки та розваги',
+            category: 'active',
+            estimatedCost: 'moderate',
+          },
+        ],
+      });
+
+      await service.getSuggestions('valid-key', 'а');
+
+      expect(mockAnalyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.DateSuggestionsGenerated,
+        expect.objectContaining({
+          letter: 'А',
+          lang: 'uk',
+          source: 'llm',
+          count: 1,
+          titles: ['Аквапарк'],
+          details: expect.any(Array),
+          durationMs: expect.any(Number),
+        })
+      );
+    });
+
+    it('should track DateSuggestionsGenerated event in PostHog with source=cache on cache hit', async () => {
+      mockPrismaService.alphadateBoard.findUnique.mockResolvedValue({ key: 'valid-key' });
+      const cached = {
+        success: true,
+        letter: 'Б',
+        lang: 'uk',
+        suggestions: [{ title: 'Боулінг', description: '', category: 'active', estimatedCost: 'moderate' }],
+      };
+      mockRedisReader.read.mockResolvedValue(cached);
+
+      await service.getSuggestions('valid-key', 'б');
+
+      expect(mockAnalyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.DateSuggestionsGenerated,
+        expect.objectContaining({
+          letter: 'Б',
+          lang: 'uk',
+          source: 'cache',
+          count: 1,
+          titles: ['Боулінг'],
+        })
       );
     });
   });

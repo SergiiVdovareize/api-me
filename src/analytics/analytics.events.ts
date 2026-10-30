@@ -22,4 +22,5 @@ export enum AnalyticsEvent {
   SetDefaultCvView = 'SetDefaultCvView',
   RepositoryClicked = 'RepositoryClicked',
   DemoClicked = 'DemoClicked',
+  DateSuggestionsGenerated = 'DateSuggestionsGenerated',
 }
