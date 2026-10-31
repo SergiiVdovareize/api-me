@@ -31,6 +31,7 @@ import { PricesModule } from './prices/prices.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { CatcastModule } from './catcast/catcast.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { TelegramModule } from './telegram/telegram.module';
     OutboxModule,
     WhatsappModule,
     TelegramModule,
+    CatcastModule,
   ],
 
   controllers: [AppController],
