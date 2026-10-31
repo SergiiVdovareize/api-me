@@ -5,8 +5,8 @@ import { LlmService } from '../llm/llm.service';
 import { TranscriptionService } from './services/transcription.service';
 import { TelegramProjectBoardService } from './services/telegram-project-board.service';
 import { TelegramUpdate } from './interfaces/telegram.interface';
-
 import { RedisReader } from '../common/helpers/redisReader';
+import { BlobService } from '../blob/blob.service';
 
 describe('TelegramService', () => {
   let service: TelegramService;
@@ -15,6 +15,7 @@ describe('TelegramService', () => {
   let transcriptionService: jest.Mocked<Partial<TranscriptionService>>;
   let projectBoardService: jest.Mocked<Partial<TelegramProjectBoardService>>;
   let mockRedisReader: jest.Mocked<Partial<RedisReader>>;
+  let mockBlobService: jest.Mocked<Partial<BlobService>>;
 
   beforeEach(async () => {
     configService = {
@@ -50,6 +51,10 @@ describe('TelegramService', () => {
       }),
     };
 
+    mockBlobService = {
+      upload: jest.fn().mockResolvedValue('https://blob.vercel-storage.com/tasks/test-photo.jpg'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TelegramService,
@@ -58,6 +63,7 @@ describe('TelegramService', () => {
         { provide: TranscriptionService, useValue: transcriptionService },
         { provide: TelegramProjectBoardService, useValue: projectBoardService },
         { provide: RedisReader, useValue: mockRedisReader },
+        { provide: BlobService, useValue: mockBlobService },
       ],
     }).compile();
 
@@ -166,7 +172,9 @@ describe('TelegramService', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/sendMessage'),
         expect.objectContaining({
-          body: expect.stringContaining('Записуйте голосове або пишіть текст задачі'),
+          body: expect.stringContaining(
+            'Записуйте голосове, фото з підписом або пишіть текст задачі'
+          ),
         })
       );
     });
@@ -254,7 +262,9 @@ describe('TelegramService', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/sendMessage'),
         expect.objectContaining({
-          body: expect.stringContaining('https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=123456'),
+          body: expect.stringContaining(
+            'https://github.com/users/SergiiVdovareize/projects/4?pane=issue&itemId=123456'
+          ),
         })
       );
       // Ensure description is omitted
@@ -415,12 +425,87 @@ describe('TelegramService', () => {
 
       const result = await service.handleIncomingUpdate(update);
       expect(result.processed).toBe(1);
-      expect(transcriptionService.transcribeAudio).toHaveBeenCalledWith(expect.any(Buffer), 'audio/mp3');
+      expect(transcriptionService.transcribeAudio).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        'audio/mp3'
+      );
+    });
+
+    it('should process photo with caption and attach image to task body', async () => {
+      await service.setAwaitingTask(12345);
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            ok: true,
+            result: { file_path: 'photos/file_large.jpg' },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(32)),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ ok: true }),
+        });
+
+      const update: TelegramUpdate = {
+        update_id: 105,
+        message: {
+          message_id: 9,
+          date: 1720000000,
+          chat: { id: 12345, type: 'private' },
+          from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+          caption: 'Дослідити цей сервіс для завантаження медіа',
+          photo: [
+            { file_id: 'thumb_id', file_unique_id: 'u_1', width: 90, height: 90 },
+            { file_id: 'large_photo_id', file_unique_id: 'u_2', width: 1280, height: 1280 },
+          ],
+        },
+      };
+
+      const result = await service.handleIncomingUpdate(update);
+      expect(result.processed).toBe(1);
+      expect(mockBlobService.upload).toHaveBeenCalledWith(
+        expect.stringContaining('tasks/telegram-photo-'),
+        expect.any(Buffer),
+        'image/jpeg'
+      );
+      expect(projectBoardService.createDraftItem).toHaveBeenCalledWith(
+        'feat(core): implement feature',
+        expect.stringContaining(
+          '![Прикріплене зображення](https://blob.vercel-storage.com/tasks/test-photo.jpg)'
+        )
+      );
+    });
+
+    it('should process message with caption only (e.g. video or document with caption)', async () => {
+      await service.setAwaitingTask(12345);
+
+      const update: TelegramUpdate = {
+        update_id: 106,
+        message: {
+          message_id: 10,
+          date: 1720000000,
+          chat: { id: 12345, type: 'private' },
+          from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+          caption: 'Оновити залежності в репозиторії',
+        },
+      };
+
+      const result = await service.handleIncomingUpdate(update);
+      expect(result.processed).toBe(1);
+      expect(llmService.callAndParseJSON).toHaveBeenCalled();
+      expect(projectBoardService.createDraftItem).toHaveBeenCalled();
     });
 
     it('should fallback to firstLine formatting when structureTaskWithLlm throws', async () => {
       llmService.callAndParseJSON!.mockRejectedValueOnce(new Error('AI parsing failed'));
-      const fallback = await service.structureTaskWithLlm('Fix navigation bar\nDetailed bug report here');
+      const fallback = await service.structureTaskWithLlm(
+        'Fix navigation bar\nDetailed bug report here'
+      );
       expect(fallback.title).toBe('Fix navigation bar');
       expect(fallback.body).toContain('Fix navigation bar');
     });
@@ -459,7 +544,9 @@ describe('TelegramService', () => {
         status: 404,
         text: jest.fn().mockResolvedValue('Not found'),
       });
-      await expect(service.downloadFile('file_1')).rejects.toThrow('Telegram getFile failed: HTTP 404');
+      await expect(service.downloadFile('file_1')).rejects.toThrow(
+        'Telegram getFile failed: HTTP 404'
+      );
 
       // 3. getFile response missing file_path
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -478,7 +565,9 @@ describe('TelegramService', () => {
           ok: false,
           status: 500,
         });
-      await expect(service.downloadFile('file_1')).rejects.toThrow('Failed to download audio from Telegram CDN');
+      await expect(service.downloadFile('file_1')).rejects.toThrow(
+        'Failed to download audio from Telegram CDN'
+      );
     });
 
     it('should handle sendMessage failure branches', async () => {

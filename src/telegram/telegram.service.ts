@@ -4,6 +4,7 @@ import { LlmService } from '../llm/llm.service';
 import { TranscriptionService } from './services/transcription.service';
 import { TelegramProjectBoardService } from './services/telegram-project-board.service';
 import { RedisReader } from '../common/helpers/redisReader';
+import { BlobService } from '../blob/blob.service';
 import {
   StructuredTaskResult,
   TelegramFileResponse,
@@ -21,7 +22,8 @@ export class TelegramService implements OnModuleInit {
     private readonly llmService: LlmService,
     private readonly transcriptionService: TranscriptionService,
     private readonly projectBoardService: TelegramProjectBoardService,
-    @Optional() private readonly redisReader?: RedisReader
+    @Optional() private readonly redisReader?: RedisReader,
+    @Optional() private readonly blobService?: BlobService
   ) {}
 
   async onModuleInit() {
@@ -131,7 +133,13 @@ export class TelegramService implements OnModuleInit {
    * Main entry point for processing incoming Telegram updates from the webhook.
    */
   async handleIncomingUpdate(update: TelegramUpdate): Promise<TelegramProcessingResult> {
-    const createdTasks: Array<{ title: string; itemId: string; senderId: string; username?: string; url?: string }> = [];
+    const createdTasks: Array<{
+      title: string;
+      itemId: string;
+      senderId: string;
+      username?: string;
+      url?: string;
+    }> = [];
     const message = update.message || update.edited_message;
 
     if (!message) {
@@ -141,11 +149,13 @@ export class TelegramService implements OnModuleInit {
     const chatId = message.chat.id;
     const senderId = message.from?.id;
     const username = message.from?.username;
-    const senderLabel = username ? `@${username}` : (senderId?.toString() || 'Unknown');
+    const senderLabel = username ? `@${username}` : senderId?.toString() || 'Unknown';
 
     // 1. Authorization check
     if (!this.isAuthorized(senderId, username)) {
-      this.logger.warn(`Unauthorized Telegram message from ${senderLabel} (ID: ${senderId}). Ignoring.`);
+      this.logger.warn(
+        `Unauthorized Telegram message from ${senderLabel} (ID: ${senderId}). Ignoring.`
+      );
       await this.sendMessage(
         chatId,
         '⛔ *Access Denied*\n\nYour Telegram account is not authorized to create tasks on this project board.'
@@ -153,7 +163,7 @@ export class TelegramService implements OnModuleInit {
       return { processed: 1, createdTasks: [] };
     }
 
-    const textTrimmed = message.text?.trim() || '';
+    const textTrimmed = (message.text || message.caption)?.trim() || '';
 
     // 2. Command handling: /start, /help
     if (textTrimmed === '/start' || textTrimmed === '/help') {
@@ -161,7 +171,7 @@ export class TelegramService implements OnModuleInit {
         `👋 *AI Tasks Bot*\n\n` +
         `Щоб створити нову задачу на GitHub дошці:\n` +
         `1. Натисніть команду /task у меню або надішліть її в чат\n` +
-        `2. Надішліть текст або надиктуйте голосове повідомлення\n\n` +
+        `2. Надішліть текст, фото з описом або надиктуйте голосове повідомлення\n\n` +
         `Для скасування скористайтесь /cancel.`;
       await this.sendMessage(chatId, helpMessage);
       return { processed: 1, createdTasks: [] };
@@ -179,7 +189,7 @@ export class TelegramService implements OnModuleInit {
       await this.setAwaitingTask(chatId);
       await this.sendMessage(
         chatId,
-        '🎙️ *Записуйте голосове або пишіть текст задачі...*\n\n_(Очікую ваше повідомлення протягом 5 хвилин)_'
+        '🎙️ *Записуйте голосове, фото з підписом або пишіть текст задачі...*\n\n_(Очікую ваше повідомлення протягом 5 хвилин)_'
       );
       return { processed: 1, createdTasks: [] };
     }
@@ -197,36 +207,71 @@ export class TelegramService implements OnModuleInit {
     // Clear awaiting state since input is now received
     await this.clearAwaitingTask(chatId);
 
-    // 6. Extract text or transcribe audio
-    let rawContent = '';
+    // 6. Extract attached photo (if present) and upload to Blob
+    let attachedImageUrl: string | null = null;
+    if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
+      const largestPhoto = message.photo[message.photo.length - 1];
+      if (largestPhoto?.file_id) {
+        this.logger.log(
+          `Received photo from ${senderLabel} (file ID: ${largestPhoto.file_id}). Downloading...`
+        );
+        try {
+          const photoBuffer = await this.downloadFile(largestPhoto.file_id);
+          if (this.blobService) {
+            const filename = `tasks/telegram-photo-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
+            attachedImageUrl = await this.blobService.upload(filename, photoBuffer, 'image/jpeg');
+            this.logger.log(`Photo uploaded to Blob: ${attachedImageUrl}`);
+          }
+        } catch (photoErr: any) {
+          this.logger.warn(`Failed to process photo attachment: ${photoErr.message}`);
+        }
+      }
+    }
 
-    if (message.text) {
-      rawContent = message.text.trim();
-    } else if (message.voice || message.audio) {
+    // 7. Extract text or transcribe audio
+    let rawContent = textTrimmed;
+
+    if (!rawContent && (message.voice || message.audio)) {
       const voiceObj = message.voice || message.audio;
       const fileId = voiceObj?.file_id;
       const mimeType = voiceObj?.mime_type || 'audio/ogg';
 
       if (fileId) {
-        this.logger.log(`Received voice memo from ${senderLabel} (file ID: ${fileId}). Downloading audio...`);
+        this.logger.log(
+          `Received voice memo from ${senderLabel} (file ID: ${fileId}). Downloading audio...`
+        );
         const audioBuffer = await this.downloadFile(fileId);
-        this.logger.log(`Audio downloaded (${audioBuffer.length} bytes). Transcribing with Whisper...`);
+        this.logger.log(
+          `Audio downloaded (${audioBuffer.length} bytes). Transcribing with Whisper...`
+        );
         rawContent = await this.transcriptionService.transcribeAudio(audioBuffer, mimeType);
       }
+    } else if (!rawContent && attachedImageUrl) {
+      rawContent = 'Задача зі знімком екрана / фотографією';
     }
 
-    if (!rawContent) {
-      this.logger.debug(`No actionable text or voice content found in update from ${senderLabel}.`);
-      await this.sendMessage(chatId, '⚠️ Не вдалося розпізнати текст або аудіо. Спробуйте ще раз через /task.');
+    if (!rawContent && !attachedImageUrl) {
+      this.logger.debug(
+        `No actionable text, photo, or voice content found in update from ${senderLabel}.`
+      );
+      await this.sendMessage(
+        chatId,
+        '⚠️ Не вдалося розпізнати текст, фото або аудіо. Спробуйте ще раз через /task.'
+      );
       return { processed: 1, createdTasks: [] };
     }
 
-    // 7. Structure task via LLM
+    // 8. Structure task via LLM
     this.logger.log(`Structuring task for ${senderLabel}: "${rawContent.slice(0, 80)}..."`);
     const structured = await this.structureTaskWithLlm(rawContent);
 
-    // 8. Create Draft Item on GitHub Project Board #4
-    const created = await this.projectBoardService.createDraftItem(structured.title, structured.body);
+    let finalBody = structured.body;
+    if (attachedImageUrl) {
+      finalBody += `\n\n### 🖼️ Прикріплене зображення\n![Прикріплене зображення](${attachedImageUrl})`;
+    }
+
+    // 9. Create Draft Item on GitHub Project Board #4
+    const created = await this.projectBoardService.createDraftItem(structured.title, finalBody);
     createdTasks.push({
       title: structured.title,
       itemId: created.itemId,
@@ -235,10 +280,9 @@ export class TelegramService implements OnModuleInit {
       url: created.url,
     });
 
-    // 9. Send concise confirmation back to user (ONLY the title and direct link to the created task)
+    // 10. Send concise confirmation back to user (ONLY the title and direct link to the created task)
     const confirmationText =
-      `📌 *${structured.title}*\n\n` +
-      `🔗 [Відкрити задачу](${created.url})`;
+      `📌 *${structured.title}*\n\n` + `🔗 [Відкрити задачу](${created.url})`;
 
     await this.sendMessage(chatId, confirmationText);
 
@@ -269,7 +313,9 @@ You MUST output ONLY a valid JSON object matching this structure:
     try {
       return await this.llmService.callAndParseJSON<StructuredTaskResult>(systemPrompt, userPrompt);
     } catch (err: any) {
-      this.logger.error(`Failed to structure task with LLM: ${err.message}. Using fallback formatting.`);
+      this.logger.error(
+        `Failed to structure task with LLM: ${err.message}. Using fallback formatting.`
+      );
       const firstLine = dictation.split('\n')[0].trim().slice(0, 80);
       return {
         title: firstLine || 'Нова задача',
@@ -304,7 +350,9 @@ You MUST output ONLY a valid JSON object matching this structure:
 
     if (!metaRes.ok) {
       const err = await metaRes.text();
-      this.logger.error(`Failed to get file metadata from Telegram (HTTP ${metaRes.status}): ${err}`);
+      this.logger.error(
+        `Failed to get file metadata from Telegram (HTTP ${metaRes.status}): ${err}`
+      );
       throw new Error(`Telegram getFile failed: HTTP ${metaRes.status}`);
     }
 
@@ -337,7 +385,9 @@ You MUST output ONLY a valid JSON object matching this structure:
   ): Promise<void> {
     const token = this.getBotToken();
     if (!token) {
-      this.logger.warn(`Neither BOARD_TELEGRAM_BOT_TOKEN nor TELEGRAM_BOT_TOKEN configured. Skipping sendMessage to chat ${chatId}.`);
+      this.logger.warn(
+        `Neither BOARD_TELEGRAM_BOT_TOKEN nor TELEGRAM_BOT_TOKEN configured. Skipping sendMessage to chat ${chatId}.`
+      );
       return;
     }
 
@@ -358,7 +408,9 @@ You MUST output ONLY a valid JSON object matching this structure:
 
       if (!res.ok) {
         const err = await res.text();
-        this.logger.error(`Failed to send Telegram message to chat ${chatId} (HTTP ${res.status}): ${err}`);
+        this.logger.error(
+          `Failed to send Telegram message to chat ${chatId} (HTTP ${res.status}): ${err}`
+        );
       } else {
         this.logger.log(`Telegram message sent successfully to chat ${chatId}`);
       }

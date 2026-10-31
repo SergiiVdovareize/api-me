@@ -61,9 +61,7 @@ const PROJECT_OPTION_ID = getProjectOptionId(REPO_NAME);
 
 function getSentryToken(): string {
   let token =
-    process.env.SENTRY_USER_TOKEN ||
-    process.env.SENTRY_API_TOKEN ||
-    process.env.SENTRY_AUTH_TOKEN;
+    process.env.SENTRY_USER_TOKEN || process.env.SENTRY_API_TOKEN || process.env.SENTRY_AUTH_TOKEN;
 
   // If token is org-level sntrys_ (only scoped for CI/sourcemaps), check if a user token sntryu_ exists in .env
   if (!token || token.startsWith('sntrys_')) {
@@ -103,9 +101,7 @@ async function fetchSentryIssues(): Promise<SentryIssue[]> {
     });
     if (listRes.ok) {
       const projects = (await listRes.json()) as any[];
-      const found = projects.find(
-        (p) => p.slug === targetProject || p.name === targetProject
-      );
+      const found = projects.find(p => p.slug === targetProject || p.name === targetProject);
       if (found?.organization?.slug) {
         org = found.organization.slug;
         console.log(`Auto-detected Sentry organization: "${org}" for project "${targetProject}"`);
@@ -138,7 +134,10 @@ async function fetchSentryIssues(): Promise<SentryIssue[]> {
       }
 
       const data = (await res.json()) as SentryIssue[];
-      return data;
+      // Filter out performance / informational spans (e.g. "Consecutive HTTP") to prevent noisy task creation
+      return data.filter(
+        i => i.level !== 'info' && !i.title.toLowerCase().includes('consecutive http')
+      );
     } catch (err: any) {
       lastError = err;
     }
@@ -300,7 +299,9 @@ function linkIssueToProjectBoard(issueUrl: string): boolean {
         '--single-select-option-id',
         PROJECT_OPTION_ID,
       ]);
-      console.log(`Successfully added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: ${REPO_NAME})`);
+      console.log(
+        `Successfully added issue to Project #${PROJECT_NUMBER} (Status: Todo, Project: ${REPO_NAME})`
+      );
       return true;
     }
   } catch (err: any) {
@@ -404,7 +405,9 @@ async function main() {
 
     if (existing) {
       if (existing.state.toUpperCase() === 'OPEN' && !boardUrls.has(existing.url)) {
-        console.log(`Sentry ID ${issue.id} has open issue #${existing.number} (${existing.url}) but is MISSING from Project #${PROJECT_NUMBER}. Linking now...`);
+        console.log(
+          `Sentry ID ${issue.id} has open issue #${existing.number} (${existing.url}) but is MISSING from Project #${PROJECT_NUMBER}. Linking now...`
+        );
         if (!dryRun) {
           const linked = linkIssueToProjectBoard(existing.url);
           if (linked) {
@@ -413,7 +416,9 @@ async function main() {
           }
         }
       } else {
-        console.log(`Skipping Sentry ID ${issue.id} (already tracked on GitHub and project board).`);
+        console.log(
+          `Skipping Sentry ID ${issue.id} (already tracked on GitHub and project board).`
+        );
       }
       continue;
     }
@@ -431,10 +436,12 @@ async function main() {
     newCount++;
   }
 
-  console.log(`Sync completed. Added ${newCount} new issue(s), reconciled ${reconciledCount} missing board item(s).`);
+  console.log(
+    `Sync completed. Added ${newCount} new issue(s), reconciled ${reconciledCount} missing board item(s).`
+  );
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err);
   process.exit(1);
 });
