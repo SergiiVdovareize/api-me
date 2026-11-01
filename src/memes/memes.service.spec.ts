@@ -175,4 +175,135 @@ describe('MemesService', () => {
       ]);
     });
   });
+
+  describe('isDirectVideoUrl', () => {
+    it('should identify direct video extensions', () => {
+      expect(service.isDirectVideoUrl('https://example.com/video.mp4')).toBe(true);
+      expect(service.isDirectVideoUrl('https://example.com/clip.webm')).toBe(true);
+      expect(service.isDirectVideoUrl('https://example.com/movie.mov')).toBe(true);
+      expect(service.isDirectVideoUrl('https://example.com/image.jpg')).toBe(false);
+      expect(service.isDirectVideoUrl('https://instagram.com/reel/C_abc123/')).toBe(false);
+      expect(service.isDirectVideoUrl('https://tiktok.com/@user/video/123')).toBe(false);
+      expect(service.isDirectVideoUrl('invalid-url')).toBe(false);
+    });
+  });
+
+  describe('streamVideo and streamFromDirectVideoUrl', () => {
+    it('should stream directly when url is a direct video file', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(16));
+          controller.close();
+        },
+      });
+
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        body: mockStream,
+        headers: new Headers({
+          'content-type': 'video/mp4',
+          'content-length': '16',
+        }),
+      } as any);
+
+      const result = await service.streamVideo('https://example.com/clip.mp4', 'custom.mp4');
+      expect(result).toBeDefined();
+    });
+
+    it('should extract social media URL via stealMeme and stream the resolved video', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(32));
+          controller.close();
+        },
+      });
+
+      mediasnap.steal.mockResolvedValue({
+        success: true,
+        title: 'Hilarious Cat Reel',
+        media: [
+          { url: 'https://cdn.instagram.com/raw_video.mp4', quality: '1080p', type: 'video' },
+        ],
+      });
+
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        body: mockStream,
+        headers: new Headers({
+          'content-type': 'video/mp4',
+          'content-length': '32',
+        }),
+      } as any);
+
+      const result = await service.streamVideo('https://instagram.com/reel/12345');
+      expect(result).toBeDefined();
+    });
+
+    it('should reject when stealMeme returns only image items', async () => {
+      mediasnap.steal.mockResolvedValue({
+        success: true,
+        title: 'Photo Post',
+        media: [{ url: 'https://cdn.instagram.com/photo.jpg', type: 'image' }],
+      });
+
+      await expect(service.streamVideo('https://instagram.com/p/12345')).rejects.toThrow(
+        'Only video content is supported. No video stream found for this URL.'
+      );
+    });
+
+    it('should throw NOT_FOUND exception when stealMeme returns unsuccessful result', async () => {
+      mediasnap.steal.mockResolvedValue({
+        success: false,
+        error: 'Video unavailable',
+        media: [],
+      });
+      snapsave.steal.mockResolvedValue({ success: false, media: [] });
+      highreach.steal.mockResolvedValue({ success: false, media: [] });
+      vidssave.steal.mockResolvedValue({ success: false, media: [] });
+
+      await expect(service.streamVideo('https://example.com/invalid-meme-url-999')).rejects.toThrow(
+        'could not download the media'
+      );
+    });
+
+    it('should throw exception when upstream fetch fails', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+      } as any);
+
+      await expect(service.streamVideo('https://example.com/forbidden.mp4')).rejects.toThrow(
+        'Failed to fetch video from source: Forbidden'
+      );
+    });
+
+    it('should throw BAD_REQUEST when upstream response is an image', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        body: new ReadableStream(),
+        headers: new Headers({
+          'content-type': 'image/jpeg',
+        }),
+      } as any);
+
+      await expect(service.streamVideo('https://example.com/not_a_video.mp4')).rejects.toThrow(
+        'Only video content is supported. Upstream returned an image.'
+      );
+    });
+
+    it('should throw exception when upstream response body is missing', async () => {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        body: null,
+        headers: new Headers({
+          'content-type': 'video/mp4',
+        }),
+      } as any);
+
+      await expect(service.streamVideo('https://example.com/empty.mp4')).rejects.toThrow(
+        'No response body received from media server'
+      );
+    });
+  });
 });
