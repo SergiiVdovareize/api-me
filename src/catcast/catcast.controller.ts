@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Post,
-  Options,
-  Body,
-  Req,
-  Res,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Options, Body, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { CatcastService } from './catcast.service';
 import { applyCatcastCorsHeaders } from './catcast.constants';

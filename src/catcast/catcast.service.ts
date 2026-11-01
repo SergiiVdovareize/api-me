@@ -22,7 +22,7 @@ export class CatcastService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly redisReader: RedisReader,
+    private readonly redisReader: RedisReader
   ) {}
 
   getAllowedKeys(): string[] {
@@ -49,7 +49,9 @@ export class CatcastService {
 
     const cleanKey = key.trim();
     if (!this.isKeyValid(cleanKey)) {
-      this.logger.warn(`Rejected invalid catcast access key attempt: "${cleanKey}" from IP: ${clientIp}`);
+      this.logger.warn(
+        `Rejected invalid catcast access key attempt: "${cleanKey}" from IP: ${clientIp}`
+      );
       throw new UnauthorizedException(CATCAST_CONSTANTS.ERROR_MESSAGES.INVALID_KEY);
     }
 

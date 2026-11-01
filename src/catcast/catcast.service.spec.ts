@@ -58,7 +58,9 @@ describe('CatcastService', () => {
   });
 
   it('should throw UnauthorizedException when key is not in allowed list', async () => {
-    await expect(service.verifyAccess('wrong-key', '1.2.3.4')).rejects.toThrow(UnauthorizedException);
+    await expect(service.verifyAccess('wrong-key', '1.2.3.4')).rejects.toThrow(
+      UnauthorizedException
+    );
   });
 
   it('should bind IP on first access with valid key', async () => {
@@ -78,7 +80,9 @@ describe('CatcastService', () => {
 
   it('should throw ForbiddenException (IP_MISMATCH) when key is used from different IP', async () => {
     await service.verifyAccess('secret-key-1', '1.2.3.4');
-    await expect(service.verifyAccess('secret-key-1', '5.6.7.8')).rejects.toThrow(ForbiddenException);
+    await expect(service.verifyAccess('secret-key-1', '5.6.7.8')).rejects.toThrow(
+      ForbiddenException
+    );
   });
 
   it('should handle IPv6-wrapped IPv4 addresses cleanly', async () => {
