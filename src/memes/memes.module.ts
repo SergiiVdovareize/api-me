@@ -23,5 +23,6 @@ import {
     VidssaveDownloader,
     VidssaveTokenParser,
   ],
+  exports: [MemesService],
 })
 export class MemesModule {}

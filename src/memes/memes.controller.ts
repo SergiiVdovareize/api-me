@@ -7,28 +7,11 @@ import { OriginGuard } from './origin.guard';
 export class MemesController {
   constructor(private readonly memesService: MemesService) {}
 
-  @Get('download/next')
-  async downloadNext(
-    @Query('url') url: string,
-    @Query('type') type: string,
-    @Query('quality') quality: string,
-    @Query('ext') ext: string,
-    @Query('title') title: string,
-    @Query('duration') duration: string
-  ): Promise<StreamableFile> {
-    return this.memesService.downloadFromNextdownloader({
-      url,
-      type,
-      quality,
-      ext,
-      title,
-      duration,
-    });
-  }
-
   @Get(':url')
-  async steal(@Param('url') url: string): Promise<object> {
-    const result = await this.memesService.stealMeme(url);
-    return result;
+  async steal(
+    @Param('url') url: string,
+    @Query('filename') filename?: string
+  ): Promise<StreamableFile> {
+    return this.memesService.streamVideo(url, filename);
   }
 }

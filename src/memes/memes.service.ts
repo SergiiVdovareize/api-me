@@ -1,4 +1,5 @@
-import { Injectable, StreamableFile } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, StreamableFile } from '@nestjs/common';
+import { Readable } from 'stream';
 import * as Sentry from '@sentry/nestjs';
 import { DownloadResult } from 'mediasnap';
 import {
@@ -140,5 +141,119 @@ export class MemesService {
       media: [],
       error: 'could not download the media',
     };
+  }
+
+  isDirectVideoUrl(url: string): boolean {
+    try {
+      const pathname = new URL(url).pathname.toLowerCase();
+      return /\.(mp4|webm|ogg|mov)$/i.test(pathname);
+    } catch {
+      return false;
+    }
+  }
+
+  async streamVideo(url: string, filename?: string): Promise<StreamableFile> {
+    let directUrl = url;
+    let title: string | undefined = undefined;
+
+    if (!this.isDirectVideoUrl(url)) {
+      const stealResult = await this.stealMeme(url);
+      if (!stealResult.success || !stealResult.media || stealResult.media.length === 0) {
+        throw new HttpException(
+          stealResult.error || 'Failed to extract video from the provided URL',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // Filter for video media items only (reject photos/images)
+      const videoItems = stealResult.media.filter(item => {
+        if (!item || !item.url) return false;
+        const type = item.type?.toLowerCase();
+        if (type === 'image' || type === 'photo') return false;
+        if (/\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(item.url)) return false;
+        return true;
+      });
+
+      if (videoItems.length === 0) {
+        throw new HttpException(
+          'Only video content is supported. No video stream found for this URL.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // The first video item is already the highest quality (sorted descending by sortMediaByQuality)
+      directUrl = videoItems[0].url;
+      title = stealResult.title || undefined;
+    }
+
+    return this.streamFromDirectVideoUrl(directUrl, filename, title);
+  }
+
+  async streamFromDirectVideoUrl(
+    directUrl: string,
+    filename?: string,
+    title?: string
+  ): Promise<StreamableFile> {
+    const response = await fetch(directUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+
+    if (!response.ok) {
+      throw new HttpException(
+        `Failed to fetch video from source: ${response.statusText}`,
+        response.status
+      );
+    }
+
+    const contentType = response.headers.get('content-type') || 'video/mp4';
+    if (contentType.startsWith('image/')) {
+      throw new HttpException(
+        'Only video content is supported. Upstream returned an image.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (!response.body) {
+      throw new HttpException(
+        'No response body received from media server',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+
+    const nodeReadable = Readable.fromWeb(response.body as any);
+    const contentLength = response.headers.get('content-length');
+
+    let ext = 'mp4';
+    const contentTypeBase = contentType.split(';')[0].trim().toLowerCase();
+    if (contentTypeBase === 'video/webm') ext = 'webm';
+    else if (contentTypeBase === 'video/quicktime') ext = 'mov';
+    else if (contentTypeBase === 'video/ogg') ext = 'ogg';
+
+    let finalFilename = filename;
+    if (!finalFilename) {
+      if (title) {
+        const sanitizedTitle = title
+          .replace(/[^a-zA-Z0-9_\u0400-\u04FF\s-]/g, '')
+          .trim()
+          .slice(0, 50)
+          .replace(/\s+/g, '_');
+        if (sanitizedTitle) {
+          finalFilename = `${sanitizedTitle}.${ext}`;
+        }
+      }
+      if (!finalFilename) {
+        const alphanumId = Math.random().toString(36).concat('00000000').slice(2, 10);
+        finalFilename = `video_${alphanumId}.${ext}`;
+      }
+    }
+
+    return new StreamableFile(nodeReadable, {
+      type: contentType,
+      disposition: `attachment; filename="${encodeURIComponent(finalFilename)}"`,
+      length: contentLength ? parseInt(contentLength, 10) : undefined,
+    });
   }
 }
