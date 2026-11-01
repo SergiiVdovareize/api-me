@@ -59,6 +59,7 @@ async function bootstrap() {
       'Accept',
       'X-Requested-With',
     ],
+    exposedHeaders: ['Content-Disposition', 'Content-Length'],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
   await app.listen(3000);

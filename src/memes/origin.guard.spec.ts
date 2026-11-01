@@ -68,6 +68,18 @@ describe('OriginGuard', () => {
     expect(guard.canActivate(mockContext as ExecutionContext)).toBe(true);
   });
 
+  it('should allow access if request method is OPTIONS', () => {
+    mockRequest.method = 'OPTIONS';
+
+    expect(guard.canActivate(mockContext as ExecutionContext)).toBe(true);
+  });
+
+  it('should allow access if referer header has path matching allowed origin host', () => {
+    mockRequest.headers.referer = 'https://snip.vdovareize.me/meme?id=123';
+
+    expect(guard.canActivate(mockContext as ExecutionContext)).toBe(true);
+  });
+
   it('should throw ForbiddenException if neither origin nor referer match allowed origin', () => {
     mockRequest.headers.origin = 'https://unauthorized-origin.com';
     mockRequest.headers.referer = 'https://unauthorized-referer.com';

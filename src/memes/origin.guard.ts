@@ -8,6 +8,12 @@ export class OriginGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
+
+    // Allow preflight OPTIONS requests to be handled by CORS middleware
+    if (request.method === 'OPTIONS') {
+      return true;
+    }
+
     const origin = request.headers.origin as string;
     const referer = request.headers.referer as string;
 
@@ -27,13 +33,23 @@ export class OriginGuard implements CanActivate {
       }
     }
 
-    const matchesAllowed = (val: string | undefined) => {
-      if (!val) return false;
-      const url = val.endsWith('/') ? val : `${val}/`;
-      return url === allowedOrigin;
+    const normalizeOrigin = (val: string | undefined): string | null => {
+      if (!val) return null;
+      try {
+        return new URL(val).origin.toLowerCase();
+      } catch {
+        return val.replace(/\/+$/, '').toLowerCase();
+      }
     };
 
-    if (matchesAllowed(origin) || matchesAllowed(referer)) {
+    const targetOrigin = normalizeOrigin(allowedOrigin);
+    const reqOrigin = normalizeOrigin(origin);
+    const reqReferer = normalizeOrigin(referer);
+
+    if (
+      (reqOrigin && reqOrigin === targetOrigin) ||
+      (reqReferer && reqReferer === targetOrigin)
+    ) {
       return true;
     }
 
