@@ -94,20 +94,7 @@ export class MemesService {
       }
     }
 
-    const isSyntheticTest = (() => {
-      try {
-        const hostname = new URL(url).hostname.toLowerCase();
-        return (
-          hostname === 'example.com' ||
-          hostname.endsWith('.example.com') ||
-          hostname === 'localhost' ||
-          hostname === '127.0.0.1' ||
-          url.includes('invalid-meme-url')
-        );
-      } catch {
-        return url.includes('example.com') || url.includes('invalid-meme-url');
-      }
-    })();
+    const isSyntheticTest = this.isSyntheticTest(url);
 
     if (!isSyntheticTest) {
       Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
@@ -143,7 +130,41 @@ export class MemesService {
     };
   }
 
+  isValidHttpUrl(url: string): boolean {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  isSyntheticTest(url: string): boolean {
+    if (!this.isValidHttpUrl(url)) {
+      return true;
+    }
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+      return (
+        hostname === 'example.com' ||
+        hostname.endsWith('.example.com') ||
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        url.includes('invalid-meme-url')
+      );
+    } catch {
+      return true;
+    }
+  }
+
   isDirectVideoUrl(url: string): boolean {
+    if (!this.isValidHttpUrl(url)) {
+      return false;
+    }
     try {
       const pathname = new URL(url).pathname.toLowerCase();
       return /\.(mp4|webm|ogg|mov)$/i.test(pathname);
@@ -153,6 +174,13 @@ export class MemesService {
   }
 
   async streamVideo(url: string, filename?: string): Promise<StreamableFile> {
+    if (!this.isValidHttpUrl(url)) {
+      throw new HttpException(
+        'Invalid URL. Please provide a valid HTTP or HTTPS video URL.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     let directUrl = url;
     let title: string | undefined = undefined;
 

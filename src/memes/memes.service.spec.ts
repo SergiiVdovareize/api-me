@@ -134,6 +134,41 @@ describe('MemesService', () => {
       expect(result.error).toBe('could not download the media');
       expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
+
+    it('should NOT capture message in Sentry for malformed or non-http URLs like "test"', async () => {
+      jest.clearAllMocks();
+      mediasnap.steal.mockRejectedValue(new Error('mediasnap failed'));
+      snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
+      highreach.steal.mockRejectedValue(new Error('highreach failed'));
+      vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+
+      const result = await service.stealMeme('test');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('could not download the media');
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isValidHttpUrl and isSyntheticTest', () => {
+    it('isValidHttpUrl should return true only for valid http and https URLs', () => {
+      expect(service.isValidHttpUrl('https://instagram.com/reel/123')).toBe(true);
+      expect(service.isValidHttpUrl('http://example.com')).toBe(true);
+      expect(service.isValidHttpUrl('test')).toBe(false);
+      expect(service.isValidHttpUrl('ftp://example.com')).toBe(false);
+      expect(service.isValidHttpUrl('')).toBe(false);
+      expect(service.isValidHttpUrl(null as any)).toBe(false);
+    });
+
+    it('isSyntheticTest should return true for invalid or synthetic test URLs and false for real target URLs', () => {
+      expect(service.isSyntheticTest('test')).toBe(true);
+      expect(service.isSyntheticTest('https://example.com/something')).toBe(true);
+      expect(service.isSyntheticTest('http://localhost:3000')).toBe(true);
+      expect(service.isSyntheticTest('http://127.0.0.1:8080')).toBe(true);
+      expect(service.isSyntheticTest('https://tiktok.com/invalid-meme-url-1')).toBe(true);
+      expect(service.isSyntheticTest('https://www.instagram.com/reel/Cx123')).toBe(false);
+      expect(service.isSyntheticTest('https://www.tiktok.com/@user/video/12345')).toBe(false);
+    });
   });
 
   describe('sortMediaByQuality', () => {
@@ -248,6 +283,12 @@ describe('MemesService', () => {
 
       await expect(service.streamVideo('https://instagram.com/p/12345')).rejects.toThrow(
         'Only video content is supported. No video stream found for this URL.'
+      );
+    });
+
+    it('should throw BAD_REQUEST when url is not a valid HTTP/HTTPS URL (e.g. "test")', async () => {
+      await expect(service.streamVideo('test')).rejects.toThrow(
+        'Invalid URL. Please provide a valid HTTP or HTTPS video URL.'
       );
     });
 
