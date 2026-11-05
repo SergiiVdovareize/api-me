@@ -23,4 +23,6 @@ export enum AnalyticsEvent {
   RepositoryClicked = 'RepositoryClicked',
   DemoClicked = 'DemoClicked',
   DateSuggestionsGenerated = 'DateSuggestionsGenerated',
+  ProxyRequest = 'ProxyRequest',
+  ProxyEntryPoint = 'ProxyEntryPoint',
 }

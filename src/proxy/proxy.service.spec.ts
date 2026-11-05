@@ -6,6 +6,8 @@ import { EventEmitter } from 'events';
 import * as https from 'https';
 import * as http from 'http';
 import { isAllowedProxyDomain, getDomainHeaders } from './proxy.constants';
+import { PosthogService } from '../posthog/posthog.service';
+import { AnalyticsEvent } from '../analytics/analytics.events';
 
 class MockUpstreamResponse extends EventEmitter {
   statusCode: number;
@@ -29,6 +31,7 @@ class MockUpstreamRequest extends EventEmitter {
 
 describe('ProxyService', () => {
   let service: ProxyService;
+  let mockPosthogService: { trackEvent: jest.Mock };
 
   const createMockResponse = () => {
     const res: any = {};
@@ -55,17 +58,32 @@ describe('ProxyService', () => {
 
   const createMockRequest = (
     urlParam?: string | null,
-    headers: Record<string, string | string[]> = {}
+    headers: Record<string, string | string[]> = {},
+    options: { method?: string; url?: string; ip?: string } = {}
   ) => {
     const emitter = new EventEmitter() as any;
     emitter.query = urlParam !== undefined ? { url: urlParam } : {};
     emitter.headers = headers;
+    emitter.method = options.method || 'GET';
+    emitter.url = options.url || '/proxy';
+    emitter.originalUrl = options.url || '/proxy';
+    emitter.ip = options.ip;
     return emitter as Request;
   };
 
   beforeEach(async () => {
+    mockPosthogService = {
+      trackEvent: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ProxyService],
+      providers: [
+        ProxyService,
+        {
+          provide: PosthogService,
+          useValue: mockPosthogService,
+        },
+      ],
     }).compile();
 
     service = module.get<ProxyService>(ProxyService);
@@ -477,6 +495,118 @@ describe('ProxyService', () => {
         referer: 'https://ashdi.vip/',
         origin: 'https://ashdi.vip',
       });
+    });
+  });
+
+  describe('PostHog tracking on proxy entry point', () => {
+    it('should record PostHog event on incoming proxy request with valid target URL and client info', async () => {
+      const targetUrl = 'https://ashdi.vip/hls/index.m3u8';
+      const req = createMockRequest(
+        targetUrl,
+        {
+          'user-agent': 'TestPlayer/1.0',
+          'referer': 'https://tizenflix.app/',
+          'origin': 'https://tizenflix.app',
+          'range': 'bytes=0-1024',
+          'x-forwarded-for': '203.0.113.195, 70.41.3.18',
+        },
+        { method: 'GET', url: '/proxy?url=' + encodeURIComponent(targetUrl) }
+      );
+      const res = createMockResponse();
+
+      const mockUpstreamReq = new MockUpstreamRequest();
+      const mockUpstreamRes = new MockUpstreamResponse(200);
+      jest.spyOn(https, 'request').mockImplementation((_opts: any, cb: any) => {
+        cb(mockUpstreamRes);
+        return mockUpstreamReq as any;
+      });
+
+      await service.handleProxy(req, res);
+
+      expect(mockPosthogService.trackEvent).toHaveBeenCalledTimes(1);
+      expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.ProxyEntryPoint,
+        expect.objectContaining({
+          distinctId: '203.0.113.195',
+          clientIp: '203.0.113.195',
+          targetUrl,
+          targetDomain: 'ashdi.vip',
+          method: 'GET',
+          path: '/proxy?url=' + encodeURIComponent(targetUrl),
+          userAgent: 'TestPlayer/1.0',
+          referer: 'https://tizenflix.app/',
+          origin: 'https://tizenflix.app',
+          range: 'bytes=0-1024',
+        })
+      );
+    });
+
+    it('should record PostHog event even if target url is missing or empty', async () => {
+      const req = createMockRequest(
+        undefined,
+        { 'user-agent': 'curl/7.68.0' },
+        { method: 'POST', url: '/api/proxy', ip: '198.51.100.5' }
+      );
+      const res = createMockResponse();
+
+      await expect(service.handleProxy(req, res)).rejects.toThrow(BadRequestException);
+
+      expect(mockPosthogService.trackEvent).toHaveBeenCalledTimes(1);
+      expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.ProxyEntryPoint,
+        expect.objectContaining({
+          distinctId: '198.51.100.5',
+          clientIp: '198.51.100.5',
+          targetUrl: undefined,
+          targetDomain: undefined,
+          method: 'POST',
+          path: '/api/proxy',
+          userAgent: 'curl/7.68.0',
+        })
+      );
+    });
+
+    it('should record PostHog event even if target url is malformed', async () => {
+      const req = createMockRequest('not-a-valid-url', {}, { method: 'GET', url: '/proxy' });
+      const res = createMockResponse();
+
+      await expect(service.handleProxy(req, res)).rejects.toThrow(BadRequestException);
+
+      expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.ProxyEntryPoint,
+        expect.objectContaining({
+          targetUrl: 'not-a-valid-url',
+          targetDomain: undefined,
+          method: 'GET',
+          path: '/proxy',
+        })
+      );
+    });
+
+    it('should gracefully handle error if posthogService.trackEvent throws without breaking request', async () => {
+      mockPosthogService.trackEvent.mockImplementation(() => {
+        throw new Error('PostHog network failure');
+      });
+
+      const req = createMockRequest('https://ashdi.vip/manifest.mpd');
+      const res = createMockResponse();
+
+      const mockUpstreamReq = new MockUpstreamRequest();
+      const mockUpstreamRes = new MockUpstreamResponse(200);
+      jest.spyOn(https, 'request').mockImplementation((_opts: any, cb: any) => {
+        cb(mockUpstreamRes);
+        return mockUpstreamReq as any;
+      });
+
+      await expect(service.handleProxy(req, res)).resolves.not.toThrow();
+    });
+
+    it('should function normally when PosthogService is not provided', async () => {
+      const standaloneService = new ProxyService();
+      const req = createMockRequest('not-a-url');
+      const res = createMockResponse();
+
+      await expect(standaloneService.handleProxy(req, res)).rejects.toThrow(BadRequestException);
     });
   });
 });
