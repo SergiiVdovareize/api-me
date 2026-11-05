@@ -66,7 +66,7 @@ export class ProxyService {
         req.ip ||
         req.socket?.remoteAddress;
 
-      this.posthogService?.trackEvent(AnalyticsEvent.ProxyEntryPoint, {
+      this.posthogService?.trackEvent(AnalyticsEvent.ProxyRequest, {
         distinctId: clientIp || 'anonymous',
         targetUrl,
         targetDomain,

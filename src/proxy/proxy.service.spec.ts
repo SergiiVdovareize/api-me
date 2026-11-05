@@ -525,7 +525,7 @@ describe('ProxyService', () => {
 
       expect(mockPosthogService.trackEvent).toHaveBeenCalledTimes(1);
       expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
-        AnalyticsEvent.ProxyEntryPoint,
+        AnalyticsEvent.ProxyRequest,
         expect.objectContaining({
           distinctId: '203.0.113.195',
           clientIp: '203.0.113.195',
@@ -553,7 +553,7 @@ describe('ProxyService', () => {
 
       expect(mockPosthogService.trackEvent).toHaveBeenCalledTimes(1);
       expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
-        AnalyticsEvent.ProxyEntryPoint,
+        AnalyticsEvent.ProxyRequest,
         expect.objectContaining({
           distinctId: '198.51.100.5',
           clientIp: '198.51.100.5',
@@ -573,7 +573,7 @@ describe('ProxyService', () => {
       await expect(service.handleProxy(req, res)).rejects.toThrow(BadRequestException);
 
       expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
-        AnalyticsEvent.ProxyEntryPoint,
+        AnalyticsEvent.ProxyRequest,
         expect.objectContaining({
           targetUrl: 'not-a-valid-url',
           targetDomain: undefined,
