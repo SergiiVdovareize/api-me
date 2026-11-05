@@ -505,9 +505,9 @@ describe('ProxyService', () => {
         targetUrl,
         {
           'user-agent': 'TestPlayer/1.0',
-          'referer': 'https://tizenflix.app/',
-          'origin': 'https://tizenflix.app',
-          'range': 'bytes=0-1024',
+          referer: 'https://tizenflix.app/',
+          origin: 'https://tizenflix.app',
+          range: 'bytes=0-1024',
           'x-forwarded-for': '203.0.113.195, 70.41.3.18',
         },
         { method: 'GET', url: '/proxy?url=' + encodeURIComponent(targetUrl) }
@@ -516,12 +516,14 @@ describe('ProxyService', () => {
 
       const mockUpstreamReq = new MockUpstreamRequest();
       const mockUpstreamRes = new MockUpstreamResponse(200);
-      jest.spyOn(https, 'request').mockImplementation((_opts: any, cb: any) => {
-        cb(mockUpstreamRes);
+      jest.spyOn(https, 'request').mockImplementation((_url: any, _opts: any, callback: any) => {
+        callback(mockUpstreamRes);
         return mockUpstreamReq as any;
       });
 
-      await service.handleProxy(req, res);
+      const handlePromise = service.handleProxy(req, res);
+      mockUpstreamRes.emit('end');
+      await handlePromise;
 
       expect(mockPosthogService.trackEvent).toHaveBeenCalledTimes(1);
       expect(mockPosthogService.trackEvent).toHaveBeenCalledWith(
@@ -593,12 +595,14 @@ describe('ProxyService', () => {
 
       const mockUpstreamReq = new MockUpstreamRequest();
       const mockUpstreamRes = new MockUpstreamResponse(200);
-      jest.spyOn(https, 'request').mockImplementation((_opts: any, cb: any) => {
-        cb(mockUpstreamRes);
+      jest.spyOn(https, 'request').mockImplementation((_url: any, _opts: any, callback: any) => {
+        callback(mockUpstreamRes);
         return mockUpstreamReq as any;
       });
 
-      await expect(service.handleProxy(req, res)).resolves.not.toThrow();
+      const handlePromise = service.handleProxy(req, res);
+      mockUpstreamRes.emit('end');
+      await expect(handlePromise).resolves.not.toThrow();
     });
 
     it('should function normally when PosthogService is not provided', async () => {
