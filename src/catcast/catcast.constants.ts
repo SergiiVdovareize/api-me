@@ -1,15 +1,25 @@
 import { Response } from 'express';
 
 export const CATCAST_CONSTANTS = {
-  REDIS_KEY_PREFIX: 'catcast:auth:ip:',
+  REDIS_KEY_PREFIX: 'catcast:auth:device:',
+  LEGACY_REDIS_KEY_PREFIX: 'catcast:auth:ip:',
   DEFAULT_TTL: 60 * 60 * 24 * 30, // 30 days
   CONFIG_KEYS: {
     ACCESS_KEYS: 'CATCAST_ACCESS_KEYS',
   },
   ERROR_MESSAGES: {
-    KEY_REQUIRED: 'Ключ доступу є обов’язковим',
-    INVALID_KEY: 'Недійсний ключ доступу',
-    IP_MISMATCH: 'Ключ прив’язано до іншої IP-адреси. Одночасний доступ з різних адрес заборонено.',
+    KEY_REQUIRED: 'Access key is required',
+    DEVICE_ID_REQUIRED: 'Device ID is required',
+    INVALID_KEY: 'Invalid access key',
+    DEVICE_MISMATCH: 'Key is already bound to another device. Access denied.',
+    IP_MISMATCH: 'Key is already bound to another IP address. Access denied.',
+  },
+  ERROR_CODES: {
+    KEY_REQUIRED: 'KEY_REQUIRED',
+    DEVICE_ID_REQUIRED: 'DEVICE_ID_REQUIRED',
+    INVALID_KEY: 'INVALID_KEY',
+    DEVICE_MISMATCH: 'DEVICE_MISMATCH',
+    IP_MISMATCH: 'IP_MISMATCH',
   },
 };
 

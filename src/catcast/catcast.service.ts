@@ -9,16 +9,31 @@ import { ConfigService } from '@nestjs/config';
 import { RedisReader } from '../common/helpers/redisReader';
 import { CATCAST_CONSTANTS } from './catcast.constants';
 
+export interface VerifyAccessDto {
+  key?: string;
+  deviceId?: string;
+  platform?: string;
+}
+
 export interface VerifyAccessResult {
   success: boolean;
-  boundIp: string;
+  boundDeviceId: string;
   isNewBinding: boolean;
+  platform: string;
+}
+
+export interface CatcastBindingRecord {
+  boundDeviceId: string;
+  platform: string;
+  lastIp: string;
+  activatedAt: string;
+  lastUsedAt: string;
 }
 
 @Injectable()
 export class CatcastService {
   private readonly logger = new Logger(CatcastService.name);
-  private readonly inMemoryBindings = new Map<string, { boundIp: string; boundAt: number }>();
+  private readonly inMemoryBindings = new Map<string, CatcastBindingRecord>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -36,59 +51,110 @@ export class CatcastService {
   isKeyValid(key: string): boolean {
     const allowed = this.getAllowedKeys();
     if (allowed.length === 0) {
-      // If no keys configured in env, allow keys matching format or fallback
       return false;
     }
     return allowed.includes(key);
   }
 
-  async verifyAccess(key: string | undefined, clientIp: string): Promise<VerifyAccessResult> {
+  async verifyAccess(dto: VerifyAccessDto | undefined, clientIp: string): Promise<VerifyAccessResult> {
+    const key = dto?.key;
     if (!key || typeof key !== 'string' || key.trim() === '') {
-      throw new BadRequestException(CATCAST_CONSTANTS.ERROR_MESSAGES.KEY_REQUIRED);
+      throw new BadRequestException({
+        success: false,
+        error: CATCAST_CONSTANTS.ERROR_CODES.KEY_REQUIRED,
+        message: CATCAST_CONSTANTS.ERROR_MESSAGES.KEY_REQUIRED,
+      });
+    }
+
+    const deviceId = dto?.deviceId;
+    if (!deviceId || typeof deviceId !== 'string' || deviceId.trim() === '') {
+      throw new BadRequestException({
+        success: false,
+        error: CATCAST_CONSTANTS.ERROR_CODES.DEVICE_ID_REQUIRED,
+        message: CATCAST_CONSTANTS.ERROR_MESSAGES.DEVICE_ID_REQUIRED,
+      });
     }
 
     const cleanKey = key.trim();
+    const cleanDeviceId = deviceId.trim();
+    const platform = (dto?.platform || 'web').trim();
+
     if (!this.isKeyValid(cleanKey)) {
       this.logger.warn(
-        `Rejected invalid catcast access key attempt: "${cleanKey}" from IP: ${clientIp}`
+        `Rejected invalid catcast access key attempt: "${cleanKey}" from device "${cleanDeviceId}" (IP: ${clientIp})`
       );
-      throw new UnauthorizedException(CATCAST_CONSTANTS.ERROR_MESSAGES.INVALID_KEY);
+      throw new UnauthorizedException({
+        success: false,
+        error: CATCAST_CONSTANTS.ERROR_CODES.INVALID_KEY,
+        message: CATCAST_CONSTANTS.ERROR_MESSAGES.INVALID_KEY,
+      });
     }
 
     const normalizedIp = this.normalizeIp(clientIp);
-    const existingBoundIp = await this.getBoundIp(cleanKey);
+    const existingRecord = await this.getBindingRecord(cleanKey);
 
-    if (!existingBoundIp) {
-      // First time this key is used: bind to client's IP
-      await this.setBoundIp(cleanKey, normalizedIp);
-      this.logger.log(`Bound catcast key "${cleanKey.slice(0, 4)}***" to IP: ${normalizedIp}`);
+    // First-time activation or unbound key (including seamless migration from legacy IP binding)
+    if (!existingRecord || !existingRecord.boundDeviceId) {
+      const now = new Date().toISOString();
+      const newRecord: CatcastBindingRecord = {
+        boundDeviceId: cleanDeviceId,
+        platform,
+        lastIp: normalizedIp,
+        activatedAt: now,
+        lastUsedAt: now,
+      };
+
+      await this.setBindingRecord(cleanKey, newRecord);
+      this.logger.log(
+        `Bound catcast key "${cleanKey.slice(0, 4)}***" to device "${cleanDeviceId}" (${platform})`
+      );
+
       return {
         success: true,
-        boundIp: normalizedIp,
+        boundDeviceId: cleanDeviceId,
         isNewBinding: true,
+        platform,
       };
     }
 
-    if (existingBoundIp !== normalizedIp) {
+    // Check device binding
+    if (existingRecord.boundDeviceId !== cleanDeviceId) {
       this.logger.warn(
-        `Catcast key IP mismatch for key "${cleanKey.slice(0, 4)}***": bound to ${existingBoundIp}, incoming: ${normalizedIp}`
+        `Catcast key device mismatch for key "${cleanKey.slice(0, 4)}***": bound to "${existingRecord.boundDeviceId}", incoming: "${cleanDeviceId}"`
       );
-      throw new ForbiddenException(CATCAST_CONSTANTS.ERROR_MESSAGES.IP_MISMATCH);
+      throw new ForbiddenException({
+        success: false,
+        error: CATCAST_CONSTANTS.ERROR_CODES.DEVICE_MISMATCH,
+        message: CATCAST_CONSTANTS.ERROR_MESSAGES.DEVICE_MISMATCH,
+      });
     }
+
+    // Successful access from the same bound device - update metadata
+    existingRecord.lastUsedAt = new Date().toISOString();
+    existingRecord.lastIp = normalizedIp;
+    if (dto?.platform && dto.platform.trim() !== existingRecord.platform) {
+      existingRecord.platform = dto.platform.trim();
+    }
+    await this.setBindingRecord(cleanKey, existingRecord);
 
     return {
       success: true,
-      boundIp: normalizedIp,
+      boundDeviceId: existingRecord.boundDeviceId,
       isNewBinding: false,
+      platform: existingRecord.platform,
     };
   }
 
   async resetBinding(key: string): Promise<boolean> {
     const cleanKey = key.trim();
     this.inMemoryBindings.delete(cleanKey);
-    const redisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${cleanKey}`;
+    const deviceRedisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${cleanKey}`;
+    const legacyRedisKey = `${CATCAST_CONSTANTS.LEGACY_REDIS_KEY_PREFIX}${cleanKey}`;
     try {
-      await this.redisReader.delete(redisKey);
+      await Promise.all([
+        this.redisReader.delete(deviceRedisKey),
+        this.redisReader.delete(legacyRedisKey),
+      ]);
       return true;
     } catch {
       return false;
@@ -111,28 +177,58 @@ export class CatcastService {
     return clean;
   }
 
-  private async getBoundIp(key: string): Promise<string | null> {
-    const redisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${key}`;
+  private async getBindingRecord(key: string): Promise<CatcastBindingRecord | null> {
+    const deviceRedisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${key}`;
     try {
-      const cached = await this.redisReader.read(redisKey);
-      if (typeof cached === 'string' && cached.length > 0) {
-        return cached;
+      const cached = await this.redisReader.read(deviceRedisKey);
+      if (cached) {
+        if (typeof cached === 'object' && cached.boundDeviceId) {
+          return cached as CatcastBindingRecord;
+        }
+        if (typeof cached === 'string') {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.boundDeviceId) {
+              return parsed as CatcastBindingRecord;
+            }
+          } catch (_) {}
+        }
       }
     } catch (err: any) {
-      this.logger.warn(`Failed reading bound IP from redis: ${err?.message}`);
+      this.logger.warn(`Failed reading bound device from redis: ${err?.message}`);
     }
 
     const inMemory = this.inMemoryBindings.get(key);
-    return inMemory ? inMemory.boundIp : null;
+    if (inMemory) return inMemory;
+
+    // Check legacy Redis IP key for backward compatibility migration
+    const legacyRedisKey = `${CATCAST_CONSTANTS.LEGACY_REDIS_KEY_PREFIX}${key}`;
+    try {
+      const legacyCached = await this.redisReader.read(legacyRedisKey);
+      if (typeof legacyCached === 'string' && legacyCached.length > 0) {
+        return {
+          boundDeviceId: '',
+          platform: 'web',
+          lastIp: legacyCached,
+          activatedAt: new Date().toISOString(),
+          lastUsedAt: new Date().toISOString(),
+        };
+      }
+    } catch (_) {}
+
+    return null;
   }
 
-  private async setBoundIp(key: string, ip: string): Promise<void> {
-    this.inMemoryBindings.set(key, { boundIp: ip, boundAt: Date.now() });
-    const redisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${key}`;
+  private async setBindingRecord(key: string, record: CatcastBindingRecord): Promise<void> {
+    this.inMemoryBindings.set(key, record);
+    const deviceRedisKey = `${CATCAST_CONSTANTS.REDIS_KEY_PREFIX}${key}`;
+    const legacyRedisKey = `${CATCAST_CONSTANTS.LEGACY_REDIS_KEY_PREFIX}${key}`;
     try {
-      await this.redisReader.write(redisKey, ip, CATCAST_CONSTANTS.DEFAULT_TTL);
+      await this.redisReader.write(deviceRedisKey, record, CATCAST_CONSTANTS.DEFAULT_TTL);
+      // Clean up legacy IP key if present
+      await this.redisReader.delete(legacyRedisKey);
     } catch (err: any) {
-      this.logger.warn(`Failed writing bound IP to redis: ${err?.message}`);
+      this.logger.warn(`Failed writing bound device to redis: ${err?.message}`);
     }
   }
 }

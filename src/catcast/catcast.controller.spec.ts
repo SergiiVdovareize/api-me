@@ -12,8 +12,9 @@ describe('CatcastController', () => {
     service = {
       verifyAccess: jest.fn().mockResolvedValue({
         success: true,
-        boundIp: '1.2.3.4',
+        boundDeviceId: 'android_9774d56d682e549c',
         isNewBinding: false,
+        platform: 'android_tv',
       }),
     };
 
@@ -42,7 +43,7 @@ describe('CatcastController', () => {
     expect(res.end).toHaveBeenCalled();
   });
 
-  it('should verify access with client IP from cf-connecting-ip header', async () => {
+  it('should verify access with client IP from cf-connecting-ip header and DTO body', async () => {
     const req = {
       headers: {
         'cf-connecting-ip': '203.0.113.195',
@@ -53,12 +54,19 @@ describe('CatcastController', () => {
       setHeader: jest.fn(),
     } as unknown as Response;
 
-    const result = await controller.verify({ key: 'test-key' }, req, res);
-    expect(service.verifyAccess).toHaveBeenCalledWith('test-key', '203.0.113.195');
+    const dto = {
+      key: 'test-key',
+      deviceId: 'android_9774d56d682e549c',
+      platform: 'android_tv',
+    };
+
+    const result = await controller.verify(dto, req, res);
+    expect(service.verifyAccess).toHaveBeenCalledWith(dto, '203.0.113.195');
     expect(result).toEqual({
       success: true,
-      boundIp: '1.2.3.4',
+      boundDeviceId: 'android_9774d56d682e549c',
       isNewBinding: false,
+      platform: 'android_tv',
     });
     expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
   });
@@ -74,7 +82,12 @@ describe('CatcastController', () => {
       setHeader: jest.fn(),
     } as unknown as Response;
 
-    await controller.verify({ key: 'test-key' }, req, res);
-    expect(service.verifyAccess).toHaveBeenCalledWith('test-key', '198.51.100.4');
+    const dto = {
+      key: 'test-key',
+      deviceId: 'web_uuid_123',
+    };
+
+    await controller.verify(dto, req, res);
+    expect(service.verifyAccess).toHaveBeenCalledWith(dto, '198.51.100.4');
   });
 });

@@ -53,49 +53,100 @@ describe('CatcastService', () => {
   });
 
   it('should throw BadRequestException when key is missing or empty', async () => {
-    await expect(service.verifyAccess('', '1.2.3.4')).rejects.toThrow(BadRequestException);
-    await expect(service.verifyAccess(undefined, '1.2.3.4')).rejects.toThrow(BadRequestException);
+    await expect(
+      service.verifyAccess({ key: '', deviceId: 'dev-1' }, '1.2.3.4')
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.verifyAccess({ key: undefined, deviceId: 'dev-1' }, '1.2.3.4')
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should throw BadRequestException when deviceId is missing or empty', async () => {
+    await expect(
+      service.verifyAccess({ key: 'secret-key-1', deviceId: '' }, '1.2.3.4')
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.verifyAccess({ key: 'secret-key-1', deviceId: undefined }, '1.2.3.4')
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('should throw UnauthorizedException when key is not in allowed list', async () => {
-    await expect(service.verifyAccess('wrong-key', '1.2.3.4')).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(
+      service.verifyAccess({ key: 'wrong-key', deviceId: 'dev-1' }, '1.2.3.4')
+    ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should bind IP on first access with valid key', async () => {
-    const result = await service.verifyAccess('secret-key-1', '1.2.3.4');
+  it('should bind deviceId and platform on first access with valid key', async () => {
+    const result = await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c', platform: 'android_tv' },
+      '1.2.3.4'
+    );
     expect(result.success).toBe(true);
-    expect(result.boundIp).toBe('1.2.3.4');
+    expect(result.boundDeviceId).toBe('android_9774d56d682e549c');
     expect(result.isNewBinding).toBe(true);
+    expect(result.platform).toBe('android_tv');
   });
 
-  it('should allow access from the same IP on subsequent calls', async () => {
-    await service.verifyAccess('secret-key-1', '1.2.3.4');
-    const result2 = await service.verifyAccess('secret-key-1', '1.2.3.4');
-    expect(result2.success).toBe(true);
-    expect(result2.boundIp).toBe('1.2.3.4');
-    expect(result2.isNewBinding).toBe(false);
-  });
-
-  it('should throw ForbiddenException (IP_MISMATCH) when key is used from different IP', async () => {
-    await service.verifyAccess('secret-key-1', '1.2.3.4');
-    await expect(service.verifyAccess('secret-key-1', '5.6.7.8')).rejects.toThrow(
-      ForbiddenException
+  it('should allow access from the same deviceId on subsequent calls regardless of IP changes', async () => {
+    await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c', platform: 'android_tv' },
+      '1.2.3.4'
     );
+    // Same device from different mobile / Wi-Fi IP
+    const result2 = await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c', platform: 'android_tv' },
+      '5.6.7.8'
+    );
+    expect(result2.success).toBe(true);
+    expect(result2.boundDeviceId).toBe('android_9774d56d682e549c');
+    expect(result2.isNewBinding).toBe(false);
+    expect(result2.platform).toBe('android_tv');
   });
 
-  it('should handle IPv6-wrapped IPv4 addresses cleanly', async () => {
-    const result = await service.verifyAccess('secret-key-2', '::ffff:192.168.1.100');
-    expect(result.boundIp).toBe('192.168.1.100');
+  it('should throw ForbiddenException (DEVICE_MISMATCH) when key is used from different deviceId', async () => {
+    await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c' },
+      '1.2.3.4'
+    );
+    await expect(
+      service.verifyAccess(
+        { key: 'secret-key-1', deviceId: 'web_550e8400-e29b-41d4-a716-446655440000' },
+        '1.2.3.4'
+      )
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should migrate legacy IP binding seamlessly on first device request', async () => {
+    // Simulate legacy redis entry stored under old catcast:auth:ip: prefix
+    redisStorage.set('catcast:auth:ip:secret-key-1', '1.2.3.4');
+
+    const result = await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'tizen_duid_abc', platform: 'tizen_tv' },
+      '1.2.3.4'
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.boundDeviceId).toBe('tizen_duid_abc');
+    expect(result.isNewBinding).toBe(true);
+    expect(result.platform).toBe('tizen_tv');
+    // Legacy IP key was cleaned up
+    expect(redisStorage.has('catcast:auth:ip:secret-key-1')).toBe(false);
   });
 
   it('should reset binding correctly', async () => {
-    await service.verifyAccess('secret-key-1', '1.2.3.4');
+    await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_device_1' },
+      '1.2.3.4'
+    );
     await service.resetBinding('secret-key-1');
-    // Now another IP can bind
-    const result = await service.verifyAccess('secret-key-1', '9.9.9.9');
+
+    // Now another device can bind
+    const result = await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_device_2' },
+      '9.9.9.9'
+    );
     expect(result.success).toBe(true);
-    expect(result.boundIp).toBe('9.9.9.9');
+    expect(result.boundDeviceId).toBe('android_device_2');
+    expect(result.isNewBinding).toBe(true);
   });
 });

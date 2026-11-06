@@ -1,6 +1,6 @@
 import { Controller, Post, Options, Body, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { CatcastService } from './catcast.service';
+import { CatcastService, VerifyAccessDto } from './catcast.service';
 import { applyCatcastCorsHeaders } from './catcast.constants';
 
 @Controller('auth/catcast')
@@ -16,7 +16,7 @@ export class CatcastController {
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   async verify(
-    @Body() body: { key?: string },
+    @Body() body: VerifyAccessDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ) {
@@ -32,7 +32,7 @@ export class CatcastController {
       req.ip ||
       '127.0.0.1';
 
-    const result = await this.catcastService.verifyAccess(body?.key, rawIp);
+    const result = await this.catcastService.verifyAccess(body, rawIp);
     return result;
   }
 }
