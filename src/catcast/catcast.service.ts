@@ -17,7 +17,9 @@ export interface VerifyAccessDto {
 
 export interface VerifyAccessResult {
   success: boolean;
+  latestVersion: string;
   boundDeviceId: string;
+  boundIp?: string;
   isNewBinding: boolean;
   platform: string;
 }
@@ -40,6 +42,13 @@ export class CatcastService {
     private readonly redisReader: RedisReader
   ) {}
 
+  getLatestVersion(): string {
+    return (
+      this.configService.get<string>(CATCAST_CONSTANTS.CONFIG_KEYS.LATEST_CLIENT_VERSION) ||
+      CATCAST_CONSTANTS.DEFAULT_LATEST_VERSION
+    );
+  }
+
   getAllowedKeys(): string[] {
     const rawKeys = this.configService.get<string>(CATCAST_CONSTANTS.CONFIG_KEYS.ACCESS_KEYS) || '';
     return rawKeys
@@ -56,11 +65,16 @@ export class CatcastService {
     return allowed.includes(key);
   }
 
-  async verifyAccess(dto: VerifyAccessDto | undefined, clientIp: string): Promise<VerifyAccessResult> {
+  async verifyAccess(
+    dto: VerifyAccessDto | undefined,
+    clientIp: string
+  ): Promise<VerifyAccessResult> {
+    const latestVersion = this.getLatestVersion();
     const key = dto?.key;
     if (!key || typeof key !== 'string' || key.trim() === '') {
       throw new BadRequestException({
         success: false,
+        latestVersion,
         error: CATCAST_CONSTANTS.ERROR_CODES.KEY_REQUIRED,
         message: CATCAST_CONSTANTS.ERROR_MESSAGES.KEY_REQUIRED,
       });
@@ -70,6 +84,7 @@ export class CatcastService {
     if (!deviceId || typeof deviceId !== 'string' || deviceId.trim() === '') {
       throw new BadRequestException({
         success: false,
+        latestVersion,
         error: CATCAST_CONSTANTS.ERROR_CODES.DEVICE_ID_REQUIRED,
         message: CATCAST_CONSTANTS.ERROR_MESSAGES.DEVICE_ID_REQUIRED,
       });
@@ -85,6 +100,7 @@ export class CatcastService {
       );
       throw new UnauthorizedException({
         success: false,
+        latestVersion,
         error: CATCAST_CONSTANTS.ERROR_CODES.INVALID_KEY,
         message: CATCAST_CONSTANTS.ERROR_MESSAGES.INVALID_KEY,
       });
@@ -111,7 +127,9 @@ export class CatcastService {
 
       return {
         success: true,
+        latestVersion,
         boundDeviceId: cleanDeviceId,
+        boundIp: normalizedIp,
         isNewBinding: true,
         platform,
       };
@@ -124,6 +142,7 @@ export class CatcastService {
       );
       throw new ForbiddenException({
         success: false,
+        latestVersion,
         error: CATCAST_CONSTANTS.ERROR_CODES.DEVICE_MISMATCH,
         message: CATCAST_CONSTANTS.ERROR_MESSAGES.DEVICE_MISMATCH,
       });
@@ -139,7 +158,9 @@ export class CatcastService {
 
     return {
       success: true,
+      latestVersion,
       boundDeviceId: existingRecord.boundDeviceId,
+      boundIp: normalizedIp,
       isNewBinding: false,
       platform: existingRecord.platform,
     };
@@ -191,7 +212,9 @@ export class CatcastService {
             if (parsed && parsed.boundDeviceId) {
               return parsed as CatcastBindingRecord;
             }
-          } catch (_) {}
+          } catch {
+            // ignore JSON parse error
+          }
         }
       }
     } catch (err: any) {
@@ -214,7 +237,9 @@ export class CatcastService {
           lastUsedAt: new Date().toISOString(),
         };
       }
-    } catch (_) {}
+    } catch {
+      // ignore legacy read error
+    }
 
     return null;
   }

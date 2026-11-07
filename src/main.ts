@@ -1,7 +1,6 @@
 import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { env } from 'process';
 import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 
@@ -17,6 +16,14 @@ async function bootstrap() {
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     })
   );
+
+  // Attach latest client version headers to all API responses (Zero-Request Version Check)
+  app.use((_req, res, next) => {
+    const version = process.env.LATEST_CLIENT_VERSION || '1.8.12';
+    res.setHeader('X-App-Version', version);
+    res.setHeader('X-CatCast-Version', version);
+    next();
+  });
 
   // Payload limits: 10mb specifically for routes requiring media uploads (e.g. /alphadate), 1mb for standard APIs
   app.use((req, res, next) => {
@@ -59,7 +66,7 @@ async function bootstrap() {
       'Accept',
       'X-Requested-With',
     ],
-    exposedHeaders: ['Content-Disposition', 'Content-Length'],
+    exposedHeaders: ['Content-Disposition', 'Content-Length', 'X-App-Version', 'X-CatCast-Version'],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
   await app.listen(3000);

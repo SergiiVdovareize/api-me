@@ -10,8 +10,10 @@ describe('CatcastController', () => {
 
   beforeEach(async () => {
     service = {
+      getLatestVersion: jest.fn().mockReturnValue('1.8.12'),
       verifyAccess: jest.fn().mockResolvedValue({
         success: true,
+        latestVersion: '1.8.12',
         boundDeviceId: 'android_9774d56d682e549c',
         isNewBinding: false,
         platform: 'android_tv',
@@ -30,7 +32,7 @@ describe('CatcastController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should handle OPTIONS verify with CORS headers', () => {
+  it('should handle OPTIONS verify with CORS and version headers', () => {
     const res = {
       setHeader: jest.fn(),
       status: jest.fn().mockReturnThis(),
@@ -39,6 +41,12 @@ describe('CatcastController', () => {
 
     controller.handleOptionsVerify(res);
     expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Access-Control-Expose-Headers',
+      'X-App-Version, X-CatCast-Version'
+    );
+    expect(res.setHeader).toHaveBeenCalledWith('X-App-Version', '1.8.12');
+    expect(res.setHeader).toHaveBeenCalledWith('X-CatCast-Version', '1.8.12');
     expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
     expect(res.end).toHaveBeenCalled();
   });
@@ -64,11 +72,18 @@ describe('CatcastController', () => {
     expect(service.verifyAccess).toHaveBeenCalledWith(dto, '203.0.113.195');
     expect(result).toEqual({
       success: true,
+      latestVersion: '1.8.12',
       boundDeviceId: 'android_9774d56d682e549c',
       isNewBinding: false,
       platform: 'android_tv',
     });
     expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Access-Control-Expose-Headers',
+      'X-App-Version, X-CatCast-Version'
+    );
+    expect(res.setHeader).toHaveBeenCalledWith('X-App-Version', '1.8.12');
+    expect(res.setHeader).toHaveBeenCalledWith('X-CatCast-Version', '1.8.12');
   });
 
   it('should fallback to x-forwarded-for or socket.remoteAddress', async () => {

@@ -4,9 +4,16 @@ export const CATCAST_CONSTANTS = {
   REDIS_KEY_PREFIX: 'catcast:auth:device:',
   LEGACY_REDIS_KEY_PREFIX: 'catcast:auth:ip:',
   DEFAULT_TTL: 60 * 60 * 24 * 30, // 30 days
+  DEFAULT_LATEST_VERSION: '1.8.12',
   CONFIG_KEYS: {
     ACCESS_KEYS: 'CATCAST_ACCESS_KEYS',
+    LATEST_CLIENT_VERSION: 'LATEST_CLIENT_VERSION',
   },
+  HEADERS: {
+    APP_VERSION: 'X-App-Version',
+    CATCAST_VERSION: 'X-CatCast-Version',
+  },
+  EXPOSED_HEADERS: 'X-App-Version, X-CatCast-Version',
   ERROR_MESSAGES: {
     KEY_REQUIRED: 'Access key is required',
     DEVICE_ID_REQUIRED: 'Device ID is required',
@@ -23,8 +30,13 @@ export const CATCAST_CONSTANTS = {
   },
 };
 
-export function applyCatcastCorsHeaders(res: Response): void {
+export function applyCatcastCorsHeaders(res: Response, version?: string): void {
+  const latestVersion =
+    version || process.env.LATEST_CLIENT_VERSION || CATCAST_CONSTANTS.DEFAULT_LATEST_VERSION;
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Expose-Headers', CATCAST_CONSTANTS.EXPOSED_HEADERS);
+  res.setHeader(CATCAST_CONSTANTS.HEADERS.APP_VERSION, latestVersion);
+  res.setHeader(CATCAST_CONSTANTS.HEADERS.CATCAST_VERSION, latestVersion);
 }

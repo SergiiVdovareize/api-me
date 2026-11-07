@@ -9,7 +9,8 @@ export class CatcastController {
 
   @Options('verify')
   handleOptionsVerify(@Res() res: Response): void {
-    applyCatcastCorsHeaders(res);
+    const version = this.catcastService.getLatestVersion();
+    applyCatcastCorsHeaders(res, version);
     res.status(HttpStatus.OK).end();
   }
 
@@ -20,7 +21,8 @@ export class CatcastController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ) {
-    applyCatcastCorsHeaders(res);
+    const version = this.catcastService.getLatestVersion();
+    applyCatcastCorsHeaders(res, version);
 
     // Extract client IP (handling reverse proxies like Cloudflare or Vercel)
     const forwarded = req.headers['x-forwarded-for'];
