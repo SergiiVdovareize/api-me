@@ -56,7 +56,10 @@ export class CatcastService {
     return allowed.includes(key);
   }
 
-  async verifyAccess(dto: VerifyAccessDto | undefined, clientIp: string): Promise<VerifyAccessResult> {
+  async verifyAccess(
+    dto: VerifyAccessDto | undefined,
+    clientIp: string
+  ): Promise<VerifyAccessResult> {
     const key = dto?.key;
     if (!key || typeof key !== 'string' || key.trim() === '') {
       throw new BadRequestException({
@@ -191,7 +194,9 @@ export class CatcastService {
             if (parsed && parsed.boundDeviceId) {
               return parsed as CatcastBindingRecord;
             }
-          } catch (_) {}
+          } catch {
+            // ignore JSON parse error
+          }
         }
       }
     } catch (err: any) {
@@ -214,7 +219,9 @@ export class CatcastService {
           lastUsedAt: new Date().toISOString(),
         };
       }
-    } catch (_) {}
+    } catch {
+      // ignore legacy read error
+    }
 
     return null;
   }

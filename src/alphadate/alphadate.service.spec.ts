@@ -865,7 +865,8 @@ describe('AlphadateService', () => {
       expect(result.suggestions[0].title).toBe('Аквапарк');
       expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
         expect.stringContaining('AlphaDate'),
-        expect.stringContaining('«А»')
+        expect.stringContaining('«А»'),
+        expect.objectContaining({ temperature: 0.4 })
       );
     });
 
@@ -892,7 +893,8 @@ describe('AlphadateService', () => {
       expect(result.suggestions[0].title).toBe('Bowling');
       expect(mockLlmService.callAndParseJSON).toHaveBeenCalledWith(
         expect.stringContaining('Alphabet Dating'),
-        expect.stringContaining('"B"')
+        expect.stringContaining('"B"'),
+        expect.objectContaining({ temperature: 0.4 })
       );
     });
 
@@ -1041,7 +1043,9 @@ describe('AlphadateService', () => {
         success: true,
         letter: 'Б',
         lang: 'uk',
-        suggestions: [{ title: 'Боулінг', description: '', category: 'active', estimatedCost: 'moderate' }],
+        suggestions: [
+          { title: 'Боулінг', description: '', category: 'active', estimatedCost: 'moderate' },
+        ],
       };
       mockRedisReader.read.mockResolvedValue(cached);
 

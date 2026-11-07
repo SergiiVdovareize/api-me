@@ -53,9 +53,9 @@ describe('CatcastService', () => {
   });
 
   it('should throw BadRequestException when key is missing or empty', async () => {
-    await expect(
-      service.verifyAccess({ key: '', deviceId: 'dev-1' }, '1.2.3.4')
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.verifyAccess({ key: '', deviceId: 'dev-1' }, '1.2.3.4')).rejects.toThrow(
+      BadRequestException
+    );
     await expect(
       service.verifyAccess({ key: undefined, deviceId: 'dev-1' }, '1.2.3.4')
     ).rejects.toThrow(BadRequestException);
@@ -134,10 +134,7 @@ describe('CatcastService', () => {
   });
 
   it('should reset binding correctly', async () => {
-    await service.verifyAccess(
-      { key: 'secret-key-1', deviceId: 'android_device_1' },
-      '1.2.3.4'
-    );
+    await service.verifyAccess({ key: 'secret-key-1', deviceId: 'android_device_1' }, '1.2.3.4');
     await service.resetBinding('secret-key-1');
 
     // Now another device can bind

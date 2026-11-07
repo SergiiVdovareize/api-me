@@ -996,7 +996,9 @@ export class AlphadateService {
         normalizedLetter,
         detectedLang
       );
-      data = await this.llmService.callAndParseJSON<any>(systemPrompt, userPrompt);
+      data = await this.llmService.callAndParseJSON<any>(systemPrompt, userPrompt, {
+        temperature: 0.4,
+      });
     } catch (error: any) {
       const errMsg = (error?.message || '').toLowerCase();
       this.logger.error(

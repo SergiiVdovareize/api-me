@@ -1,7 +1,6 @@
 import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { env } from 'process';
 import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 

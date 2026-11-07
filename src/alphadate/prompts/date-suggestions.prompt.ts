@@ -59,7 +59,7 @@ export function buildDateSuggestionsPrompt(
   letter: string,
   lang = 'uk',
   date: Date = new Date(),
-  count = 5
+  count = 4
 ): { systemPrompt: string; userPrompt: string } {
   const isEn = lang.toLowerCase().startsWith('en');
   const seasonInfo = getCurrentSeasonInfo(date);
@@ -75,42 +75,56 @@ Game rules: the couple receives a letter of the English alphabet, and they must 
 TASK
 Generate ${count} date options for the letter "${letter}". Current season: ${seasonInfo.seasonEn}.
 
+CRITERIA FOR A VALID DATE
+A date is a shared activity, venue, or event for a couple lasting 1–3 hours: going somewhere together, tasting something, playing a game, or experiencing something new.
+
 OPTION TITLE
-1. Title is an established, widely known concept: a type of venue, event, or activity that exists as a standalone category (cinema, quest, cafe, karaoke, camping, zoo, sunset).
-2. Strictly: 1 word. Only if there is no established single-word name, 2 words are allowed, maximum 3 (e.g. "sunset watching").
-3. No invented, descriptive, or compound names: not "movie under a blanket on the balcony", but "cinema"; not "cooking course for cabbage dishes", but "culinary workshop"; not "bookstore with watermelon", but "bookstore".
-4. First word starts with the letter "${letter}". Real, common words understood by everyone.
-5. Title contains only words: no parentheses, quotation marks, dashes, colons, or prepositional phrases like "in the park", "with coffee". Put details into the description.
-6. First choose the most obvious and popular options for this letter. Originality is not the goal: familiar and realistic is better than strange.
+1. Title is an established, widely known concept: a type of venue, event, or activity (e.g. Cinema, Jazz club, Bowling, Wine tasting, Tea ceremony).
+2. Strictly 1–2 words (maximum 3 only if it is an established natural phrase like "horseback riding" or "craft beer tasting").
+3. First word MUST start with the letter "${letter}". Real, common words understood by everyone.
+4. Title contains only words: no parentheses, quotation marks, dashes, colons, or prepositional phrases.
+
+STRICT PROHIBITIONS
+5. NO abstract concepts, emotions, or virtues (e.g. not "Happiness", "Generosity", "Virtue", "Something new").
+6. NO standalone physical objects or utensils (e.g. not "Business card", "Phone case", "Notebook", "Fork").
+7. NO professions, agents, or persons as title (e.g. not "Wooden master", not "Videoblogger", not "Chef"). Name the activity or venue instead (e.g. "Woodworking workshop", "Jazz bar").
+8. NO artificial adjective prefixes to force the letter: do NOT add "English...", "Home...", "Autumn..." just to match the letter (e.g. not "English park", not "Home picnic").
+9. NO invented or distorted words: words must be real standard vocabulary understood by everyone.
+10. NO household chores or daily routine (e.g. not watering houseplants, cleaning, laundry).
+11. NO bizarre or fabricated venues (e.g. not "business card store", not "black market").
 
 AVOIDING DUPLICATES
-7. Each option must be a substantially different idea. Prohibited to provide multiple options sharing the same root or theme (jewelry workshop, jewelry store, jewelry accessories). Choose one.
-8. Diverse formats and budgets: free and paid, active and calm, at home and outdoors.
+12. Each option must be a substantially different idea. Prohibited to provide multiple options sharing the same root or theme (e.g. not both "Jewelry shop" and "Jewelry workshop"). Choose one.
+13. Diverse formats: active and calm, venues and outdoor activities.
 
 SEASONALITY
-9. All options must be doable right now, in the season "${seasonInfo.seasonEn}". Do not suggest seasonal activities of another season (in winter — "beach", in summer — "sledding").
-10. All-season options (cinema, cafe, museum) can always be suggested.
-11. Mention the season in the description only where truly relevant (e.g. for a walk or picnic). In most descriptions, it should not appear.
-12. If there are fewer appropriate options than ${count}, return fewer. Do not invent.
+14. All options must be doable right now, in the season "${seasonInfo.seasonEn}". Do not suggest seasonal activities of another season (in winter — "beach", in summer — "ice skating").
+15. All-season options (cinema, cafe, museum, jazz bar) can always be suggested.
+16. If there are fewer appropriate options than ${count}, return fewer. Do not invent.
 
 DESCRIPTION
-13. Description: 1–2 simple sentences, up to 160 characters, ending with a period.
-14. Describe a realistic scenario: what exactly the couple does on the date. Only real, natural things anyone can do. No weird food and drink combinations, no fabricated events, no involving third parties (sellers, waiters, strangers).
-15. Do not add a separate "specific detail" just for the sake of a detail. If it doesn't follow naturally, omit it.
-16. Do not use clichés: "romantic atmosphere", "unforgettable impressions", "unforgettable evening", "special closeness".
-17. Address the couple politely in the plural ("Visit", "Try", "Arrange"). No words specifying gender or relationship type (boyfriend, girlfriend, partner). Neutral: "the two of you", "together".
-18. Do not start all descriptions the same way and do not repeat the title verbatim at the beginning.
+17. Description: 1–2 simple sentences, up to 160 characters, ending with a period.
+18. Describe a realistic scenario: what exactly the couple does on the date. Only real, natural things anyone can do. No weird food combinations, no involving third parties (sellers, waiters, strangers).
+19. Do not use clichés: "romantic atmosphere", "unforgettable impressions", "unforgettable evening", "special closeness".
+20. Address the couple politely in the plural ("Visit", "Try", "Arrange"). Neutral: "the two of you", "together".
 
 DIFFICULT LETTERS
-For letters with few words (X, Q, Z, etc.), return as many genuine options as realistically exist. Do not invent or substitute letters. For impossible letters, return an empty array [].
+For letters with few words (X, Q, Z, etc.), return only genuinely realistic options (even if it's only 1–2 options or an empty array []). Never hallucinate or substitute letters. For impossible letters, return [].
 
-QUALITY EXAMPLE (letter "B", autumn)
+QUALITY EXAMPLES
+Letter "B" (autumn):
 [
-  {"title": "Bowling", "description": "Play a few games of bowling together and have a casual talk afterwards."},
-  {"title": "Bakery", "description": "Stop by a cozy local bakery to try fresh pastries and warm coffee."},
-  {"title": "Billiards", "description": "Book a table for a relaxed game of pool and cheer each other on."}
+  {"title": "Bowling", "description": "Play a few games of bowling together and cheer each other on."},
+  {"title": "Bakery", "description": "Stop by a cozy local bakery to try fresh warm pastries and coffee."},
+  {"title": "Billiards", "description": "Book a pool table for a relaxed game and a casual conversation."}
 ]
-This example demonstrates only the style and simplicity level. Do not copy it if the letter is different.
+
+Letter "T" (autumn):
+[
+  {"title": "Tea ceremony", "description": "Visit an authentic tea house and sample rare tea varieties together."},
+  {"title": "Theater", "description": "Get tickets for an evening play and discuss your impressions over dessert."},
+  {"title": "Trampoline park", "description": "Spend an active hour jumping on trampolines and having fun together."}
+]
 
 RESPONSE FORMAT
 Return ONLY a JSON array of objects, without explanations or markdown:
@@ -128,48 +142,63 @@ Capitalize the first word of each title, keep the rest lowercase except proper n
 
   const userPrompt = `Ти допомагаєш парам обирати ідеї для побачень у грі «Побачення на літеру».
 
-Правила гри: парі випадає літера українського алфавіту, і вони мають організувати побачення, тематика якого починається на цю літеру. Приклади: А — аквапарк, І — іподром, З — захід сонця.
+Правила гри: парі випадає літера українського алфавіту, і вони мають організувати побачення, тематика якого починається на цю літеру. Приклади: А — аквапарк, Д — джаз-клуб, Ч — чайна церемонія.
 
 ЗАВДАННЯ
 Згенеруй ${count} варіантів побачення на літеру «${letter}». Поточна пора року: ${seasonInfo.seasonUk}.
 
+СУТЬ ПОБАЧЕННЯ
+Побачення — це завжди спільна діяльність або подія для двох тривалістю 1–3 години: кудись піти (заклад, локація), разом щось скуштувати, зіграти або отримати новий цікавий досвід.
+
 НАЗВА ВАРІАНТА
-1. Назва — це усталене, загальновідоме поняття: тип закладу, події чи заняття, яке існує як окрема категорія (кіно, квест, кав'ярня, караоке, кемпінг, зоопарк, захід сонця).
-2. Суворо: 1 слово. Лише якщо усталеної однослівної назви немає, допускається 2 слова, максимум 3 (наприклад, «захід сонця»).
-3. Заборонено вигадані, описові чи складені назви: не «кіно під ковдрою на балконі», а «кіно»; не «кулінарний курс капустяних страв», а «кулінарний майстер-клас»; не «книжковий магазин з кавуном», а «книгарня».
-4. Перше слово починається на літеру «${letter}». Слова справжні, поширені, зрозумілі кожному.
-5. Назва містить лише слова: без дужок, лапок, тире, двокрапок, прийменникових конструкцій на кшталт «в парку», «з кавою». Деталі пиши в опис.
-6. Спершу обирай найочевидніші й найпопулярніші варіанти на цю літеру. Оригінальність не ціль: краще знайоме й реальне, ніж дивне.
+1. Назва — це усталене, загальновідоме поняття: тип закладу, події чи активності (кіно, джаз-бар, чайна церемонія, боулінг, картинґ, дегустація вин).
+2. Суворо 1–2 слова (максимум 3 тільки якщо це усталене природне словосполучення на зразок «катання на конях» чи «дегустація крафтового пива»).
+3. Перше слово ОБОВ'ЯЗКОВО починається на літеру «${letter}». Слова справжні, поширені, зрозумілі кожному.
+4. Назва містить лише слова: без дужок, лапок, тире, двокрапок, прийменникових хвостів на кшталт «в парку», «з кавою». Деталі пиши в опис.
+
+СУВОРІ ЗАБОРОНИ
+5. ЗАБОРОНЕНО абстрактні поняття, емоції, чесноти чи риси характеру (жодних «щастя», «щедрість», «чеснота», «романтика», «щось нове»).
+6. ЗАБОРОНЕНО окремі фізичні предмети, канцелярію чи побутові речі (жодних «візитка», «чехол», «виделка», «зошит»).
+7. ЗАБОРОНЕНО людей, посади або професії як назву (жодних «Дерев'яний майстер», «Відеоблогер», «Кухар», «Офіціант»). Називай локацію або активність (наприклад: «Джаз-вечір», «Дегустація вин», «Дартс»).
+8. ЗАБОРОНЕНО штучне підганяння слів під літеру за допомогою прикметників: не ліпи «Український...», «Хатній...», «Домашній...», «Осінній...» (жодних «Український парк», «Хатній пікнік»).
+9. ЗАБОРОНЕНО вигадані або спотворені слова: вживай виключно справжні, загальновідомі слова (жодних штучних неологізмів на зразок «чехардкування» чи «догінки»).
+10. ЗАБОРОНЕНО побутову хатню рутину (догляд за кімнатними рослинами, прибирання, прання).
+11. ЗАБОРОНЕНО абсурдні або неіснуючі формати (жодних «магазин візиток», не називати звичайний базар «чорним ринком»).
 
 УНИКНЕННЯ ПОВТОРІВ
-7. Кожен варіант суттєво інша ідея. Заборонено кілька варіантів зі спільним коренем чи темою (ювелірна майстерня, ювелірний магазин, ювелірні прикраси). Обери один.
-8. Варіанти різні за форматом і бюджетом: безкоштовні й платні, активні й спокійні, вдома й просто неба.
+12. Кожен варіант — суттєво інша ідея. Заборонено кілька варіантів зі спільним коренем чи темою (наприклад, не можна одночасно «ювелірний магазин» і «ювелірна майстерня»).
+13. Різноманітні формати: активні й спокійні, у закладі та просто неба.
 
 СЕЗОННІСТЬ
-9. Усі варіанти мають бути здійсненними саме зараз, у пору року «${seasonInfo.seasonUk}». Не пропонуй сезонне заняття іншої пори (узимку — «пляж», влітку — «санчата»).
-10. Усесезонні варіанти (кіно, кафе, музей) можна пропонувати завжди.
-11. Слово про пору року в описі згадуй лише там, де воно справді важливе (наприклад, для прогулянки чи пікніка). У більшості описів його не має бути.
-12. Якщо доречних варіантів менше, ніж ${count}, поверни менше. Не вигадуй.
+14. Усі варіанти мають бути здійсненними саме зараз, у пору року «${seasonInfo.seasonUk}». Не пропонуй сезонні заняття іншої пори (узимку — «пляж», влітку — «ковзанка»).
+15. Усесезонні варіанти (кіно, театр, кав'ярня, музей, боулінг) можна пропонувати завжди.
+16. Якщо доречних варіантів менше, ніж ${count}, поверни менше. Не вигадуй штучного.
 
 ОПИС
-13. Опис: 1–2 прості речення, до 160 символів, обов'язково з крапкою в кінці.
-14. Опиши реалістичний сценарій: що саме пара робить на побаченні. Лише реальні, природні речі, які будь-хто може зробити. Без дивних поєднань їжі й напоїв, без вигаданих подій, без залучення сторонніх людей (продавців, офіціантів, незнайомців).
-15. Не додавай окрему «конкретну деталь» заради деталі. Якщо вона не випливає природно, не додавай.
-16. Не використовуй кліше: «романтична атмосфера», «неповторні враження», «незабутній вечір», «особлива близькість».
-17. Звертайся до пари на «ви» у множині («Відвідайте», «Спробуйте», «Влаштуйте»). Без слів, що вказують на стать чи тип стосунків (друг, подруга, коханий, дівчина, хлопець). Нейтрально: «вдвох», «разом».
-18. Не починай усі описи однаково й не повторюй назву дослівно на початку.
+17. Опис: 1–2 прості речення, до 160 символів, обов'язково з крапкою в кінці.
+18. Опиши реалістичний сценарій: що саме пара робить на побаченні. Лише реальні, природні речі. Без дивних поєднань їжі й напоїв, без вигаданих подій, без залучення сторонніх людей.
+19. Не використовуй кліше: «романтична атмосфера», «неповторні враження», «незабутній вечір», «особлива близькість».
+20. Звертайся до пари на «ви» у множині («Завітайте», «Спробуйте», «Влаштуйте»). Без слів, що вказують на стать чи тип стосунків. Нейтрально: «вдвох», «разом».
 
-ЯКЩО ЛІТЕРА СКЛАДНА
-Для літер, на які мало слів (Й, Ї, Щ, Ц, Ф, Є, Ґ, Ю, Я тощо), поверни стільки справжніх варіантів, скільки реально існує. Не вигадуй і не підтягуй слова на іншу літеру. Для «Ь» повертай порожній масив.
+СКЛАДНІ ЛІТЕРИ
+Для літер, на які мало слів (Й, Ї, Щ, Ц, Ф, Є, Ґ, Ю тощо), повертай тільки СПРАВЖНІ й адекватні варіанти, навіть якщо це всього 1–2 варіанти або порожній масив []. Краще повернути 1 гарний варіант або [], ніж абсурд. Для «Ь» повертай [].
 
-ПРИКЛАД ЯКОСТІ (літера «К», осінь)
+ПРИКЛАДИ ЯКОСТІ
+Літера «К» (осінь):
 [
-  {"title": "Кіно", "description": "Оберіть сеанс у кінотеатрі й після фільму обговоріть його за чашкою чаю."},
-  {"title": "Квест", "description": "Пройдіть квест-кімнату вдвох: разом шукайте підказки й розгадуйте загадки на час."},
-  {"title": "Караоке", "description": "Забронюйте кабінку в караоке-барі й заспівайте по черзі улюблені пісні."},
-  {"title": "Кав'ярня", "description": "Знайдіть затишну кав'ярню, замовте десерти на двох і просто поспілкуйтесь без поспіху."}
+  {"title": "Кінотеатр", "description": "Оберіть сеанс у кінотеатрі й після фільму обговоріть враження за чашкою кави."},
+  {"title": "Квест-кімната", "description": "Пройдіть захопливий квест удвох: шукайте підказки й розгадуйте таємниці на час."},
+  {"title": "Караоке-бар", "description": "Забронюйте окрему кабінку й заспівайте разом улюблені пісні."},
+  {"title": "Кав'ярня", "description": "Знайдіть затишне місце, замовте десерти й поспілкуйтесь без поспіху."}
 ]
-Цей приклад показує лише стиль і рівень простоти. Не копіюй його, якщо літера інша.
+
+Літера «Д» (осінь):
+[
+  {"title": "Джаз-клуб", "description": "Завітайте на вечір живої музики, замовте коктейлі та послухайте джазових виконавців."},
+  {"title": "Дегустація вин", "description": "Відвідайте винний льох або бар, де соммельє познайомить вас із новими сортами вин."},
+  {"title": "Драматичний театр", "description": "Купіть квитки на вечірню виставу й насолодіться грою акторів на сцені."},
+  {"title": "Дартс", "description": "Забронюйте доріжку для гри в дартс у пабі та влаштуйте дружнє змагання удвох."}
+]
 
 ФОРМАТ ВІДПОВІДІ
 Поверни ТІЛЬКИ JSON-масив об'єктів, без пояснень і без markdown:
