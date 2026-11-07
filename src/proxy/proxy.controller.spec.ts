@@ -54,10 +54,8 @@ describe('ProxyController', () => {
       expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Headers', '*');
       expect(res.setHeader).toHaveBeenCalledWith(
         'Access-Control-Expose-Headers',
-        'Content-Length, Content-Range, Accept-Ranges, X-App-Version, X-CatCast-Version'
+        'Content-Length, Content-Range, Accept-Ranges'
       );
-      expect(res.setHeader).toHaveBeenCalledWith('X-App-Version', '1.8.12');
-      expect(res.setHeader).toHaveBeenCalledWith('X-CatCast-Version', '1.8.12');
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.end).toHaveBeenCalled();
     });
@@ -65,10 +63,7 @@ describe('ProxyController', () => {
 
   describe('getProxy', () => {
     it('should call proxyService.handleProxy with req and res on POST', async () => {
-      const req = {
-        method: 'POST',
-        query: { url: 'https://club.uakino.fun/search/' },
-      } as unknown as Request;
+      const req = { method: 'POST', query: { url: 'https://club.uakino.fun/search/' } } as unknown as Request;
       const res = {} as unknown as Response;
 
       await controller.postProxy(req, res);

@@ -10,11 +10,8 @@ export const PROXY_CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': '*',
-  'Access-Control-Expose-Headers':
-    'Content-Length, Content-Range, Accept-Ranges, X-App-Version, X-CatCast-Version',
+  'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
 } as const;
-
-export const DEFAULT_CLIENT_VERSION = '1.8.12';
 
 export const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
@@ -103,11 +100,8 @@ export function getDomainHeaders(hostname: string): { referer: string; origin: s
   };
 }
 
-export function applyProxyCorsHeaders(res: Response, version?: string): void {
+export function applyProxyCorsHeaders(res: Response): void {
   for (const [header, value] of Object.entries(PROXY_CORS_HEADERS)) {
     res.setHeader(header, value);
   }
-  const clientVersion = version || process.env.LATEST_CLIENT_VERSION || DEFAULT_CLIENT_VERSION;
-  res.setHeader('X-App-Version', clientVersion);
-  res.setHeader('X-CatCast-Version', clientVersion);
 }
