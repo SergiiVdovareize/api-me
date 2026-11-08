@@ -894,6 +894,5 @@ describe('TelegramService', () => {
         expect(awaiting).toBe(false);
       });
     });
-    });
   });
 });
