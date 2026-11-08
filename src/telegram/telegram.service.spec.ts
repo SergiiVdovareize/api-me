@@ -740,5 +740,160 @@ describe('TelegramService', () => {
         );
       });
     });
+
+    describe('Interactive Menu & Callback Queries', () => {
+      it('should send main menu when /menu is received', async () => {
+        const update: TelegramUpdate = {
+          update_id: 300,
+          message: {
+            message_id: 300,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/menu',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Головне меню'),
+          })
+        );
+      });
+
+      it('should reject callback query for unauthorized user', async () => {
+        const update: TelegramUpdate = {
+          update_id: 301,
+          callback_query: {
+            id: 'cb_999',
+            from: { id: 99999, is_bot: false, first_name: 'Intruder' },
+            message: {
+              message_id: 50,
+              date: 1720000000,
+              chat: { id: 99999, type: 'private' },
+            },
+            data: 'menu_main',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({
+            body: expect.stringContaining('Доступ заборонено'),
+          })
+        );
+      });
+
+      it('should switch to CatCast submenu on menu_catcast callback', async () => {
+        const update: TelegramUpdate = {
+          update_id: 302,
+          callback_query: {
+            id: 'cb_1',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 51,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'menu_catcast',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/editMessageText'),
+          expect.objectContaining({
+            body: expect.stringContaining('CatCast Management'),
+          })
+        );
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.any(Object)
+        );
+      });
+
+      it('should handle quick key creation via catcast_quick_create callback', async () => {
+        const update: TelegramUpdate = {
+          update_id: 303,
+          callback_query: {
+            id: 'cb_2',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 52,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'catcast_quick_create',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.createKey).toHaveBeenCalled();
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Ключ CatCast успішно створено'),
+          })
+        );
+      });
+
+      it('should handle action_task_create callback to set awaiting task state', async () => {
+        const update: TelegramUpdate = {
+          update_id: 304,
+          callback_query: {
+            id: 'cb_3',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 53,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'action_task_create',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        const awaiting = await service.isAwaitingTask(12345);
+        expect(awaiting).toBe(true);
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Надішліть опис задачі'),
+          })
+        );
+      });
+
+      it('should handle action_task_cancel callback to clear awaiting task state', async () => {
+        await service.setAwaitingTask(12345);
+
+        const update: TelegramUpdate = {
+          update_id: 305,
+          callback_query: {
+            id: 'cb_4',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 54,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'action_task_cancel',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        const awaiting = await service.isAwaitingTask(12345);
+        expect(awaiting).toBe(false);
+      });
+    });
+    });
   });
 });

@@ -49,6 +49,20 @@ describe('CatcastService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('generateAccessKey', () => {
+    it('should generate a 16-character lowercase alphanumeric string without prefixes', () => {
+      const key = service.generateAccessKey();
+      expect(key).toHaveLength(16);
+      expect(key).toMatch(/^[a-z0-9]{16}$/);
+    });
+
+    it('should support custom length', () => {
+      const key = service.generateAccessKey(20);
+      expect(key).toHaveLength(20);
+      expect(key).toMatch(/^[a-z0-9]{20}$/);
+    });
+  });
+
   it('should parse allowed keys from config', () => {
     expect(service.getAllowedKeys()).toEqual(['secret-key-1', 'secret-key-2']);
   });
@@ -221,6 +235,7 @@ describe('CatcastService', () => {
         key: 'db-key-1',
         isActive: true,
         boundDeviceId: null,
+        createdAt: new Date(),
       });
       mockPrisma.catcastKey.update.mockResolvedValue({
         id: 1,
@@ -236,6 +251,34 @@ describe('CatcastService', () => {
       expect(res.success).toBe(true);
       expect(res.isNewBinding).toBe(true);
       expect(res.boundDeviceId).toBe('android_dev_1');
+    });
+
+    it('should throw UnauthorizedException and deactivate key if activated after 24 hours', async () => {
+      const expiredCreatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      mockPrisma.catcastKey.findUnique.mockResolvedValue({
+        id: 99,
+        key: 'expiredkey123456',
+        isActive: true,
+        boundDeviceId: null,
+        createdAt: expiredCreatedAt,
+      });
+      mockPrisma.catcastKey.update.mockResolvedValue({
+        id: 99,
+        key: 'expiredkey123456',
+        isActive: false,
+      });
+
+      await expect(
+        dbService.verifyAccess(
+          { key: 'expiredkey123456', deviceId: 'dev-1', platform: 'android_tv' },
+          '1.2.3.4'
+        )
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(mockPrisma.catcastKey.update).toHaveBeenCalledWith({
+        where: { id: 99 },
+        data: { isActive: false },
+      });
     });
 
     it('should reject blocked key from database', async () => {
@@ -266,7 +309,12 @@ describe('CatcastService', () => {
       expect(res.key).toBe('db-key-5');
       expect(mockPrisma.catcastKey.update).toHaveBeenCalledWith({
         where: { id: 5 },
-        data: { boundDeviceId: null, platform: null, lastIp: null },
+        data: {
+          boundDeviceId: null,
+          platform: null,
+          lastIp: null,
+          createdAt: expect.any(Date),
+        },
       });
     });
 

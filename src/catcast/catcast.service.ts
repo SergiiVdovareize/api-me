@@ -45,12 +45,13 @@ export class CatcastService {
   ) {}
 
   /**
-   * Generates a random, human-readable access key (e.g. catcast-7k9p2m4x)
+   * Generates a completely random, lowercase alphanumeric access key (e.g. 7k9p2m4x8ab3c5d6)
+   * without prefixes, special characters, uppercase letters, or spaces.
    */
-  generateAccessKey(): string {
-    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-    let key = 'catcast-';
-    for (let i = 0; i < 8; i++) {
+  generateAccessKey(length = 16): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let key = '';
+    for (let i = 0; i < length; i++) {
       key += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return key;
@@ -63,7 +64,7 @@ export class CatcastService {
     if (!this.prisma) {
       throw new Error('Database service unavailable');
     }
-    const key = (customKey || this.generateAccessKey()).trim();
+    const key = (customKey || this.generateAccessKey()).trim().toLowerCase();
     const record = await this.prisma.catcastKey.create({
       data: {
         key,
@@ -107,6 +108,7 @@ export class CatcastService {
           boundDeviceId: null,
           platform: null,
           lastIp: null,
+          createdAt: new Date(), // Reset 24-hour activation window for re-pairing
         },
       });
     }
@@ -246,6 +248,25 @@ export class CatcastService {
 
       // First-time binding for this key in DB
       if (!dbKey.boundDeviceId) {
+        // Enforce 24-hour activation window from key creation
+        const createdAtTime = new Date(dbKey.createdAt).getTime();
+        const maxActivationWindowMs = 24 * 60 * 60 * 1000; // 24 hours
+        if (now.getTime() - createdAtTime > maxActivationWindowMs) {
+          this.logger.warn(
+            `CatCast key "${cleanKey.slice(0, 4)}***" activation window expired: created at ${dbKey.createdAt.toISOString()}, attempted at ${now.toISOString()} (> 24 hours)`
+          );
+          await this.prisma.catcastKey.update({
+            where: { id: dbKey.id },
+            data: { isActive: false },
+          });
+
+          throw new UnauthorizedException({
+            success: false,
+            error: CATCAST_CONSTANTS.ERROR_CODES.KEY_EXPIRED,
+            message: CATCAST_CONSTANTS.ERROR_MESSAGES.KEY_EXPIRED,
+          });
+        }
+
         await this.prisma.catcastKey.update({
           where: { id: dbKey.id },
           data: {

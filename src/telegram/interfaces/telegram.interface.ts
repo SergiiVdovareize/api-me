@@ -56,10 +56,36 @@ export interface TelegramMessage {
   photo?: TelegramPhotoSize[];
 }
 
+export interface TelegramInlineKeyboardButton {
+  text: string;
+  callback_data?: string;
+  url?: string;
+}
+
+export interface TelegramInlineKeyboardMarkup {
+  inline_keyboard: TelegramInlineKeyboardButton[][];
+}
+
+export interface TelegramReplyKeyboardMarkup {
+  keyboard: Array<Array<{ text: string }>>;
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+}
+
+export interface TelegramCallbackQuery {
+  id: string;
+  from: TelegramUser;
+  message?: TelegramMessage;
+  inline_message_id?: string;
+  chat_instance?: string;
+  data?: string;
+}
+
 export interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 }
 
 export interface TelegramFileResponse {
