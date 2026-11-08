@@ -151,3 +151,20 @@ model PriceProduct {
   @@index([domain])
 }
 
+model CatcastKey {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique @db.VarChar(64)
+  label         String?   @db.VarChar(128)
+  isActive      Boolean   @default(true)
+  boundDeviceId String?   @db.VarChar(128)
+  platform      String?   @db.VarChar(32)
+  lastIp        String?   @db.VarChar(64)
+  activatedAt   DateTime?
+  lastUsedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([key, isActive])
+}
+
+

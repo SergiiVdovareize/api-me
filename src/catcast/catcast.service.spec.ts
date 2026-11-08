@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { CatcastService } from './catcast.service';
 import { RedisReader } from '../common/helpers/redisReader';
+import { PrismaService } from '../models/prisma/prisma.service';
 
 describe('CatcastService', () => {
   let service: CatcastService;
@@ -159,5 +160,130 @@ describe('CatcastService', () => {
     expect(result.success).toBe(true);
     expect(result.boundDeviceId).toBe('android_device_2');
     expect(result.isNewBinding).toBe(true);
+  });
+
+  describe('Database backed operations', () => {
+    let dbService: CatcastService;
+    let mockPrisma: any;
+
+    beforeEach(async () => {
+      mockPrisma = {
+        catcastKey: {
+          findUnique: jest.fn(),
+          findMany: jest.fn(),
+          create: jest.fn(),
+          update: jest.fn(),
+          upsert: jest.fn(),
+        },
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          CatcastService,
+          { provide: ConfigService, useValue: configService },
+          { provide: RedisReader, useValue: redisReader },
+          { provide: PrismaService, useValue: mockPrisma },
+        ],
+      }).compile();
+
+      dbService = module.get<CatcastService>(CatcastService);
+    });
+
+    it('should create key in database', async () => {
+      mockPrisma.catcastKey.create.mockResolvedValue({
+        id: 10,
+        key: 'catcast-test1234',
+        label: 'Mom TV',
+        isActive: true,
+      });
+
+      const result = await dbService.createKey('Mom TV', 'catcast-test1234');
+      expect(result.key).toBe('catcast-test1234');
+      expect(result.label).toBe('Mom TV');
+      expect(mockPrisma.catcastKey.create).toHaveBeenCalledWith({
+        data: {
+          key: 'catcast-test1234',
+          label: 'Mom TV',
+          isActive: true,
+        },
+      });
+    });
+
+    it('should list keys from database', async () => {
+      mockPrisma.catcastKey.findMany.mockResolvedValue([{ id: 1, key: 'k1', label: 'L1' }]);
+      const list = await dbService.listKeys();
+      expect(list).toHaveLength(1);
+    });
+
+    it('should verify and bind key from database on first use', async () => {
+      mockPrisma.catcastKey.findUnique.mockResolvedValue({
+        id: 1,
+        key: 'db-key-1',
+        isActive: true,
+        boundDeviceId: null,
+      });
+      mockPrisma.catcastKey.update.mockResolvedValue({
+        id: 1,
+        key: 'db-key-1',
+        isActive: true,
+        boundDeviceId: 'android_dev_1',
+      });
+
+      const res = await dbService.verifyAccess(
+        { key: 'db-key-1', deviceId: 'android_dev_1', platform: 'android_tv' },
+        '1.2.3.4'
+      );
+      expect(res.success).toBe(true);
+      expect(res.isNewBinding).toBe(true);
+      expect(res.boundDeviceId).toBe('android_dev_1');
+    });
+
+    it('should reject blocked key from database', async () => {
+      mockPrisma.catcastKey.findUnique.mockResolvedValue({
+        id: 1,
+        key: 'blocked-key',
+        isActive: false,
+      });
+
+      await expect(
+        dbService.verifyAccess({ key: 'blocked-key', deviceId: 'dev-1' }, '1.2.3.4')
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should reset key binding in database and redis', async () => {
+      mockPrisma.catcastKey.findUnique.mockResolvedValue({
+        id: 5,
+        key: 'db-key-5',
+        boundDeviceId: 'dev-5',
+      });
+      mockPrisma.catcastKey.update.mockResolvedValue({
+        id: 5,
+        key: 'db-key-5',
+        boundDeviceId: null,
+      });
+
+      const res = await dbService.resetKeyBinding(5);
+      expect(res.key).toBe('db-key-5');
+      expect(mockPrisma.catcastKey.update).toHaveBeenCalledWith({
+        where: { id: 5 },
+        data: { boundDeviceId: null, platform: null, lastIp: null },
+      });
+    });
+
+    it('should toggle key status in database', async () => {
+      mockPrisma.catcastKey.findUnique.mockResolvedValue({
+        id: 5,
+        key: 'db-key-5',
+        isActive: true,
+      });
+      mockPrisma.catcastKey.update.mockResolvedValue({
+        id: 5,
+        key: 'db-key-5',
+        isActive: false,
+      });
+
+      const res = await dbService.toggleKey(5);
+      expect(res.isActive).toBe(false);
+    });
   });
 });

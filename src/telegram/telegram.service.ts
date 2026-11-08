@@ -5,6 +5,7 @@ import { TranscriptionService } from './services/transcription.service';
 import { TelegramProjectBoardService } from './services/telegram-project-board.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { BlobService } from '../blob/blob.service';
+import { CatcastService } from '../catcast/catcast.service';
 import {
   StructuredTaskResult,
   TelegramFileResponse,
@@ -23,7 +24,8 @@ export class TelegramService implements OnModuleInit {
     private readonly transcriptionService: TranscriptionService,
     private readonly projectBoardService: TelegramProjectBoardService,
     @Optional() private readonly redisReader?: RedisReader,
-    @Optional() private readonly blobService?: BlobService
+    @Optional() private readonly blobService?: BlobService,
+    @Optional() private readonly catcastService?: CatcastService
   ) {}
 
   async onModuleInit() {
@@ -44,7 +46,8 @@ export class TelegramService implements OnModuleInit {
         body: JSON.stringify({
           commands: [
             { command: 'task', description: '➕ Створити нову задачу' },
-            { command: 'cancel', description: '❌ Скасувати створення' },
+            { command: 'catcast', description: '🐱 Ключі CatCast' },
+            { command: 'cancel', description: '❌ Скасувати дію' },
             { command: 'help', description: 'ℹ️ Довідка' },
           ],
         }),
@@ -169,9 +172,12 @@ export class TelegramService implements OnModuleInit {
     if (textTrimmed === '/start' || textTrimmed === '/help') {
       const helpMessage =
         `👋 *AI Tasks Bot*\n\n` +
-        `Щоб створити нову задачу на GitHub дошці:\n` +
-        `1. Натисніть команду /task у меню або надішліть її в чат\n` +
-        `2. Надішліть текст, фото з описом або надиктуйте голосове повідомлення\n\n` +
+        `*Задачі на GitHub:*\n` +
+        `• /task — створити нову задачу (голосом, текстом чи з фото)\n` +
+        `• /cancel — скасувати створення задачі\n\n` +
+        `*CatCast:*\n` +
+        `• /catcast — керування персональними ключами доступу\n` +
+        `• /catcast\\_list — переглянути всі ключі\n\n` +
         `Для скасування скористайтесь /cancel.`;
       await this.sendMessage(chatId, helpMessage);
       return { processed: 1, createdTasks: [] };
@@ -184,7 +190,153 @@ export class TelegramService implements OnModuleInit {
       return { processed: 1, createdTasks: [] };
     }
 
-    // 4. Command handling: /task (Variant A prompt initiation)
+    // 4. CatCast Key Management commands
+    if (textTrimmed === '/catcast' || textTrimmed.startsWith('/catcast_help')) {
+      const helpMsg =
+        `🐱 *Керування ключами CatCast*\n\n` +
+        `• \`/catcast_new [назва]\` — створити новий ключ\n` +
+        `  _Приклад: \`/catcast_new MiBox Вітальня\`_\n\n` +
+        `• \`/catcast_list\` — список усіх ключів та пристроїв\n\n` +
+        `• \`/catcast_reset_[ID]\` — скинути прив'язку пристрою\n\n` +
+        `• \`/catcast_toggle_[ID]\` — активувати / заблокувати ключ`;
+      await this.sendMessage(chatId, helpMsg);
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (textTrimmed.startsWith('/catcast_new')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      const rawLabel = textTrimmed.replace(/^\/catcast_new(@\w+)?/i, '').trim();
+      const label = rawLabel || 'Новий пристрій';
+
+      try {
+        const created = await this.catcastService.createKey(label);
+        const reply =
+          `✅ *Ключ CatCast успішно створено!*\n\n` +
+          `👤 Назва: *${created.label || 'Без назви'}*\n` +
+          `🔑 Ключ: \`${created.key}\`\n\n` +
+          `_(Натисніть на ключ, щоб скопіювати)_`;
+        await this.sendMessage(chatId, reply);
+      } catch (err: any) {
+        await this.sendMessage(chatId, `❌ Не вдалося створити ключ: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (textTrimmed === '/catcast_list' || textTrimmed.startsWith('/catcast_list@')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const keys = await this.catcastService.listKeys();
+        if (keys.length === 0) {
+          await this.sendMessage(
+            chatId,
+            'ℹ️ *Список ключів CatCast порожній.*\nСтворіть перший ключ: `/catcast_new [назва]`'
+          );
+          return { processed: 1, createdTasks: [] };
+        }
+
+        const items = keys.map((k, idx) => {
+          const statusIcon = k.isActive ? '🟢' : '🔴';
+          const deviceText = k.boundDeviceId
+            ? `📱 \`${k.boundDeviceId.slice(0, 18)}...\` (${k.platform || 'web'})`
+            : `📱 _Пристрій не прив'язано_`;
+          const lastUsed = k.lastUsedAt
+            ? `🕒 ${new Date(k.lastUsedAt).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+            : '';
+
+          return (
+            `${idx + 1}. ${statusIcon} *${k.label || 'Без назви'}* (ID: ${k.id})\n` +
+            `   🔑 \`${k.key}\`\n` +
+            `   ${deviceText} ${lastUsed}\n` +
+            `   Дії: /catcast\\_reset\\_${k.id} | /catcast\\_toggle\\_${k.id}`
+          );
+        });
+
+        const listReply = `📋 *Ключі доступу CatCast (${keys.length}):*\n\n` + items.join('\n\n');
+        await this.sendMessage(chatId, listReply);
+      } catch (err: any) {
+        await this.sendMessage(chatId, `❌ Помилка завантаження ключів: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (textTrimmed.startsWith('/catcast_reset')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      const idOrKey = textTrimmed
+        .replace(/^\/catcast_reset_(@\w+)?/i, '')
+        .replace(/^\/catcast_reset(@\w+)?/i, '')
+        .replace(/^_/, '')
+        .trim();
+
+      if (!idOrKey) {
+        await this.sendMessage(
+          chatId,
+          'ℹ️ Вкажіть ID або ключ для скидання: `/catcast_reset_[ID]` або `/catcast_reset [ключ]`'
+        );
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const res = await this.catcastService.resetKeyBinding(idOrKey);
+        await this.sendMessage(
+          chatId,
+          `🔄 *Прив'язку пристрою скинуто!*\n\n` +
+            `🔑 Ключ: \`${res.key}\`\n` +
+            `👤 Назва: *${res.label || '-'}*\n\n` +
+            `Тепер цей ключ можна активувати на новому пристрої.`
+        );
+      } catch (err: any) {
+        await this.sendMessage(chatId, `❌ Не вдалося скинути прив'язку: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (textTrimmed.startsWith('/catcast_toggle')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      const idOrKey = textTrimmed
+        .replace(/^\/catcast_toggle_(@\w+)?/i, '')
+        .replace(/^\/catcast_toggle(@\w+)?/i, '')
+        .replace(/^_/, '')
+        .trim();
+
+      if (!idOrKey) {
+        await this.sendMessage(
+          chatId,
+          'ℹ️ Вкажіть ID або ключ: `/catcast_toggle_[ID]` або `/catcast_toggle [ключ]`'
+        );
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const updated = await this.catcastService.toggleKey(idOrKey);
+        const icon = updated.isActive ? '🟢' : '🔴';
+        const action = updated.isActive ? 'активовано' : 'заблоковано';
+        await this.sendMessage(
+          chatId,
+          `${icon} Ключ \`${updated.key}\` (*${updated.label || '-'}*) успішно *${action}*!`
+        );
+      } catch (err: any) {
+        await this.sendMessage(chatId, `❌ Не вдалося змінити статус: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    // 5. Command handling: /task (Variant A prompt initiation)
     if (textTrimmed === '/task' || textTrimmed.startsWith('/task@')) {
       await this.setAwaitingTask(chatId);
       await this.sendMessage(
