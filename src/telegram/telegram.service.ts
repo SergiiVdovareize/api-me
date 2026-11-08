@@ -10,6 +10,7 @@ import {
   StructuredTaskResult,
   TelegramCallbackQuery,
   TelegramFileResponse,
+  TelegramInlineKeyboardButton,
   TelegramInlineKeyboardMarkup,
   TelegramProcessingResult,
   TelegramReplyKeyboardMarkup,
@@ -45,6 +46,7 @@ const KEYBOARDS = {
         { text: '➕ Створити ключ', callback_data: 'catcast_new_menu' },
         { text: '📋 Список ключів', callback_data: 'catcast_list' },
       ],
+      [{ text: '📱 Дозволені пристрої', callback_data: 'catcast_devices_list' }],
       [{ text: 'ℹ️ Довідка по командах', callback_data: 'catcast_help' }],
       [{ text: '⬅️ Головне меню', callback_data: 'menu_main' }],
     ],
@@ -74,6 +76,11 @@ export class TelegramService implements OnModuleInit {
 
   async onModuleInit() {
     await this.registerBotCommands();
+    if (this.catcastService) {
+      this.catcastService.setDeviceRequestNotifier(async request => {
+        return this.notifyNewDeviceRequest(request);
+      });
+    }
   }
 
   /**
@@ -92,6 +99,7 @@ export class TelegramService implements OnModuleInit {
             { command: 'menu', description: '📱 Головне меню' },
             { command: 'task', description: '➕ Створити нову задачу' },
             { command: 'catcast', description: '🐱 Ключі CatCast' },
+            { command: 'catcast_devices', description: '📱 Дозволені пристрої' },
             { command: 'cancel', description: '❌ Скасувати дію' },
             { command: 'help', description: 'ℹ️ Довідка' },
           ],
@@ -404,6 +412,70 @@ export class TelegramService implements OnModuleInit {
       return { processed: 1, createdTasks: [] };
     }
 
+    if (textTrimmed === '/catcast_devices' || textTrimmed.startsWith('/catcast_devices@')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const devices = await this.catcastService.listAllowedDevices();
+        const rendered = this.renderCatcastDeviceList(devices);
+        await this.sendMessage(chatId, rendered.text, {
+          parse_mode: 'HTML',
+          reply_markup: rendered.markup,
+        });
+      } catch (err: any) {
+        await this.sendMessage(
+          chatId,
+          `❌ Помилка завантаження дозволених пристроїв: ${escapeHtml(err.message)}`,
+          { parse_mode: 'HTML' }
+        );
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (textTrimmed.startsWith('/catcast_revoke')) {
+      if (!this.catcastService) {
+        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      const idOrDevice = textTrimmed
+        .replace(/^\/catcast_revoke_(@\w+)?/i, '')
+        .replace(/^\/catcast_revoke(@\w+)?/i, '')
+        .replace(/^_/, '')
+        .trim();
+
+      if (!idOrDevice) {
+        await this.sendMessage(
+          chatId,
+          'ℹ️ Вкажіть ID або Device ID для відкликання: <code>/catcast_revoke_[ID]</code>',
+          { parse_mode: 'HTML' }
+        );
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const res = await this.catcastService.revokeDeviceAccess(idOrDevice);
+        await this.sendMessage(
+          chatId,
+          `🚫 <b>Доступ для пристрою відкликано!</b>\n\n` +
+            `📱 <b>${escapeHtml(res.model || res.deviceId)}</b>\n` +
+            `🔑 Device ID: <code>${res.deviceId}</code>\n\n` +
+            `Цей пристрій більше не має доступу без ключа.`,
+          { parse_mode: 'HTML' }
+        );
+      } catch (err: any) {
+        await this.sendMessage(
+          chatId,
+          `❌ Не вдалося відкликати доступ: ${escapeHtml(err.message)}`,
+          { parse_mode: 'HTML' }
+        );
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
     // 6. Command handling: /task (Variant A prompt initiation)
     if (textTrimmed === '/task' || textTrimmed.startsWith('/task@')) {
       await this.setAwaitingTask(chatId);
@@ -533,6 +605,96 @@ export class TelegramService implements OnModuleInit {
       return { processed: 1, createdTasks: [] };
     }
 
+    if (data.startsWith('catcast_dev_approve:')) {
+      const requestId = data.replace('catcast_dev_approve:', '').trim();
+      const adminName = username ? `@${username}` : callbackQuery.from?.first_name || 'Адмін';
+
+      if (!this.catcastService) {
+        await this.answerCallbackQuery(callbackQuery.id, '⚠️ CatCast недоступний');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const res = await this.catcastService.approveDeviceRequest(requestId, adminName);
+        if (res.alreadyProcessed) {
+          await this.answerCallbackQuery(callbackQuery.id, 'ℹ️ Заявку вже було оброблено');
+        } else {
+          await this.answerCallbackQuery(callbackQuery.id, '✅ Доступ надано');
+        }
+
+        const nowStr = new Date().toLocaleTimeString('uk-UA', {
+          timeZone: 'Europe/Kyiv',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const currentText = callbackQuery.message?.text || '';
+        const updatedText = `${currentText}\n\n✅ <b>Дозволено:</b> ${escapeHtml(adminName)} (${nowStr})`;
+        await this.editMessageText(chatId, messageId, updatedText, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [] },
+        });
+      } catch (err: any) {
+        await this.answerCallbackQuery(callbackQuery.id, `❌ Помилка: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (data.startsWith('catcast_dev_deny:')) {
+      const requestId = data.replace('catcast_dev_deny:', '').trim();
+      const adminName = username ? `@${username}` : callbackQuery.from?.first_name || 'Адмін';
+
+      if (!this.catcastService) {
+        await this.answerCallbackQuery(callbackQuery.id, '⚠️ CatCast недоступний');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        const res = await this.catcastService.denyDeviceRequest(requestId, adminName);
+        if (res.alreadyProcessed) {
+          await this.answerCallbackQuery(callbackQuery.id, 'ℹ️ Заявку вже було оброблено');
+        } else {
+          await this.answerCallbackQuery(callbackQuery.id, '❌ Заявку відхилено');
+        }
+
+        const nowStr = new Date().toLocaleTimeString('uk-UA', {
+          timeZone: 'Europe/Kyiv',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const currentText = callbackQuery.message?.text || '';
+        const updatedText = `${currentText}\n\n❌ <b>Відхилено:</b> ${escapeHtml(adminName)} (${nowStr})`;
+        await this.editMessageText(chatId, messageId, updatedText, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [] },
+        });
+      } catch (err: any) {
+        await this.answerCallbackQuery(callbackQuery.id, `❌ Помилка: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
+    if (data.startsWith('catcast_dev_revoke:')) {
+      const idOrDevice = data.replace('catcast_dev_revoke:', '').trim();
+      if (!this.catcastService) {
+        await this.answerCallbackQuery(callbackQuery.id, '⚠️ CatCast недоступний');
+        return { processed: 1, createdTasks: [] };
+      }
+
+      try {
+        await this.catcastService.revokeDeviceAccess(idOrDevice);
+        await this.answerCallbackQuery(callbackQuery.id, '🚫 Доступ відкликано');
+        const devices = await this.catcastService.listAllowedDevices();
+        const rendered = this.renderCatcastDeviceList(devices);
+        await this.editMessageText(chatId, messageId, rendered.text, {
+          parse_mode: 'HTML',
+          reply_markup: rendered.markup,
+        });
+      } catch (err: any) {
+        await this.answerCallbackQuery(callbackQuery.id, `❌ Помилка: ${err.message}`);
+      }
+      return { processed: 1, createdTasks: [] };
+    }
+
     await this.answerCallbackQuery(callbackQuery.id);
 
     switch (data) {
@@ -630,6 +792,29 @@ export class TelegramService implements OnModuleInit {
           await this.sendMessage(
             chatId,
             `❌ Помилка завантаження ключів: ${escapeHtml(err.message)}`,
+            {
+              parse_mode: 'HTML',
+            }
+          );
+        }
+        break;
+
+      case 'catcast_devices_list':
+        if (!this.catcastService) {
+          await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
+          break;
+        }
+        try {
+          const devices = await this.catcastService.listAllowedDevices();
+          const rendered = this.renderCatcastDeviceList(devices);
+          await this.editMessageText(chatId, messageId, rendered.text, {
+            parse_mode: 'HTML',
+            reply_markup: rendered.markup,
+          });
+        } catch (err: any) {
+          await this.sendMessage(
+            chatId,
+            `❌ Помилка завантаження дозволених пристроїв: ${escapeHtml(err.message)}`,
             {
               parse_mode: 'HTML',
             }
@@ -785,6 +970,105 @@ export class TelegramService implements OnModuleInit {
         ],
       },
     };
+  }
+
+  /**
+   * Renders a list of allowed CatCast devices with revocation buttons.
+   */
+  renderCatcastDeviceList(devices: any[]): {
+    text: string;
+    markup: TelegramInlineKeyboardMarkup;
+  } {
+    if (!devices || devices.length === 0) {
+      return {
+        text: '📱 <b>Дозволені пристрої CatCast</b>\n\nНаразі немає жодного дозволеного пристрою.',
+        markup: {
+          inline_keyboard: [[{ text: '⬅️ До CatCast', callback_data: 'menu_catcast' }]],
+        },
+      };
+    }
+
+    let text = `📱 <b>Дозволені пристрої CatCast (${devices.length})</b>\n\n`;
+    const keyboardRows: TelegramInlineKeyboardButton[][] = [];
+
+    devices.forEach((dev, idx) => {
+      const model = escapeHtml(dev.model || 'Пристрій');
+      const platform = escapeHtml(dev.platform);
+      const devId = dev.deviceId || '';
+      const deviceIdShort = escapeHtml(devId.length > 22 ? devId.slice(0, 20) + '...' : devId);
+      text += `<b>${idx + 1}. ${model}</b> (${platform})\n`;
+      text += `   <code>${deviceIdShort}</code>\n`;
+      text += `   <i>Схвалено: ${new Date(dev.createdAt).toLocaleDateString('uk-UA')}</i>\n\n`;
+
+      keyboardRows.push([
+        {
+          text: `🚫 Відкликати #${dev.id}`,
+          callback_data: `catcast_dev_revoke:${dev.id}`,
+        },
+      ]);
+    });
+
+    keyboardRows.push([{ text: '⬅️ До CatCast', callback_data: 'menu_catcast' }]);
+
+    return {
+      text,
+      markup: { inline_keyboard: keyboardRows },
+    };
+  }
+
+  /**
+   * Sends a notification to the admin chat about a new pending device request.
+   */
+  async notifyNewDeviceRequest(request: {
+    id: string;
+    deviceId: string;
+    platform: string;
+    model?: string | null;
+    os?: string | null;
+    createdAt: Date;
+  }): Promise<{ messageId?: number; chatId?: string } | void> {
+    const adminChatId =
+      this.configService.get<string>('CATCAST_ADMIN_CHAT_ID')?.trim() ||
+      this.configService.get<string>('TELEGRAM_DEFAULT_CHAT_ID')?.trim() ||
+      '1252877';
+
+    const createdTimeStr = new Date(request.createdAt).toLocaleString('uk-UA', {
+      timeZone: 'Europe/Kyiv',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const text =
+      `📺 <b>Нова заявка на доступ до CatCast</b>\n\n` +
+      `📱 <b>Пристрій:</b> <code>${escapeHtml(request.model || 'Невідомий')}</code>\n` +
+      `💻 <b>ОС:</b> <code>${escapeHtml(request.os || '-')}</code>\n` +
+      `🌐 <b>Платформа:</b> <code>${escapeHtml(request.platform)}</code>\n` +
+      `🔑 <b>Device ID:</b> <code>${escapeHtml(request.deviceId)}</code>\n` +
+      `⏱ <b>Створено:</b> ${createdTimeStr} <i>(діє 30 хв)</i>`;
+
+    const keyboard: TelegramInlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: '✅ Дозволити', callback_data: `catcast_dev_approve:${request.id}` },
+          { text: '❌ Відхилити', callback_data: `catcast_dev_deny:${request.id}` },
+        ],
+      ],
+    };
+
+    const sent = await this.sendMessage(adminChatId, text, {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+
+    if (sent && sent.messageId) {
+      return {
+        messageId: sent.messageId,
+        chatId: sent.chatId ? String(sent.chatId) : adminChatId,
+      };
+    }
   }
 
   /**
@@ -954,7 +1238,7 @@ You MUST output ONLY a valid JSON object matching this structure:
       parse_mode?: string;
       reply_markup?: TelegramInlineKeyboardMarkup | TelegramReplyKeyboardMarkup;
     } = { parse_mode: 'Markdown' }
-  ): Promise<void> {
+  ): Promise<{ messageId?: number; chatId?: string | number } | void> {
     const token = this.getBotToken();
     if (!token) {
       this.logger.warn(
@@ -997,17 +1281,33 @@ You MUST output ONLY a valid JSON object matching this structure:
             if (options.reply_markup) {
               fallbackPayload.reply_markup = options.reply_markup;
             }
-            await fetch(url, {
+            const fallbackRes = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(fallbackPayload),
             });
+            if (fallbackRes.ok) {
+              const fbData = (await fallbackRes.json()) as any;
+              return {
+                messageId: fbData?.result?.message_id,
+                chatId: fbData?.result?.chat?.id,
+              };
+            }
           } catch {
             // ignore retry error
           }
         }
       } else {
         this.logger.log(`Telegram message sent successfully to chat ${chatId}`);
+        try {
+          const data = (await res.json()) as any;
+          return {
+            messageId: data?.result?.message_id,
+            chatId: data?.result?.chat?.id,
+          };
+        } catch {
+          // ignore json parse error
+        }
       }
     } catch (err: any) {
       this.logger.error(`Error sending Telegram message: ${err.message}`);

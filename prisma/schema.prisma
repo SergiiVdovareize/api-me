@@ -42,23 +42,22 @@ model GameResult {
 }
 
 model AlphadateBoard {
-  id        Int                @id @default(autoincrement())
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  key       String             @unique
-  name      String?
-  pin       String?
-  email     String?
-  settings         Json?              @default("{}")
-  letters          Json?              @default("[]")
-  partners         AlphadatePartner[]
-  history          AlphadateHistory[]
+  id                      Int                @id @default(autoincrement())
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  key                     String             @unique
+  name                    String?
+  pin                     String?
+  email                   String?
+  settings                Json?              @default("{}")
+  letters                 Json?              @default("[]")
+  partners                AlphadatePartner[]
+  history                 AlphadateHistory[]
   currentLetter           String?            @db.Char(1)
   currentLetterSelectedAt DateTime?
   currentPartnerId        Int?
   currentPartner          AlphadatePartner?  @relation("CurrentPartner", fields: [currentPartnerId], references: [id])
 }
-
 
 model AlphadatePartner {
   id             Int                @id @default(autoincrement())
@@ -89,7 +88,6 @@ model AlphadateHistory {
 
   @@unique([boardId, letter])
 }
-
 
 enum LetterStatus {
   used
@@ -136,8 +134,8 @@ model PriceProduct {
   lastNotifiedPrice Float?
   chatId            String?            @default("1252877") @db.VarChar(64)
   selector          String?            @db.Text
-  sizes             Json?              // e.g. ["XXS", "XS", "S", "M", "L"]
-  colors            Json?              // e.g. ["світло-сірий", "чорний"]
+  sizes             Json? // e.g. ["XXS", "XS", "S", "M", "L"]
+  colors            Json? // e.g. ["світло-сірий", "чорний"]
   desiredSize       String?            @db.VarChar(32)
   desiredColor      String?            @db.VarChar(64)
   failCount         Int                @default(0)
@@ -166,5 +164,53 @@ model CatcastKey {
 
   @@index([key, isActive])
 }
+
+model CatcastDevice {
+  id        Int      @id @default(autoincrement())
+  deviceId  String   @unique @db.VarChar(128)
+  platform  String   @db.VarChar(32)
+  model     String?  @db.VarChar(128)
+  os        String?  @db.VarChar(128)
+  isAllowed Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deviceId, isAllowed])
+}
+
+model CatcastDeviceRequest {
+  id                String   @id @default(cuid()) @db.VarChar(64)
+  deviceId          String   @db.VarChar(128)
+  platform          String   @db.VarChar(32)
+  model             String?  @db.VarChar(128)
+  os                String?  @db.VarChar(128)
+  status            String   @default("pending") @db.VarChar(32)
+  expiresAt         DateTime
+  telegramMessageId Int?
+  telegramChatId    String?  @db.VarChar(64)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([deviceId, createdAt])
+  @@index([deviceId, status])
+}
+
+model CatcastDeviceRequest {
+  id                String   @id @default(cuid()) @db.VarChar(64)
+  deviceId          String   @db.VarChar(128)
+  platform          String   @db.VarChar(32)
+  model             String?  @db.VarChar(128)
+  os                String?  @db.VarChar(128)
+  status            String   @default("pending") @db.VarChar(32)
+  expiresAt         DateTime
+  telegramMessageId Int?
+  telegramChatId    String?  @db.VarChar(64)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([deviceId, createdAt])
+  @@index([deviceId, status])
+}
+
 
 

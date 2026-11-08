@@ -86,6 +86,32 @@ describe('TelegramService', () => {
         label: 'Test Device',
         isActive: false,
       }),
+      setDeviceRequestNotifier: jest.fn(),
+      approveDeviceRequest: jest.fn().mockResolvedValue({
+        success: true,
+        alreadyProcessed: false,
+        request: { id: 'req_1', status: 'approved' },
+      }),
+      denyDeviceRequest: jest.fn().mockResolvedValue({
+        success: true,
+        alreadyProcessed: false,
+        request: { id: 'req_1', status: 'denied' },
+      }),
+      listAllowedDevices: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          deviceId: 'android_9774d56d',
+          platform: 'android_tv',
+          model: 'MIBOX4',
+          isAllowed: true,
+          createdAt: new Date(),
+        },
+      ]),
+      revokeDeviceAccess: jest.fn().mockResolvedValue({
+        id: 1,
+        deviceId: 'android_9774d56d',
+        isAllowed: false,
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -892,6 +918,191 @@ describe('TelegramService', () => {
         expect(result.processed).toBe(1);
         const awaiting = await service.isAwaitingTask(12345);
         expect(awaiting).toBe(false);
+      });
+
+      it('should handle catcast_dev_approve callback query', async () => {
+        const update: TelegramUpdate = {
+          update_id: 306,
+          callback_query: {
+            id: 'cb_app',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii', username: 'admin_user' },
+            message: {
+              message_id: 60,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+              text: '📺 Нова заявка на доступ до CatCast',
+            },
+            data: 'catcast_dev_approve:req_123',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.approveDeviceRequest).toHaveBeenCalledWith(
+          'req_123',
+          '@admin_user'
+        );
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({
+            body: expect.stringContaining('Доступ надано'),
+          })
+        );
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/editMessageText'),
+          expect.objectContaining({
+            body: expect.stringContaining('Дозволено:'),
+          })
+        );
+      });
+
+      it('should handle catcast_dev_deny callback query', async () => {
+        const update: TelegramUpdate = {
+          update_id: 307,
+          callback_query: {
+            id: 'cb_deny',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii', username: 'admin_user' },
+            message: {
+              message_id: 61,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+              text: '📺 Нова заявка на доступ до CatCast',
+            },
+            data: 'catcast_dev_deny:req_123',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.denyDeviceRequest).toHaveBeenCalledWith('req_123', '@admin_user');
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({
+            body: expect.stringContaining('Заявку відхилено'),
+          })
+        );
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/editMessageText'),
+          expect.objectContaining({
+            body: expect.stringContaining('Відхилено:'),
+          })
+        );
+      });
+
+      it('should handle catcast_devices_list callback query', async () => {
+        const update: TelegramUpdate = {
+          update_id: 308,
+          callback_query: {
+            id: 'cb_dev_list',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 62,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'catcast_devices_list',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.listAllowedDevices).toHaveBeenCalled();
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/editMessageText'),
+          expect.objectContaining({
+            body: expect.stringContaining('Дозволені пристрої CatCast'),
+          })
+        );
+      });
+
+      it('should handle catcast_dev_revoke callback query', async () => {
+        const update: TelegramUpdate = {
+          update_id: 309,
+          callback_query: {
+            id: 'cb_revoke',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: {
+              message_id: 63,
+              date: 1720000000,
+              chat: { id: 12345, type: 'private' },
+            },
+            data: 'catcast_dev_revoke:1',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.revokeDeviceAccess).toHaveBeenCalledWith('1');
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({
+            body: expect.stringContaining('Доступ відкликано'),
+          })
+        );
+      });
+
+      it('should handle /catcast_devices command', async () => {
+        const update: TelegramUpdate = {
+          update_id: 310,
+          message: {
+            message_id: 310,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/catcast_devices',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.listAllowedDevices).toHaveBeenCalled();
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Дозволені пристрої CatCast'),
+          })
+        );
+      });
+
+      it('should handle /catcast_revoke_[ID] command', async () => {
+        const update: TelegramUpdate = {
+          update_id: 311,
+          message: {
+            message_id: 311,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/catcast_revoke_1',
+          },
+        };
+
+        const result = await service.handleIncomingUpdate(update);
+        expect(result.processed).toBe(1);
+        expect(mockCatcastService.revokeDeviceAccess).toHaveBeenCalledWith('1');
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Доступ для пристрою відкликано'),
+          })
+        );
+      });
+
+      it('should notify admin on notifyNewDeviceRequest', async () => {
+        const res = await service.notifyNewDeviceRequest({
+          id: 'req_test',
+          deviceId: 'android_dev_test',
+          platform: 'android_tv',
+          model: 'MIBOX4',
+          os: '9',
+          createdAt: new Date(),
+        });
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({
+            body: expect.stringContaining('Нова заявка на доступ до CatCast'),
+          })
+        );
       });
     });
   });

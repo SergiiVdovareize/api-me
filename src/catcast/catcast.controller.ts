@@ -1,6 +1,17 @@
-import { Controller, Post, Options, Body, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Options,
+  Body,
+  Query,
+  Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
-import { CatcastService, VerifyAccessDto } from './catcast.service';
+import { CatcastService, VerifyAccessDto, CreateDeviceRequestDto } from './catcast.service';
 import { applyCatcastCorsHeaders } from './catcast.constants';
 
 @Controller('auth/catcast')
@@ -34,5 +45,33 @@ export class CatcastController {
 
     const result = await this.catcastService.verifyAccess(body, rawIp);
     return result;
+  }
+
+  @Options('request')
+  handleOptionsRequest(@Res() res: Response): void {
+    applyCatcastCorsHeaders(res);
+    res.status(HttpStatus.OK).end();
+  }
+
+  @Post('request')
+  @HttpCode(HttpStatus.OK)
+  async createRequest(
+    @Body() body: CreateDeviceRequestDto,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    applyCatcastCorsHeaders(res);
+    return this.catcastService.requestDeviceAccess(body);
+  }
+
+  @Options('status')
+  handleOptionsStatus(@Res() res: Response): void {
+    applyCatcastCorsHeaders(res);
+    res.status(HttpStatus.OK).end();
+  }
+
+  @Get('status')
+  async getStatus(@Query('deviceId') deviceId: string, @Res({ passthrough: true }) res: Response) {
+    applyCatcastCorsHeaders(res);
+    return this.catcastService.getDeviceStatus(deviceId);
   }
 }

@@ -23,6 +23,18 @@ export const CATCAST_CONSTANTS = {
     KEY_EXPIRED: 'KEY_EXPIRED',
     DEVICE_MISMATCH: 'DEVICE_MISMATCH',
     IP_MISMATCH: 'IP_MISMATCH',
+    RATE_LIMIT: 'RATE_LIMIT',
+  },
+  DEVICE_STATUS: {
+    UNKNOWN: 'unknown',
+    PENDING: 'pending',
+    APPROVED: 'approved',
+    DENIED: 'denied',
+    EXPIRED: 'expired',
+  } as const,
+  DEVICE_REQUEST: {
+    TTL_MINUTES: 30,
+    RATE_LIMIT_HOURLY: 5,
   },
 };
 

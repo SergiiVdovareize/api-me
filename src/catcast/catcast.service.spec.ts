@@ -189,6 +189,22 @@ describe('CatcastService', () => {
           update: jest.fn(),
           upsert: jest.fn(),
         },
+        catcastDevice: {
+          findUnique: jest.fn(),
+          findMany: jest.fn(),
+          create: jest.fn(),
+          update: jest.fn(),
+          updateMany: jest.fn(),
+          upsert: jest.fn(),
+        },
+        catcastDeviceRequest: {
+          findUnique: jest.fn(),
+          findFirst: jest.fn(),
+          findMany: jest.fn(),
+          create: jest.fn(),
+          update: jest.fn(),
+          count: jest.fn(),
+        },
       };
 
       const module: TestingModule = await Test.createTestingModule({
@@ -332,6 +348,279 @@ describe('CatcastService', () => {
 
       const res = await dbService.toggleKey(5);
       expect(res.isActive).toBe(false);
+    });
+
+    describe('Device Access Management', () => {
+      it('should throw BadRequestException if deviceId is missing in requestDeviceAccess', async () => {
+        await expect(
+          dbService.requestDeviceAccess({ deviceId: '', platform: 'android_tv' })
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('should return approved immediately if device is in allowlist', async () => {
+        mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+          id: 1,
+          deviceId: 'android_dev_allowed',
+          isAllowed: true,
+        });
+
+        const res = await dbService.requestDeviceAccess({
+          deviceId: 'android_dev_allowed',
+          platform: 'android_tv',
+        });
+
+        expect(res.status).toBe('approved');
+        expect(res.requestId).toBeNull();
+        expect(mockPrisma.catcastDeviceRequest.create).not.toHaveBeenCalled();
+      });
+
+      it('should return existing live request if already pending within 30 min', async () => {
+        mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+        const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
+        mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
+          id: 'req_existing_123',
+          deviceId: 'android_dev_pending',
+          status: 'pending',
+          expiresAt,
+        });
+
+        const res = await dbService.requestDeviceAccess({
+          deviceId: 'android_dev_pending',
+          platform: 'android_tv',
+        });
+
+        expect(res.status).toBe('pending');
+        expect(res.requestId).toBe('req_existing_123');
+        expect(res.expiresAt).toBe(expiresAt.toISOString());
+        expect(mockPrisma.catcastDeviceRequest.create).not.toHaveBeenCalled();
+      });
+
+      it('should return rate limit error if device created >= 5 requests in last hour', async () => {
+        mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.count.mockResolvedValue(5);
+
+        const res = await dbService.requestDeviceAccess({
+          deviceId: 'android_spam_dev',
+          platform: 'android_tv',
+        });
+
+        expect(res.error).toBe('RATE_LIMIT');
+        expect(res.status).toBe('denied');
+        expect(res.message).toContain('Забагато заявок');
+        expect(mockPrisma.catcastDeviceRequest.create).not.toHaveBeenCalled();
+      });
+
+      it('should create new pending request and call notifier if available', async () => {
+        mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.count.mockResolvedValue(1);
+
+        const createdRecord = {
+          id: 'req_new_456',
+          deviceId: 'android_new_dev',
+          platform: 'android_tv',
+          model: 'MIBOX4',
+          os: '9',
+          status: 'pending',
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+          createdAt: new Date(),
+        };
+        mockPrisma.catcastDeviceRequest.create.mockResolvedValue(createdRecord);
+        mockPrisma.catcastDeviceRequest.update.mockResolvedValue(createdRecord);
+
+        const mockNotifier = jest.fn().mockResolvedValue({ messageId: 999, chatId: '1252877' });
+        dbService.setDeviceRequestNotifier(mockNotifier);
+
+        const res = await dbService.requestDeviceAccess({
+          deviceId: 'android_new_dev',
+          platform: 'android_tv',
+          model: 'MIBOX4',
+          os: '9',
+        });
+
+        expect(res.status).toBe('pending');
+        expect(res.requestId).toBe('req_new_456');
+        expect(mockNotifier).toHaveBeenCalledWith(createdRecord);
+        expect(mockPrisma.catcastDeviceRequest.update).toHaveBeenCalledWith({
+          where: { id: 'req_new_456' },
+          data: { telegramMessageId: 999, telegramChatId: '1252877' },
+        });
+      });
+
+      describe('getDeviceStatus', () => {
+        it('should return unknown if deviceId is empty or no requests found', async () => {
+          expect(await dbService.getDeviceStatus('')).toEqual({
+            status: 'unknown',
+            expiresAt: null,
+            requestId: null,
+          });
+
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue(null);
+
+          expect(await dbService.getDeviceStatus('dev-unknown')).toEqual({
+            status: 'unknown',
+            expiresAt: null,
+            requestId: null,
+          });
+        });
+
+        it('should return approved if device is in allowlist', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+            id: 1,
+            deviceId: 'dev_allowed',
+            isAllowed: true,
+          });
+
+          const res = await dbService.getDeviceStatus('dev_allowed');
+          expect(res.status).toBe('approved');
+        });
+
+        it('should return pending if request is active', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          const futureExpires = new Date(Date.now() + 15 * 60 * 1000);
+          mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
+            id: 'req_1',
+            status: 'pending',
+            expiresAt: futureExpires,
+          });
+
+          const res = await dbService.getDeviceStatus('dev_pending');
+          expect(res.status).toBe('pending');
+          expect(res.expiresAt).toBe(futureExpires.toISOString());
+        });
+
+        it('should return expired if pending request has passed expiresAt', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          const pastExpires = new Date(Date.now() - 5 * 60 * 1000);
+          mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
+            id: 'req_2',
+            status: 'pending',
+            expiresAt: pastExpires,
+          });
+
+          const res = await dbService.getDeviceStatus('dev_expired');
+          expect(res.status).toBe('expired');
+          expect(res.expiresAt).toBe(pastExpires.toISOString());
+        });
+
+        it('should return denied if latest request was denied', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
+            id: 'req_3',
+            status: 'denied',
+            expiresAt: new Date(),
+          });
+
+          const res = await dbService.getDeviceStatus('dev_denied');
+          expect(res.status).toBe('denied');
+        });
+      });
+
+      describe('approveDeviceRequest & denyDeviceRequest', () => {
+        it('should approve pending request and upsert CatcastDevice', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue({
+            id: 'req_app',
+            deviceId: 'dev_app',
+            platform: 'android_tv',
+            model: 'MIBOX4',
+            os: '9',
+            status: 'pending',
+          });
+          mockPrisma.catcastDeviceRequest.update.mockResolvedValue({
+            id: 'req_app',
+            status: 'approved',
+          });
+          mockPrisma.catcastDevice.upsert.mockResolvedValue({
+            id: 10,
+            deviceId: 'dev_app',
+            isAllowed: true,
+          });
+
+          const result = await dbService.approveDeviceRequest('req_app', '@admin');
+          expect(result.success).toBe(true);
+          expect(result.alreadyProcessed).toBe(false);
+          expect(mockPrisma.catcastDevice.upsert).toHaveBeenCalledWith({
+            where: { deviceId: 'dev_app' },
+            create: {
+              deviceId: 'dev_app',
+              platform: 'android_tv',
+              model: 'MIBOX4',
+              os: '9',
+              isAllowed: true,
+            },
+            update: {
+              platform: 'android_tv',
+              model: 'MIBOX4',
+              os: '9',
+              isAllowed: true,
+            },
+          });
+        });
+
+        it('should return alreadyProcessed: true when approving already approved request', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue({
+            id: 'req_app',
+            deviceId: 'dev_app',
+            status: 'approved',
+          });
+
+          const result = await dbService.approveDeviceRequest('req_app');
+          expect(result.alreadyProcessed).toBe(true);
+          expect(mockPrisma.catcastDeviceRequest.update).not.toHaveBeenCalled();
+        });
+
+        it('should deny pending request', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue({
+            id: 'req_deny',
+            deviceId: 'dev_deny',
+            status: 'pending',
+          });
+          mockPrisma.catcastDeviceRequest.update.mockResolvedValue({
+            id: 'req_deny',
+            status: 'denied',
+          });
+
+          const result = await dbService.denyDeviceRequest('req_deny');
+          expect(result.success).toBe(true);
+          expect(result.alreadyProcessed).toBe(false);
+          expect(mockPrisma.catcastDevice.updateMany).toHaveBeenCalledWith({
+            where: { deviceId: 'dev_deny' },
+            data: { isAllowed: false },
+          });
+        });
+      });
+
+      describe('listAllowedDevices & revokeDeviceAccess', () => {
+        it('should list allowed devices', async () => {
+          mockPrisma.catcastDevice.findMany.mockResolvedValue([
+            { id: 1, deviceId: 'dev_1', isAllowed: true },
+          ]);
+          const list = await dbService.listAllowedDevices();
+          expect(list).toHaveLength(1);
+        });
+
+        it('should revoke device access by ID or deviceId', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+            id: 2,
+            deviceId: 'dev_2',
+            isAllowed: true,
+          });
+          mockPrisma.catcastDevice.update.mockResolvedValue({
+            id: 2,
+            deviceId: 'dev_2',
+            isAllowed: false,
+          });
+
+          const res = await dbService.revokeDeviceAccess(2);
+          expect(res.isAllowed).toBe(false);
+          expect(mockPrisma.catcastDevice.update).toHaveBeenCalledWith({
+            where: { id: 2 },
+            data: { isAllowed: false },
+          });
+        });
+      });
     });
   });
 });
