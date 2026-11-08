@@ -195,22 +195,4 @@ model CatcastDeviceRequest {
   @@index([deviceId, status])
 }
 
-model CatcastDeviceRequest {
-  id                String   @id @default(cuid()) @db.VarChar(64)
-  deviceId          String   @db.VarChar(128)
-  platform          String   @db.VarChar(32)
-  model             String?  @db.VarChar(128)
-  os                String?  @db.VarChar(128)
-  status            String   @default("pending") @db.VarChar(32)
-  expiresAt         DateTime
-  telegramMessageId Int?
-  telegramChatId    String?  @db.VarChar(64)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([deviceId, createdAt])
-  @@index([deviceId, status])
-}
-
-
 
