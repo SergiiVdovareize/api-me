@@ -1088,6 +1088,14 @@ describe('TelegramService', () => {
       });
 
       it('should notify admin on notifyNewDeviceRequest', async () => {
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            ok: true,
+            result: { message_id: 888, chat: { id: 1252877 } },
+          }),
+        });
+
         const res = await service.notifyNewDeviceRequest({
           id: 'req_test',
           deviceId: 'android_dev_test',
@@ -1096,7 +1104,7 @@ describe('TelegramService', () => {
           os: '9',
           createdAt: new Date(),
         });
-        expect(res).toBeDefined();
+        expect(res).toEqual({ messageId: 888, chatId: '1252877' });
 
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/sendMessage'),
