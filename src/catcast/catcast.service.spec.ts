@@ -569,6 +569,12 @@ describe('CatcastService', () => {
           const res = await dbService.getDeviceStatus('dev_other');
           expect(res.status).toBe('unknown');
 
+          mockPrisma.catcastDevice.findUnique.mockRejectedValueOnce(
+            new Error('Table CatcastDevice does not exist')
+          );
+          const errRes = await dbService.getDeviceStatus('dev_db_err');
+          expect(errRes.status).toBe('unknown');
+
           const noPrismaRes = await service.getDeviceStatus('dev_no_prisma');
           expect(noPrismaRes.status).toBe('unknown');
         });

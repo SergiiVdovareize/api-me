@@ -629,65 +629,74 @@ export class CatcastService {
       return { status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN, expiresAt: null, requestId: null };
     }
 
-    // 1. Check allowlist
-    const allowed = await this.prisma.catcastDevice.findUnique({
-      where: { deviceId: cleanDeviceId },
-    });
-    if (allowed && allowed.isAllowed) {
-      return {
-        status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
-        expiresAt: null,
-        requestId: null,
-      };
-    }
-
-    // 2. Check latest request
-    const latest = await this.prisma.catcastDeviceRequest.findFirst({
-      where: { deviceId: cleanDeviceId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!latest) {
-      return { status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN, expiresAt: null, requestId: null };
-    }
-
-    if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED) {
-      return {
-        status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
-        expiresAt: null,
-        requestId: latest.id,
-      };
-    }
-
-    if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.DENIED) {
-      return {
-        status: CATCAST_CONSTANTS.DEVICE_STATUS.DENIED,
-        expiresAt: null,
-        requestId: latest.id,
-      };
-    }
-
-    if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.PENDING) {
-      const now = new Date();
-      if (now <= new Date(latest.expiresAt)) {
+    try {
+      // 1. Check allowlist
+      const allowed = await this.prisma.catcastDevice.findUnique({
+        where: { deviceId: cleanDeviceId },
+      });
+      if (allowed && allowed.isAllowed) {
         return {
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+          status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+          expiresAt: null,
+          requestId: null,
+        };
+      }
+
+      // 2. Check latest request
+      const latest = await this.prisma.catcastDeviceRequest.findFirst({
+        where: { deviceId: cleanDeviceId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!latest) {
+        return {
+          status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+          expiresAt: null,
+          requestId: null,
+        };
+      }
+
+      if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED) {
+        return {
+          status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+          expiresAt: null,
+          requestId: latest.id,
+        };
+      }
+
+      if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.DENIED) {
+        return {
+          status: CATCAST_CONSTANTS.DEVICE_STATUS.DENIED,
+          expiresAt: null,
+          requestId: latest.id,
+        };
+      }
+
+      if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.PENDING) {
+        const now = new Date();
+        if (now <= new Date(latest.expiresAt)) {
+          return {
+            status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+            expiresAt: new Date(latest.expiresAt).toISOString(),
+            requestId: latest.id,
+          };
+        }
+        return {
+          status: CATCAST_CONSTANTS.DEVICE_STATUS.EXPIRED,
           expiresAt: new Date(latest.expiresAt).toISOString(),
           requestId: latest.id,
         };
       }
+
       return {
-        status: CATCAST_CONSTANTS.DEVICE_STATUS.EXPIRED,
-        expiresAt: new Date(latest.expiresAt).toISOString(),
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+        expiresAt: null,
         requestId: latest.id,
       };
+    } catch (err: any) {
+      this.logger.warn(`Failed to retrieve device status for "${cleanDeviceId}": ${err.message}`);
+      return { status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN, expiresAt: null, requestId: null };
     }
-
-    return {
-      status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
-      expiresAt: null,
-      requestId: latest.id,
-    };
   }
 
   /**
