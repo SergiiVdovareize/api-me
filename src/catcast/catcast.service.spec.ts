@@ -1,6 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CatcastService } from './catcast.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { PrismaService } from '../models/prisma/prisma.service';
@@ -357,6 +362,12 @@ describe('CatcastService', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
+      it('should throw Error if prisma is unavailable in requestDeviceAccess', async () => {
+        await expect(
+          service.requestDeviceAccess({ deviceId: 'dev_1', platform: 'web' })
+        ).rejects.toThrow('Database service unavailable');
+      });
+
       it('should return approved immediately if device is in allowlist', async () => {
         mockPrisma.catcastDevice.findUnique.mockResolvedValue({
           id: 1,
@@ -448,6 +459,36 @@ describe('CatcastService', () => {
         });
       });
 
+      it('should handle notifier rejection gracefully and default platform/model/os', async () => {
+        mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue(null);
+        mockPrisma.catcastDeviceRequest.count.mockResolvedValue(0);
+
+        const createdRecord = {
+          id: 'req_new_789',
+          deviceId: 'android_dev_minimal',
+          platform: 'unknown',
+          model: null,
+          os: null,
+          status: 'pending',
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+          createdAt: new Date(),
+        };
+        mockPrisma.catcastDeviceRequest.create.mockResolvedValue(createdRecord);
+
+        const mockFaultyNotifier = jest.fn().mockRejectedValue(new Error('Telegram down'));
+        dbService.setDeviceRequestNotifier(mockFaultyNotifier);
+
+        const res = await dbService.requestDeviceAccess({
+          deviceId: 'android_dev_minimal',
+          platform: '',
+        });
+
+        expect(res.status).toBe('pending');
+        expect(res.requestId).toBe('req_new_789');
+        expect(mockFaultyNotifier).toHaveBeenCalledWith(createdRecord);
+      });
+
       describe('getDeviceStatus', () => {
         it('should return unknown if deviceId is empty or no requests found', async () => {
           expect(await dbService.getDeviceStatus('')).toEqual({
@@ -516,6 +557,21 @@ describe('CatcastService', () => {
           const res = await dbService.getDeviceStatus('dev_denied');
           expect(res.status).toBe('denied');
         });
+
+        it('should return unknown if latest request has unrecognized status or without prisma', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
+            id: 'req_other',
+            status: 'canceled',
+            expiresAt: new Date(),
+          });
+
+          const res = await dbService.getDeviceStatus('dev_other');
+          expect(res.status).toBe('unknown');
+
+          const noPrismaRes = await service.getDeviceStatus('dev_no_prisma');
+          expect(noPrismaRes.status).toBe('unknown');
+        });
       });
 
       describe('approveDeviceRequest & denyDeviceRequest', () => {
@@ -571,6 +627,19 @@ describe('CatcastService', () => {
           expect(mockPrisma.catcastDeviceRequest.update).not.toHaveBeenCalled();
         });
 
+        it('should throw NotFoundException if request not found in approveDeviceRequest', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue(null);
+          await expect(dbService.approveDeviceRequest('req_missing')).rejects.toThrow(
+            NotFoundException
+          );
+        });
+
+        it('should throw Error if prisma is missing in approveDeviceRequest', async () => {
+          await expect(service.approveDeviceRequest('req_1')).rejects.toThrow(
+            'Database service unavailable'
+          );
+        });
+
         it('should deny pending request', async () => {
           mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue({
             id: 'req_deny',
@@ -590,18 +659,46 @@ describe('CatcastService', () => {
             data: { isAllowed: false },
           });
         });
+
+        it('should return alreadyProcessed: true when denying already denied request', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue({
+            id: 'req_deny',
+            deviceId: 'dev_deny',
+            status: 'denied',
+          });
+
+          const result = await dbService.denyDeviceRequest('req_deny');
+          expect(result.alreadyProcessed).toBe(true);
+          expect(mockPrisma.catcastDeviceRequest.update).not.toHaveBeenCalled();
+        });
+
+        it('should throw NotFoundException if request not found in denyDeviceRequest', async () => {
+          mockPrisma.catcastDeviceRequest.findUnique.mockResolvedValue(null);
+          await expect(dbService.denyDeviceRequest('req_missing')).rejects.toThrow(
+            NotFoundException
+          );
+        });
+
+        it('should throw Error if prisma is missing in denyDeviceRequest', async () => {
+          await expect(service.denyDeviceRequest('req_1')).rejects.toThrow(
+            'Database service unavailable'
+          );
+        });
       });
 
       describe('listAllowedDevices & revokeDeviceAccess', () => {
-        it('should list allowed devices', async () => {
+        it('should list allowed devices and return empty array if no prisma', async () => {
           mockPrisma.catcastDevice.findMany.mockResolvedValue([
             { id: 1, deviceId: 'dev_1', isAllowed: true },
           ]);
           const list = await dbService.listAllowedDevices();
           expect(list).toHaveLength(1);
+
+          const emptyList = await service.listAllowedDevices();
+          expect(emptyList).toEqual([]);
         });
 
-        it('should revoke device access by ID or deviceId', async () => {
+        it('should revoke device access by numeric ID or string deviceId', async () => {
           mockPrisma.catcastDevice.findUnique.mockResolvedValue({
             id: 2,
             deviceId: 'dev_2',
@@ -619,6 +716,25 @@ describe('CatcastService', () => {
             where: { id: 2 },
             data: { isAllowed: false },
           });
+
+          // Test with string identifier
+          await dbService.revokeDeviceAccess('dev_2');
+          expect(mockPrisma.catcastDevice.findUnique).toHaveBeenCalledWith({
+            where: { deviceId: 'dev_2' },
+          });
+        });
+
+        it('should throw NotFoundException if device not found in revokeDeviceAccess', async () => {
+          mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
+          await expect(dbService.revokeDeviceAccess('unknown_device')).rejects.toThrow(
+            NotFoundException
+          );
+        });
+
+        it('should throw Error if prisma is missing in revokeDeviceAccess', async () => {
+          await expect(service.revokeDeviceAccess(1)).rejects.toThrow(
+            'Database service unavailable'
+          );
         });
       });
     });

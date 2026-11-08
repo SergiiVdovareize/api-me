@@ -1281,18 +1281,11 @@ You MUST output ONLY a valid JSON object matching this structure:
             if (options.reply_markup) {
               fallbackPayload.reply_markup = options.reply_markup;
             }
-            const fallbackRes = await fetch(url, {
+            await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(fallbackPayload),
             });
-            if (fallbackRes.ok) {
-              const fbData = (await fallbackRes.json()) as any;
-              return {
-                messageId: fbData?.result?.message_id,
-                chatId: fbData?.result?.chat?.id,
-              };
-            }
           } catch {
             // ignore retry error
           }

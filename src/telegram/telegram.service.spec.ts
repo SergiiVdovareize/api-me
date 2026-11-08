@@ -1096,12 +1096,175 @@ describe('TelegramService', () => {
           os: '9',
           createdAt: new Date(),
         });
+        expect(res).toBeDefined();
 
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/sendMessage'),
           expect.objectContaining({
             body: expect.stringContaining('Нова заявка на доступ до CatCast'),
           })
+        );
+      });
+
+      it('should handle alreadyProcessed and error branches in approve/deny/revoke callbacks', async () => {
+        // 1. approve alreadyProcessed
+        mockCatcastService.approveDeviceRequest!.mockResolvedValueOnce({
+          success: true,
+          alreadyProcessed: true,
+          request: { id: 'req_123', status: 'approved' } as any,
+        });
+        await service.handleIncomingUpdate({
+          update_id: 312,
+          callback_query: {
+            id: 'cb_app_dup',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 70, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_dev_approve:req_123',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({ body: expect.stringContaining('вже було оброблено') })
+        );
+
+        // 2. approve error
+        mockCatcastService.approveDeviceRequest!.mockRejectedValueOnce(new Error('Approve error'));
+        await service.handleIncomingUpdate({
+          update_id: 313,
+          callback_query: {
+            id: 'cb_app_err',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 71, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_dev_approve:req_123',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({ body: expect.stringContaining('Approve error') })
+        );
+
+        // 3. deny alreadyProcessed
+        mockCatcastService.denyDeviceRequest!.mockResolvedValueOnce({
+          success: true,
+          alreadyProcessed: true,
+          request: { id: 'req_123', status: 'denied' } as any,
+        });
+        await service.handleIncomingUpdate({
+          update_id: 314,
+          callback_query: {
+            id: 'cb_deny_dup',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 72, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_dev_deny:req_123',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({ body: expect.stringContaining('вже було оброблено') })
+        );
+
+        // 4. deny error
+        mockCatcastService.denyDeviceRequest!.mockRejectedValueOnce(new Error('Deny error'));
+        await service.handleIncomingUpdate({
+          update_id: 315,
+          callback_query: {
+            id: 'cb_deny_err',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 73, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_dev_deny:req_123',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({ body: expect.stringContaining('Deny error') })
+        );
+
+        // 5. revoke error
+        mockCatcastService.revokeDeviceAccess!.mockRejectedValueOnce(new Error('Revoke error'));
+        await service.handleIncomingUpdate({
+          update_id: 316,
+          callback_query: {
+            id: 'cb_rev_err',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 74, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_dev_revoke:1',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/answerCallbackQuery'),
+          expect.objectContaining({ body: expect.stringContaining('Revoke error') })
+        );
+      });
+
+      it('should handle empty devices list and error handling in list/revoke commands', async () => {
+        // 1. renderCatcastDeviceList with empty list
+        const emptyRender = service.renderCatcastDeviceList([]);
+        expect(emptyRender.text).toContain('Наразі немає жодного дозволеного пристрою');
+
+        // 2. catcast_devices_list error
+        mockCatcastService.listAllowedDevices!.mockRejectedValueOnce(new Error('List error'));
+        await service.handleIncomingUpdate({
+          update_id: 317,
+          callback_query: {
+            id: 'cb_list_err',
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            message: { message_id: 75, date: 1720000000, chat: { id: 12345, type: 'private' } },
+            data: 'catcast_devices_list',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({ body: expect.stringContaining('List error') })
+        );
+
+        // 3. /catcast_devices command error
+        mockCatcastService.listAllowedDevices!.mockRejectedValueOnce(new Error('Command error'));
+        await service.handleIncomingUpdate({
+          update_id: 318,
+          message: {
+            message_id: 318,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/catcast_devices',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({ body: expect.stringContaining('Command error') })
+        );
+
+        // 4. /catcast_revoke without identifier
+        await service.handleIncomingUpdate({
+          update_id: 319,
+          message: {
+            message_id: 319,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/catcast_revoke',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({ body: expect.stringContaining('Вкажіть ID або Device ID') })
+        );
+
+        // 5. /catcast_revoke error
+        mockCatcastService.revokeDeviceAccess!.mockRejectedValueOnce(new Error('Revoke cmd error'));
+        await service.handleIncomingUpdate({
+          update_id: 320,
+          message: {
+            message_id: 320,
+            date: 1720000000,
+            chat: { id: 12345, type: 'private' },
+            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
+            text: '/catcast_revoke_99',
+          },
+        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/sendMessage'),
+          expect.objectContaining({ body: expect.stringContaining('Revoke cmd error') })
         );
       });
     });

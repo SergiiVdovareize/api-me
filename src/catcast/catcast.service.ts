@@ -522,58 +522,57 @@ export class CatcastService {
     if (!cleanDeviceId) {
       throw new BadRequestException('deviceId is required');
     }
+    if (!this.prisma) {
+      throw new Error('Database service unavailable');
+    }
     const cleanPlatform = dto.platform?.trim() || 'unknown';
 
     // 1. Check if device is already approved in allowlist
-    if (this.prisma) {
-      const allowed = await this.prisma.catcastDevice.findUnique({
-        where: { deviceId: cleanDeviceId },
-      });
-      if (allowed && allowed.isAllowed) {
-        return {
-          requestId: null,
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
-        };
-      }
+    const allowed = await this.prisma.catcastDevice.findUnique({
+      where: { deviceId: cleanDeviceId },
+    });
+    if (allowed && allowed.isAllowed) {
+      return {
+        requestId: null,
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+      };
     }
 
     const now = new Date();
 
     // 2. Check for an existing live pending request
-    if (this.prisma) {
-      const live = await this.prisma.catcastDeviceRequest.findFirst({
-        where: {
-          deviceId: cleanDeviceId,
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
-          expiresAt: { gt: now },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+    const live = await this.prisma.catcastDeviceRequest.findFirst({
+      where: {
+        deviceId: cleanDeviceId,
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-      if (live) {
-        return {
-          requestId: live.id,
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
-          expiresAt: live.expiresAt.toISOString(),
-        };
-      }
+    if (live) {
+      return {
+        requestId: live.id,
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+        expiresAt: live.expiresAt.toISOString(),
+      };
+    }
 
-      // 3. Rate limiting: max 5 new requests per deviceId per hour
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      const countLastHour = await this.prisma.catcastDeviceRequest.count({
-        where: {
-          deviceId: cleanDeviceId,
-          createdAt: { gte: oneHourAgo },
-        },
-      });
+    // 3. Rate limiting: max 5 new requests per deviceId per hour
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const countLastHour = await this.prisma.catcastDeviceRequest.count({
+      where: {
+        deviceId: cleanDeviceId,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
 
-      if (countLastHour >= CATCAST_CONSTANTS.DEVICE_REQUEST.RATE_LIMIT_HOURLY) {
-        return {
-          error: CATCAST_CONSTANTS.ERROR_CODES.RATE_LIMIT,
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.DENIED,
-          message: 'Забагато заявок. Спробуйте пізніше',
-        };
-      }
+    if (countLastHour >= CATCAST_CONSTANTS.DEVICE_REQUEST.RATE_LIMIT_HOURLY) {
+      return {
+        error: CATCAST_CONSTANTS.ERROR_CODES.RATE_LIMIT,
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.DENIED,
+        message: 'Забагато заявок. Спробуйте пізніше',
+      };
     }
 
     // 4. Create new pending request with 30 min lifetime
@@ -583,26 +582,23 @@ export class CatcastService {
     const model = dto.model ? dto.model.trim().slice(0, 120) : null;
     const os = dto.os ? dto.os.trim().slice(0, 80) : null;
 
-    let newRecord: any = null;
-    if (this.prisma) {
-      newRecord = await this.prisma.catcastDeviceRequest.create({
-        data: {
-          deviceId: cleanDeviceId,
-          platform: cleanPlatform,
-          model,
-          os,
-          status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
-          expiresAt,
-        },
-      });
-    }
+    const newRecord = await this.prisma.catcastDeviceRequest.create({
+      data: {
+        deviceId: cleanDeviceId,
+        platform: cleanPlatform,
+        model,
+        os,
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+        expiresAt,
+      },
+    });
 
     // 5. Notify admin via Telegram
-    if (newRecord && this.deviceRequestNotifier) {
+    if (this.deviceRequestNotifier) {
       try {
         const sent = await this.deviceRequestNotifier(newRecord);
         if (sent && sent.messageId) {
-          await this.prisma?.catcastDeviceRequest.update({
+          await this.prisma.catcastDeviceRequest.update({
             where: { id: newRecord.id },
             data: {
               telegramMessageId: sent.messageId,
@@ -618,7 +614,7 @@ export class CatcastService {
     }
 
     return {
-      requestId: newRecord?.id || 'req_local',
+      requestId: newRecord.id,
       status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
       expiresAt: expiresAt.toISOString(),
     };
