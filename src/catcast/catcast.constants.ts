@@ -11,7 +11,8 @@ export const CATCAST_CONSTANTS = {
     KEY_REQUIRED: 'Access key is required',
     DEVICE_ID_REQUIRED: 'Device ID is required',
     INVALID_KEY: 'Invalid access key',
-    KEY_EXPIRED: 'Activation window expired. The key must be activated within 24 hours of creation.',
+    KEY_EXPIRED:
+      'Activation window expired. The key must be activated within 24 hours of creation.',
     DEVICE_MISMATCH: 'Key is already bound to another device. Access denied.',
     IP_MISMATCH: 'Key is already bound to another IP address. Access denied.',
   },

@@ -419,7 +419,7 @@ export class TelegramService implements OnModuleInit {
     if (!isAwaiting) {
       await this.sendMessage(
         chatId,
-        'ℹ️ Щоб створити задачу, надішліть команду /task або скористайтесь /menu.'
+        'ℹ️ Щоб створити задачу, спочатку виберіть команду /task у меню або скористайтесь /menu.'
       );
       return { processed: 1, createdTasks: [] };
     }
@@ -604,9 +604,13 @@ export class TelegramService implements OnModuleInit {
             },
           });
         } catch (err: any) {
-          await this.sendMessage(chatId, `❌ Не вдалося створити ключ: ${escapeHtml(err.message)}`, {
-            parse_mode: 'HTML',
-          });
+          await this.sendMessage(
+            chatId,
+            `❌ Не вдалося створити ключ: ${escapeHtml(err.message)}`,
+            {
+              parse_mode: 'HTML',
+            }
+          );
         }
         break;
 
@@ -819,17 +823,16 @@ You MUST output ONLY a valid JSON object matching this structure:
         return parsed;
       }
     } catch (err: any) {
-      this.logger.warn(`Failed to structure task with LLM: ${err.message}. Using fallback formatting.`);
+      this.logger.warn(
+        `Failed to structure task with LLM: ${err.message}. Using fallback formatting.`
+      );
     }
 
     // Fallback: simple line split if LLM fails
-    const lines = dictation.trim().split('\n').filter(Boolean);
-    const firstLine = lines[0] || 'Нова задача';
-    const rest = lines.slice(1).join('\n') || dictation;
-
+    const firstLine = dictation.split('\n')[0].trim().slice(0, 80);
     return {
-      title: firstLine.length > 70 ? firstLine.slice(0, 67) + '...' : firstLine,
-      body: `## Опис\n\n${rest}`,
+      title: firstLine || 'Нова задача',
+      body: `## Суть ідеї\n${dictation}\n\n---\n*Task dictated via Telegram bot.*`,
     };
   }
 
@@ -846,19 +849,25 @@ You MUST output ONLY a valid JSON object matching this structure:
   async downloadFile(fileId: string): Promise<Buffer> {
     const token = this.getBotToken();
     if (!token) {
-      throw new Error('Telegram bot token not configured');
+      this.logger.warn('TELEGRAM_BOT_TOKEN not configured. Returning mock audio buffer.');
+      return Buffer.from('mock-audio-buffer');
     }
 
-    const infoUrl = `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`;
-    const infoRes = await fetch(infoUrl);
+    // 1. Get file path from Telegram
+    const getFileUrl = `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`;
+    const infoRes = await fetch(getFileUrl);
     if (!infoRes.ok) {
-      throw new Error(`Failed to get file metadata from Telegram (HTTP ${infoRes.status})`);
+      const err = await infoRes.text();
+      this.logger.error(
+        `Failed to get file metadata from Telegram (HTTP ${infoRes.status}): ${err}`
+      );
+      throw new Error(`Telegram getFile failed: HTTP ${infoRes.status}`);
     }
 
     const infoData = (await infoRes.json()) as TelegramFileResponse;
     const filePath = infoData.result?.file_path;
     if (!filePath) {
-      throw new Error('Telegram getFile response did not contain file_path');
+      throw new Error(`Telegram getFile response did not contain file_path for file ID ${fileId}`);
     }
 
     const fileUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;

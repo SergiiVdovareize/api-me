@@ -784,7 +784,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/answerCallbackQuery'),
           expect.objectContaining({
-            body: expect.stringContaining('Доступ заборонено'),
+            body: expect.stringContaining('Немає доступу'),
           })
         );
       });
@@ -809,7 +809,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/editMessageText'),
           expect.objectContaining({
-            body: expect.stringContaining('CatCast Management'),
+            body: expect.stringContaining('Керування ключами CatCast'),
           })
         );
         expect(global.fetch).toHaveBeenCalledWith(
@@ -866,7 +866,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/sendMessage'),
           expect.objectContaining({
-            body: expect.stringContaining('Надішліть опис задачі'),
+            body: expect.stringContaining('Записуйте голосове'),
           })
         );
       });
