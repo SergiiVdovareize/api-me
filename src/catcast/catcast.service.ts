@@ -120,8 +120,8 @@ export class CatcastService {
       };
     }
 
-    // Check device binding
-    if (existingRecord.boundDeviceId !== cleanDeviceId) {
+    // Check device binding (case-insensitive)
+    if (existingRecord.boundDeviceId.trim().toLowerCase() !== cleanDeviceId.toLowerCase()) {
       this.logger.warn(
         `Catcast key device mismatch for key "${cleanKey.slice(0, 4)}***": bound to "${existingRecord.boundDeviceId}", incoming: "${cleanDeviceId}"`
       );

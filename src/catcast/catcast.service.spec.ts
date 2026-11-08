@@ -103,6 +103,20 @@ describe('CatcastService', () => {
     expect(result2.platform).toBe('android_tv');
   });
 
+  it('should allow access when deviceId differs only by case (case-insensitive check)', async () => {
+    await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c', platform: 'android_tv' },
+      '1.2.3.4'
+    );
+    // Same device with uppercase / mixed case
+    const result2 = await service.verifyAccess(
+      { key: 'secret-key-1', deviceId: 'ANDROID_9774D56D682E549C', platform: 'android_tv' },
+      '5.6.7.8'
+    );
+    expect(result2.success).toBe(true);
+    expect(result2.isNewBinding).toBe(false);
+  });
+
   it('should throw ForbiddenException (DEVICE_MISMATCH) when key is used from different deviceId', async () => {
     await service.verifyAccess(
       { key: 'secret-key-1', deviceId: 'android_9774d56d682e549c' },
