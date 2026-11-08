@@ -13,6 +13,10 @@ import {
   TelegramUpdate,
 } from './interfaces/telegram.interface';
 
+function escapeHtml(text: string): string {
+  return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
@@ -176,8 +180,7 @@ export class TelegramService implements OnModuleInit {
         `• /task — створити нову задачу (голосом, текстом чи з фото)\n` +
         `• /cancel — скасувати створення задачі\n\n` +
         `*CatCast:*\n` +
-        `• /catcast — керування персональними ключами доступу\n` +
-        `• /catcast\\_list — переглянути всі ключі\n\n` +
+        `• /catcast — керування персональними ключами доступу\n\n` +
         `Для скасування скористайтесь /cancel.`;
       await this.sendMessage(chatId, helpMessage);
       return { processed: 1, createdTasks: [] };
@@ -193,13 +196,13 @@ export class TelegramService implements OnModuleInit {
     // 4. CatCast Key Management commands
     if (textTrimmed === '/catcast' || textTrimmed.startsWith('/catcast_help')) {
       const helpMsg =
-        `🐱 *Керування ключами CatCast*\n\n` +
-        `• \`/catcast_new [назва]\` — створити новий ключ\n` +
-        `  _Приклад: \`/catcast_new MiBox Вітальня\`_\n\n` +
-        `• \`/catcast_list\` — список усіх ключів та пристроїв\n\n` +
-        `• \`/catcast_reset_[ID]\` — скинути прив'язку пристрою\n\n` +
-        `• \`/catcast_toggle_[ID]\` — активувати / заблокувати ключ`;
-      await this.sendMessage(chatId, helpMsg);
+        `🐱 <b>Керування ключами CatCast</b>\n\n` +
+        `• <code>/catcast_new [назва]</code> — створити новий ключ\n` +
+        `  <i>Приклад: /catcast_new MiBox Вітальня</i>\n\n` +
+        `• <code>/catcast_list</code> — список усіх ключів та пристроїв\n\n` +
+        `• <code>/catcast_reset_[ID]</code> — скинути прив'язку пристрою\n\n` +
+        `• <code>/catcast_toggle_[ID]</code> — активувати / заблокувати ключ`;
+      await this.sendMessage(chatId, helpMsg, { parse_mode: 'HTML' });
       return { processed: 1, createdTasks: [] };
     }
 
@@ -215,13 +218,15 @@ export class TelegramService implements OnModuleInit {
       try {
         const created = await this.catcastService.createKey(label);
         const reply =
-          `✅ *Ключ CatCast успішно створено!*\n\n` +
-          `👤 Назва: *${created.label || 'Без назви'}*\n` +
-          `🔑 Ключ: \`${created.key}\`\n\n` +
-          `_(Натисніть на ключ, щоб скопіювати)_`;
-        await this.sendMessage(chatId, reply);
+          `✅ <b>Ключ CatCast успішно створено!</b>\n\n` +
+          `👤 Назва: <b>${escapeHtml(created.label || 'Без назви')}</b>\n` +
+          `🔑 Ключ: <code>${created.key}</code>\n\n` +
+          `<i>(Натисніть на ключ, щоб скопіювати)</i>`;
+        await this.sendMessage(chatId, reply, { parse_mode: 'HTML' });
       } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Не вдалося створити ключ: ${err.message}`);
+        await this.sendMessage(chatId, `❌ Не вдалося створити ключ: ${escapeHtml(err.message)}`, {
+          parse_mode: 'HTML',
+        });
       }
       return { processed: 1, createdTasks: [] };
     }
@@ -237,32 +242,41 @@ export class TelegramService implements OnModuleInit {
         if (keys.length === 0) {
           await this.sendMessage(
             chatId,
-            'ℹ️ *Список ключів CatCast порожній.*\nСтворіть перший ключ: `/catcast_new [назва]`'
+            'ℹ️ <b>Список ключів CatCast порожній.</b>\nСтворіть перший ключ: <code>/catcast_new [назва]</code>',
+            { parse_mode: 'HTML' }
           );
           return { processed: 1, createdTasks: [] };
         }
 
         const items = keys.map((k, idx) => {
           const statusIcon = k.isActive ? '🟢' : '🔴';
+          const safeLabel = escapeHtml(k.label || 'Без назви');
           const deviceText = k.boundDeviceId
-            ? `📱 \`${k.boundDeviceId.slice(0, 18)}...\` (${k.platform || 'web'})`
-            : `📱 _Пристрій не прив'язано_`;
+            ? `📱 <code>${escapeHtml(k.boundDeviceId.slice(0, 18))}...</code> (${escapeHtml(k.platform || 'web')})`
+            : `📱 <i>Пристрій не прив'язано</i>`;
           const lastUsed = k.lastUsedAt
             ? `🕒 ${new Date(k.lastUsedAt).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
             : '';
 
           return (
-            `${idx + 1}. ${statusIcon} *${k.label || 'Без назви'}* (ID: ${k.id})\n` +
-            `   🔑 \`${k.key}\`\n` +
+            `${idx + 1}. ${statusIcon} <b>${safeLabel}</b> (ID: ${k.id})\n` +
+            `   🔑 <code>${k.key}</code>\n` +
             `   ${deviceText} ${lastUsed}\n` +
-            `   Дії: /catcast\\_reset\\_${k.id} | /catcast\\_toggle\\_${k.id}`
+            `   Дії: /catcast_reset_${k.id} | /catcast_toggle_${k.id}`
           );
         });
 
-        const listReply = `📋 *Ключі доступу CatCast (${keys.length}):*\n\n` + items.join('\n\n');
-        await this.sendMessage(chatId, listReply);
+        const listReply =
+          `📋 <b>Ключі доступу CatCast (${keys.length}):</b>\n\n` + items.join('\n\n');
+        await this.sendMessage(chatId, listReply, { parse_mode: 'HTML' });
       } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Помилка завантаження ключів: ${err.message}`);
+        await this.sendMessage(
+          chatId,
+          `❌ Помилка завантаження ключів: ${escapeHtml(err.message)}`,
+          {
+            parse_mode: 'HTML',
+          }
+        );
       }
       return { processed: 1, createdTasks: [] };
     }
@@ -282,7 +296,8 @@ export class TelegramService implements OnModuleInit {
       if (!idOrKey) {
         await this.sendMessage(
           chatId,
-          'ℹ️ Вкажіть ID або ключ для скидання: `/catcast_reset_[ID]` або `/catcast_reset [ключ]`'
+          'ℹ️ Вкажіть ID або ключ для скидання: <code>/catcast_reset_[ID]</code> або <code>/catcast_reset [ключ]</code>',
+          { parse_mode: 'HTML' }
         );
         return { processed: 1, createdTasks: [] };
       }
@@ -291,13 +306,20 @@ export class TelegramService implements OnModuleInit {
         const res = await this.catcastService.resetKeyBinding(idOrKey);
         await this.sendMessage(
           chatId,
-          `🔄 *Прив'язку пристрою скинуто!*\n\n` +
-            `🔑 Ключ: \`${res.key}\`\n` +
-            `👤 Назва: *${res.label || '-'}*\n\n` +
-            `Тепер цей ключ можна активувати на новому пристрої.`
+          `🔄 <b>Прив'язку пристрою скинуто!</b>\n\n` +
+            `🔑 Ключ: <code>${res.key}</code>\n` +
+            `👤 Назва: <b>${escapeHtml(res.label || '-')}</b>\n\n` +
+            `Тепер цей ключ можна активувати на новому пристрої.`,
+          { parse_mode: 'HTML' }
         );
       } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Не вдалося скинути прив'язку: ${err.message}`);
+        await this.sendMessage(
+          chatId,
+          `❌ Не вдалося скинути прив'язку: ${escapeHtml(err.message)}`,
+          {
+            parse_mode: 'HTML',
+          }
+        );
       }
       return { processed: 1, createdTasks: [] };
     }
@@ -317,7 +339,8 @@ export class TelegramService implements OnModuleInit {
       if (!idOrKey) {
         await this.sendMessage(
           chatId,
-          'ℹ️ Вкажіть ID або ключ: `/catcast_toggle_[ID]` або `/catcast_toggle [ключ]`'
+          'ℹ️ Вкажіть ID або ключ: <code>/catcast_toggle_[ID]</code> або <code>/catcast_toggle [ключ]</code>',
+          { parse_mode: 'HTML' }
         );
         return { processed: 1, createdTasks: [] };
       }
@@ -328,10 +351,13 @@ export class TelegramService implements OnModuleInit {
         const action = updated.isActive ? 'активовано' : 'заблоковано';
         await this.sendMessage(
           chatId,
-          `${icon} Ключ \`${updated.key}\` (*${updated.label || '-'}*) успішно *${action}*!`
+          `${icon} Ключ <code>${updated.key}</code> (<b>${escapeHtml(updated.label || '-')}</b>) успішно <b>${action}</b>!`,
+          { parse_mode: 'HTML' }
         );
       } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Не вдалося змінити статус: ${err.message}`);
+        await this.sendMessage(chatId, `❌ Не вдалося змінити статус: ${escapeHtml(err.message)}`, {
+          parse_mode: 'HTML',
+        });
       }
       return { processed: 1, createdTasks: [] };
     }
@@ -563,6 +589,20 @@ You MUST output ONLY a valid JSON object matching this structure:
         this.logger.error(
           `Failed to send Telegram message to chat ${chatId} (HTTP ${res.status}): ${err}`
         );
+
+        // Fallback: If Telegram rejected due to markdown/entity parsing error, retry as plain text
+        if (options.parse_mode && err.includes("can't parse entities")) {
+          this.logger.warn(`Retrying sending Telegram message to chat ${chatId} as plain text...`);
+          try {
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text }),
+            });
+          } catch {
+            // ignore retry error
+          }
+        }
       } else {
         this.logger.log(`Telegram message sent successfully to chat ${chatId}`);
       }
