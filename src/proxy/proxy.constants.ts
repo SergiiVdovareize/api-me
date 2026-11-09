@@ -37,6 +37,16 @@ export const PROXY_DOMAIN_RULES: readonly DomainHeaderRule[] = [
     referer: 'https://uafix.net/',
     origin: 'https://uafix.net',
   },
+  {
+    matchDomains: ['kinobazaua.com'],
+    referer: 'https://kinobazaua.com/',
+    origin: 'https://kinobazaua.com',
+  },
+  {
+    matchDomains: ['kinobaza.com.ua'],
+    referer: 'https://kinobaza.com.ua/',
+    origin: 'https://kinobaza.com.ua',
+  },
 ] as const;
 
 export const ALLOWED_PROXY_DOMAINS: readonly string[] = PROXY_DOMAIN_RULES.flatMap(

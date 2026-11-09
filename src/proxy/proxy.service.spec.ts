@@ -485,11 +485,23 @@ describe('ProxyService', () => {
       expect(isAllowedProxyDomain('club.uakino.fun')).toBe(true);
       expect(isAllowedProxyDomain('zetvideo.net')).toBe(true);
       expect(isAllowedProxyDomain('uafix.net')).toBe(true);
+      expect(isAllowedProxyDomain('kinobazaua.com')).toBe(true);
+      expect(isAllowedProxyDomain('stream.kinobazaua.com')).toBe(true);
+      expect(isAllowedProxyDomain('kinobaza.com.ua')).toBe(true);
+      expect(isAllowedProxyDomain('cdn.kinobaza.com.ua')).toBe(true);
       expect(isAllowedProxyDomain('attacker-ashdi.vip')).toBe(false);
       expect(isAllowedProxyDomain('google.com')).toBe(false);
     });
 
     it('getDomainHeaders should return default ashdi headers for unknown hostname', () => {
+      expect(getDomainHeaders('kinobazaua.com')).toEqual({
+        referer: 'https://kinobazaua.com/',
+        origin: 'https://kinobazaua.com',
+      });
+      expect(getDomainHeaders('kinobaza.com.ua')).toEqual({
+        referer: 'https://kinobaza.com.ua/',
+        origin: 'https://kinobaza.com.ua',
+      });
       const headers = getDomainHeaders('unknown-domain.com');
       expect(headers).toEqual({
         referer: 'https://ashdi.vip/',
