@@ -730,6 +730,7 @@ export class TelegramService implements OnModuleInit {
     platform: string;
     model?: string | null;
     os?: string | null;
+    code?: string | null;
     createdAt: Date;
   }): Promise<{ messageId?: number; chatId?: string } | void> {
     const adminChatId =
@@ -746,13 +747,18 @@ export class TelegramService implements OnModuleInit {
       minute: '2-digit',
     });
 
+    const codeHeader = request.code
+      ? `🔑 <b>Код: ${escapeHtml(request.code)}</b>\n\n`
+      : '';
+
     const text =
-      `📺 <b>Нова заявка на доступ до CatCast</b>\n\n` +
+      `${codeHeader}` +
+      `📺 <b>Нова заявка на доступ до CatCast</b>\n` +
       `📱 <b>Пристрій:</b> <code>${escapeHtml(request.model || 'Невідомий')}</code>\n` +
       `💻 <b>ОС:</b> <code>${escapeHtml(request.os || '-')}</code>\n` +
       `🌐 <b>Платформа:</b> <code>${escapeHtml(request.platform)}</code>\n` +
       `🔑 <b>Device ID:</b> <code>${escapeHtml(request.deviceId)}</code>\n` +
-      `⏱ <b>Створено:</b> ${createdTimeStr} <i>(діє 30 хв)</i>`;
+      `⏱ <b>Час:</b> ${createdTimeStr} <i>(діє 30 хв)</i>`;
 
     const keyboard: TelegramInlineKeyboardMarkup = {
       inline_keyboard: [

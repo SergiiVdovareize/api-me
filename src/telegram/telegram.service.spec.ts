@@ -981,6 +981,7 @@ describe('TelegramService', () => {
           platform: 'android_tv',
           model: 'MIBOX4',
           os: '9',
+          code: '4K7M',
           createdAt: new Date(),
         });
         expect(res).toEqual({ messageId: 888, chatId: '1252877' });
@@ -988,7 +989,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/sendMessage'),
           expect.objectContaining({
-            body: expect.stringContaining('Нова заявка на доступ до CatCast'),
+            body: expect.stringContaining('Код: 4K7M'),
           })
         );
       });

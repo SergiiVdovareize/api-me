@@ -6,10 +6,26 @@ import {
   Logger,
   Optional,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { CATCAST_CONSTANTS } from './catcast.constants';
 import { RedisReader } from '../common/helpers/redisReader';
 import { PrismaService } from '../models/prisma/prisma.service';
+
+/**
+ * Deterministically derives a 4-character visual confirmation code from requestId
+ * using the Crockford-inspired alphabet (excluding I, O, 0, 1).
+ */
+export function deriveDeviceRequestCode(requestId: string): string {
+  if (!requestId) return '';
+  const hash = createHash('sha256').update(requestId).digest();
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += alphabet[hash[i] % alphabet.length];
+  }
+  return code;
+}
 
 export interface VerifyAccessDto {
   key?: string;
@@ -27,6 +43,7 @@ export interface CreateDeviceRequestDto {
 export interface DeviceRequestResponse {
   requestId?: string | null;
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'unknown';
+  code?: string | null;
   expiresAt?: string | null;
   error?: string;
   message?: string;
@@ -34,6 +51,7 @@ export interface DeviceRequestResponse {
 
 export interface DeviceStatusResponse {
   status: 'pending' | 'approved' | 'denied' | 'expired' | 'unknown';
+  code?: string | null;
   expiresAt: string | null;
   requestId: string | null;
 }
@@ -136,6 +154,7 @@ export class CatcastService {
       return {
         requestId: null,
         status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+        code: null,
       };
     }
 
@@ -155,6 +174,7 @@ export class CatcastService {
       return {
         requestId: live.id,
         status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+        code: deriveDeviceRequestCode(live.id),
         expiresAt: live.expiresAt.toISOString(),
       };
     }
@@ -194,10 +214,15 @@ export class CatcastService {
       },
     });
 
+    const code = deriveDeviceRequestCode(newRecord.id);
+
     // 5. Notify admin via Telegram
     if (this.deviceRequestNotifier) {
       try {
-        const sent = await this.deviceRequestNotifier(newRecord);
+        const sent = await this.deviceRequestNotifier({
+          ...newRecord,
+          code,
+        });
         if (sent && sent.messageId) {
           await this.prisma.catcastDeviceRequest.update({
             where: { id: newRecord.id },
@@ -217,6 +242,7 @@ export class CatcastService {
     return {
       requestId: newRecord.id,
       status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+      code,
       expiresAt: expiresAt.toISOString(),
     };
   }
@@ -227,7 +253,12 @@ export class CatcastService {
   async getDeviceStatus(deviceId?: string): Promise<DeviceStatusResponse> {
     const cleanDeviceId = deviceId?.trim();
     if (!cleanDeviceId || !this.prisma) {
-      return { status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN, expiresAt: null, requestId: null };
+      return {
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+        code: null,
+        expiresAt: null,
+        requestId: null,
+      };
     }
 
     try {
@@ -238,6 +269,7 @@ export class CatcastService {
       if (allowed && allowed.isAllowed) {
         return {
           status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+          code: null,
           expiresAt: null,
           requestId: null,
         };
@@ -252,6 +284,7 @@ export class CatcastService {
       if (!latest) {
         return {
           status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+          code: null,
           expiresAt: null,
           requestId: null,
         };
@@ -260,6 +293,7 @@ export class CatcastService {
       if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED) {
         return {
           status: CATCAST_CONSTANTS.DEVICE_STATUS.APPROVED,
+          code: null,
           expiresAt: null,
           requestId: latest.id,
         };
@@ -268,6 +302,7 @@ export class CatcastService {
       if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.DENIED) {
         return {
           status: CATCAST_CONSTANTS.DEVICE_STATUS.DENIED,
+          code: null,
           expiresAt: null,
           requestId: latest.id,
         };
@@ -275,15 +310,18 @@ export class CatcastService {
 
       if (latest.status === CATCAST_CONSTANTS.DEVICE_STATUS.PENDING) {
         const now = new Date();
+        const code = deriveDeviceRequestCode(latest.id);
         if (now <= new Date(latest.expiresAt)) {
           return {
             status: CATCAST_CONSTANTS.DEVICE_STATUS.PENDING,
+            code,
             expiresAt: new Date(latest.expiresAt).toISOString(),
             requestId: latest.id,
           };
         }
         return {
           status: CATCAST_CONSTANTS.DEVICE_STATUS.EXPIRED,
+          code: null,
           expiresAt: new Date(latest.expiresAt).toISOString(),
           requestId: latest.id,
         };
@@ -291,12 +329,18 @@ export class CatcastService {
 
       return {
         status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+        code: null,
         expiresAt: null,
         requestId: latest.id,
       };
     } catch (err: any) {
       this.logger.warn(`Failed to retrieve device status for "${cleanDeviceId}": ${err.message}`);
-      return { status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN, expiresAt: null, requestId: null };
+      return {
+        status: CATCAST_CONSTANTS.DEVICE_STATUS.UNKNOWN,
+        code: null,
+        expiresAt: null,
+        requestId: null,
+      };
     }
   }
 

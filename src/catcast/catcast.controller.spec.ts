@@ -19,10 +19,12 @@ describe('CatcastController', () => {
       requestDeviceAccess: jest.fn().mockResolvedValue({
         requestId: 'req_123',
         status: 'pending',
+        code: '4K7M',
         expiresAt: '2026-11-09T01:00:00.000Z',
       }),
       getDeviceStatus: jest.fn().mockResolvedValue({
         status: 'pending',
+        code: '4K7M',
         expiresAt: '2026-11-09T01:00:00.000Z',
         requestId: 'req_123',
       }),
@@ -132,6 +134,7 @@ describe('CatcastController', () => {
     expect(result).toEqual({
       requestId: 'req_123',
       status: 'pending',
+      code: '4K7M',
       expiresAt: '2026-11-09T01:00:00.000Z',
     });
   });
@@ -159,6 +162,7 @@ describe('CatcastController', () => {
     expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');
     expect(result).toEqual({
       status: 'pending',
+      code: '4K7M',
       expiresAt: '2026-11-09T01:00:00.000Z',
       requestId: 'req_123',
     });

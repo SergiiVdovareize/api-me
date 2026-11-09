@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, UnauthorizedException, NotFoundException } from '@nestjs/common';
-import { CatcastService } from './catcast.service';
+import { CatcastService, deriveDeviceRequestCode } from './catcast.service';
 import { PrismaService } from '../models/prisma/prisma.service';
 
 describe('CatcastService', () => {
@@ -44,6 +44,24 @@ describe('CatcastService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
     expect(dbService).toBeDefined();
+  });
+
+  describe('deriveDeviceRequestCode', () => {
+    it('should derive a 4-character uppercase alphanumeric code from requestId', () => {
+      const code = deriveDeviceRequestCode('req_test_1234');
+      expect(code).toHaveLength(4);
+      expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+    });
+
+    it('should be deterministic for the same requestId', () => {
+      const code1 = deriveDeviceRequestCode('req_same_id');
+      const code2 = deriveDeviceRequestCode('req_same_id');
+      expect(code1).toBe(code2);
+    });
+
+    it('should return empty string for empty requestId', () => {
+      expect(deriveDeviceRequestCode('')).toBe('');
+    });
   });
 
   describe('verifyAccess', () => {
@@ -164,6 +182,7 @@ describe('CatcastService', () => {
 
       expect(res.status).toBe('pending');
       expect(res.requestId).toBe('req_existing_123');
+      expect(res.code).toBe(deriveDeviceRequestCode('req_existing_123'));
       expect(res.expiresAt).toBe(expiresAt.toISOString());
       expect(mockPrisma.catcastDeviceRequest.create).not.toHaveBeenCalled();
     });
@@ -214,7 +233,13 @@ describe('CatcastService', () => {
 
       expect(res.status).toBe('pending');
       expect(res.requestId).toBe('req_new_456');
-      expect(mockNotifier).toHaveBeenCalledWith(createdRecord);
+      expect(res.code).toBe(deriveDeviceRequestCode('req_new_456'));
+      expect(mockNotifier).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'req_new_456',
+          code: deriveDeviceRequestCode('req_new_456'),
+        })
+      );
       expect(mockPrisma.catcastDeviceRequest.update).toHaveBeenCalledWith({
         where: { id: 'req_new_456' },
         data: { telegramMessageId: 999, telegramChatId: '1252877' },
@@ -255,6 +280,7 @@ describe('CatcastService', () => {
       it('should return unknown if deviceId is empty or no requests found', async () => {
         expect(await dbService.getDeviceStatus('')).toEqual({
           status: 'unknown',
+          code: null,
           expiresAt: null,
           requestId: null,
         });
@@ -264,6 +290,7 @@ describe('CatcastService', () => {
 
         expect(await dbService.getDeviceStatus('dev-unknown')).toEqual({
           status: 'unknown',
+          code: null,
           expiresAt: null,
           requestId: null,
         });
@@ -278,9 +305,10 @@ describe('CatcastService', () => {
 
         const res = await dbService.getDeviceStatus('dev_allowed');
         expect(res.status).toBe('approved');
+        expect(res.code).toBeNull();
       });
 
-      it('should return pending if request is active', async () => {
+      it('should return pending and derived code if request is active', async () => {
         mockPrisma.catcastDevice.findUnique.mockResolvedValue(null);
         const futureExpires = new Date(Date.now() + 15 * 60 * 1000);
         mockPrisma.catcastDeviceRequest.findFirst.mockResolvedValue({
@@ -291,6 +319,7 @@ describe('CatcastService', () => {
 
         const res = await dbService.getDeviceStatus('dev_pending');
         expect(res.status).toBe('pending');
+        expect(res.code).toBe(deriveDeviceRequestCode('req_1'));
         expect(res.expiresAt).toBe(futureExpires.toISOString());
       });
 
@@ -305,6 +334,7 @@ describe('CatcastService', () => {
 
         const res = await dbService.getDeviceStatus('dev_expired');
         expect(res.status).toBe('expired');
+        expect(res.code).toBeNull();
         expect(res.expiresAt).toBe(pastExpires.toISOString());
       });
 
@@ -318,6 +348,7 @@ describe('CatcastService', () => {
 
         const res = await dbService.getDeviceStatus('dev_denied');
         expect(res.status).toBe('denied');
+        expect(res.code).toBeNull();
       });
 
       it('should return unknown if latest request has unrecognized status or without prisma', async () => {
