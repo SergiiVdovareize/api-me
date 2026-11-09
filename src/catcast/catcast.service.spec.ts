@@ -273,7 +273,13 @@ describe('CatcastService', () => {
 
       expect(res.status).toBe('pending');
       expect(res.requestId).toBe('req_new_789');
-      expect(mockFaultyNotifier).toHaveBeenCalledWith(createdRecord);
+      expect(res.code).toBe(deriveDeviceRequestCode('req_new_789'));
+      expect(mockFaultyNotifier).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'req_new_789',
+          code: deriveDeviceRequestCode('req_new_789'),
+        })
+      );
     });
 
     describe('getDeviceStatus', () => {
