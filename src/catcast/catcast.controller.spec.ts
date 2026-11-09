@@ -12,8 +12,8 @@ describe('CatcastController', () => {
     service = {
       verifyAccess: jest.fn().mockResolvedValue({
         success: true,
+        deviceId: 'android_9774d56d682e549c',
         boundDeviceId: 'android_9774d56d682e549c',
-        isNewBinding: false,
         platform: 'android_tv',
       }),
       requestDeviceAccess: jest.fn().mockResolvedValue({
@@ -74,8 +74,8 @@ describe('CatcastController', () => {
     expect(service.verifyAccess).toHaveBeenCalledWith(dto, '203.0.113.195');
     expect(result).toEqual({
       success: true,
+      deviceId: 'android_9774d56d682e549c',
       boundDeviceId: 'android_9774d56d682e549c',
-      isNewBinding: false,
       platform: 'android_tv',
     });
     expect(res.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', '*');

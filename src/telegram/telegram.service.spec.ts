@@ -58,34 +58,6 @@ describe('TelegramService', () => {
     };
 
     mockCatcastService = {
-      createKey: jest.fn().mockResolvedValue({
-        id: 1,
-        key: 'catcast-test1234',
-        label: 'Test Device',
-        isActive: true,
-      }),
-      listKeys: jest.fn().mockResolvedValue([
-        {
-          id: 1,
-          key: 'catcast-test1234',
-          label: 'Test Device',
-          isActive: true,
-          boundDeviceId: 'android_9774d56d',
-          platform: 'android_tv',
-          lastUsedAt: new Date(),
-        },
-      ]),
-      resetKeyBinding: jest.fn().mockResolvedValue({
-        id: 1,
-        key: 'catcast-test1234',
-        label: 'Test Device',
-      }),
-      toggleKey: jest.fn().mockResolvedValue({
-        id: 1,
-        key: 'catcast-test1234',
-        label: 'Test Device',
-        isActive: false,
-      }),
       setDeviceRequestNotifier: jest.fn(),
       approveDeviceRequest: jest.fn().mockResolvedValue({
         success: true,
@@ -669,99 +641,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/sendMessage'),
           expect.objectContaining({
-            body: expect.stringContaining('Керування ключами CatCast'),
-          })
-        );
-      });
-
-      it('should create new CatCast key via /catcast_new [label]', async () => {
-        const update: TelegramUpdate = {
-          update_id: 202,
-          message: {
-            message_id: 202,
-            date: 1720000000,
-            chat: { id: 12345, type: 'private' },
-            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
-            text: '/catcast_new MiBox Вітальня',
-          },
-        };
-
-        const result = await service.handleIncomingUpdate(update);
-        expect(result.processed).toBe(1);
-        expect(mockCatcastService.createKey).toHaveBeenCalledWith('MiBox Вітальня');
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sendMessage'),
-          expect.objectContaining({
-            body: expect.stringContaining('Ключ CatCast успішно створено'),
-          })
-        );
-      });
-
-      it('should list CatCast keys via /catcast_list', async () => {
-        const update: TelegramUpdate = {
-          update_id: 203,
-          message: {
-            message_id: 203,
-            date: 1720000000,
-            chat: { id: 12345, type: 'private' },
-            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
-            text: '/catcast_list',
-          },
-        };
-
-        const result = await service.handleIncomingUpdate(update);
-        expect(result.processed).toBe(1);
-        expect(mockCatcastService.listKeys).toHaveBeenCalled();
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sendMessage'),
-          expect.objectContaining({
-            body: expect.stringContaining('Ключі доступу CatCast'),
-          })
-        );
-      });
-
-      it('should reset device binding via /catcast_reset_[ID]', async () => {
-        const update: TelegramUpdate = {
-          update_id: 204,
-          message: {
-            message_id: 204,
-            date: 1720000000,
-            chat: { id: 12345, type: 'private' },
-            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
-            text: '/catcast_reset_1',
-          },
-        };
-
-        const result = await service.handleIncomingUpdate(update);
-        expect(result.processed).toBe(1);
-        expect(mockCatcastService.resetKeyBinding).toHaveBeenCalledWith('1');
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sendMessage'),
-          expect.objectContaining({
-            body: expect.stringContaining("Прив'язку пристрою скинуто"),
-          })
-        );
-      });
-
-      it('should toggle key status via /catcast_toggle_[ID]', async () => {
-        const update: TelegramUpdate = {
-          update_id: 205,
-          message: {
-            message_id: 205,
-            date: 1720000000,
-            chat: { id: 12345, type: 'private' },
-            from: { id: 12345, is_bot: false, first_name: 'Sergii' },
-            text: '/catcast_toggle_1',
-          },
-        };
-
-        const result = await service.handleIncomingUpdate(update);
-        expect(result.processed).toBe(1);
-        expect(mockCatcastService.toggleKey).toHaveBeenCalledWith('1');
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sendMessage'),
-          expect.objectContaining({
-            body: expect.stringContaining('заблоковано'),
+            body: expect.stringContaining('Управління доступом CatCast'),
           })
         );
       });
@@ -835,7 +715,7 @@ describe('TelegramService', () => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/editMessageText'),
           expect.objectContaining({
-            body: expect.stringContaining('Керування ключами CatCast'),
+            body: expect.stringContaining('Управління доступом CatCast'),
           })
         );
         expect(global.fetch).toHaveBeenCalledWith(
@@ -844,7 +724,7 @@ describe('TelegramService', () => {
         );
       });
 
-      it('should handle quick key creation via catcast_quick_create callback', async () => {
+      it('should handle catcast_help callback', async () => {
         const update: TelegramUpdate = {
           update_id: 303,
           callback_query: {
@@ -855,17 +735,16 @@ describe('TelegramService', () => {
               date: 1720000000,
               chat: { id: 12345, type: 'private' },
             },
-            data: 'catcast_quick_create',
+            data: 'catcast_help',
           },
         };
 
         const result = await service.handleIncomingUpdate(update);
         expect(result.processed).toBe(1);
-        expect(mockCatcastService.createKey).toHaveBeenCalled();
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/sendMessage'),
+          expect.stringContaining('/editMessageText'),
           expect.objectContaining({
-            body: expect.stringContaining('Ключ CatCast успішно створено'),
+            body: expect.stringContaining('Команди доступу CatCast'),
           })
         );
       });

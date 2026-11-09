@@ -1,25 +1,5 @@
--- CreateTable
-CREATE TABLE IF NOT EXISTS "CatcastKey" (
-    "id" SERIAL NOT NULL,
-    "key" VARCHAR(64) NOT NULL,
-    "label" VARCHAR(128),
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "boundDeviceId" VARCHAR(128),
-    "platform" VARCHAR(32),
-    "lastIp" VARCHAR(64),
-    "activatedAt" TIMESTAMP(3),
-    "lastUsedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "CatcastKey_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "CatcastKey_key_key" ON "CatcastKey"("key");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "CatcastKey_key_isActive_idx" ON "CatcastKey"("key", "isActive");
+-- Drop legacy table if exists
+DROP TABLE IF EXISTS "CatcastKey";
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "CatcastDevice" (

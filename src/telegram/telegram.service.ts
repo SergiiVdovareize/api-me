@@ -26,7 +26,7 @@ const KEYBOARDS = {
     inline_keyboard: [
       [
         { text: '📋 Задачі (GitHub)', callback_data: 'menu_tasks' },
-        { text: '🐱 Ключі CatCast', callback_data: 'menu_catcast' },
+        { text: '🐱 Доступ CatCast', callback_data: 'menu_catcast' },
       ],
       [{ text: 'ℹ️ Довідка', callback_data: 'menu_help' }],
     ],
@@ -42,19 +42,9 @@ const KEYBOARDS = {
   },
   catcastMenu: {
     inline_keyboard: [
-      [
-        { text: '➕ Створити ключ', callback_data: 'catcast_new_menu' },
-        { text: '📋 Список ключів', callback_data: 'catcast_list' },
-      ],
       [{ text: '📱 Дозволені пристрої', callback_data: 'catcast_devices_list' }],
       [{ text: 'ℹ️ Довідка по командах', callback_data: 'catcast_help' }],
       [{ text: '⬅️ Головне меню', callback_data: 'menu_main' }],
-    ],
-  },
-  catcastNewMenu: {
-    inline_keyboard: [
-      [{ text: '⚡ Швидкий ключ', callback_data: 'catcast_quick_create' }],
-      [{ text: '⬅️ Назад до CatCast', callback_data: 'menu_catcast' }],
     ],
   },
 };
@@ -98,7 +88,7 @@ export class TelegramService implements OnModuleInit {
           commands: [
             { command: 'menu', description: '📱 Головне меню' },
             { command: 'task', description: '➕ Створити нову задачу' },
-            { command: 'catcast', description: '🐱 Ключі CatCast' },
+            { command: 'catcast', description: '🐱 Доступ CatCast' },
             { command: 'catcast_devices', description: '📱 Дозволені пристрої' },
             { command: 'cancel', description: '❌ Скасувати дію' },
             { command: 'help', description: 'ℹ️ Довідка' },
@@ -242,7 +232,8 @@ export class TelegramService implements OnModuleInit {
         `• /task — створити нову задачу (голосом, текстом чи з фото)\n` +
         `• /cancel — скасувати створення задачі\n\n` +
         `*CatCast:*\n` +
-        `• /catcast — керування персональними ключами доступу\n` +
+        `• /catcast — керування доступом пристроїв\n` +
+        `• /catcast_devices — список дозволених пристроїв\n` +
         `• /menu — відкрити меню з кнопками\n\n` +
         `Для скасування скористайтесь /cancel.`;
       await this.sendMessage(chatId, helpMessage, {
@@ -259,156 +250,12 @@ export class TelegramService implements OnModuleInit {
       return { processed: 1, createdTasks: [] };
     }
 
-    // 5. CatCast Key Management commands
+    // 5. CatCast Device Access commands
     if (textTrimmed === '/catcast' || textTrimmed.startsWith('/catcast_help')) {
       await this.sendMessage(chatId, this.getCatcastMenuText(), {
         parse_mode: 'HTML',
         reply_markup: KEYBOARDS.catcastMenu,
       });
-      return { processed: 1, createdTasks: [] };
-    }
-
-    if (textTrimmed.startsWith('/catcast_new')) {
-      if (!this.catcastService) {
-        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-        return { processed: 1, createdTasks: [] };
-      }
-
-      const rawLabel = textTrimmed.replace(/^\/catcast_new(@\w+)?/i, '').trim();
-      const label = rawLabel || 'Новий пристрій';
-
-      try {
-        const created = await this.catcastService.createKey(label);
-        const reply =
-          `✅ <b>Ключ CatCast успішно створено!</b>\n\n` +
-          `👤 Назва: <b>${escapeHtml(created.label || 'Без назви')}</b>\n` +
-          `🔑 Ключ: <code>${created.key}</code>\n` +
-          `⏳ Дійсний для першої активації: <b>24 години</b>\n\n` +
-          `<i>(Натисніть на ключ, щоб скопіювати)</i>`;
-        await this.sendMessage(chatId, reply, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '📋 Список ключів', callback_data: 'catcast_list' },
-                { text: '➕ Ще ключ', callback_data: 'catcast_quick_create' },
-              ],
-              [{ text: '⬅️ До CatCast', callback_data: 'menu_catcast' }],
-            ],
-          },
-        });
-      } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Не вдалося створити ключ: ${escapeHtml(err.message)}`, {
-          parse_mode: 'HTML',
-        });
-      }
-      return { processed: 1, createdTasks: [] };
-    }
-
-    if (textTrimmed === '/catcast_list' || textTrimmed.startsWith('/catcast_list@')) {
-      if (!this.catcastService) {
-        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-        return { processed: 1, createdTasks: [] };
-      }
-
-      try {
-        const keys = await this.catcastService.listKeys();
-        const rendered = this.renderCatcastList(keys);
-        await this.sendMessage(chatId, rendered.text, {
-          parse_mode: 'HTML',
-          reply_markup: rendered.markup,
-        });
-      } catch (err: any) {
-        await this.sendMessage(
-          chatId,
-          `❌ Помилка завантаження ключів: ${escapeHtml(err.message)}`,
-          {
-            parse_mode: 'HTML',
-          }
-        );
-      }
-      return { processed: 1, createdTasks: [] };
-    }
-
-    if (textTrimmed.startsWith('/catcast_reset')) {
-      if (!this.catcastService) {
-        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-        return { processed: 1, createdTasks: [] };
-      }
-
-      const idOrKey = textTrimmed
-        .replace(/^\/catcast_reset_(@\w+)?/i, '')
-        .replace(/^\/catcast_reset(@\w+)?/i, '')
-        .replace(/^_/, '')
-        .trim();
-
-      if (!idOrKey) {
-        await this.sendMessage(
-          chatId,
-          'ℹ️ Вкажіть ID або ключ для скидання: <code>/catcast_reset_[ID]</code> або <code>/catcast_reset [ключ]</code>',
-          { parse_mode: 'HTML' }
-        );
-        return { processed: 1, createdTasks: [] };
-      }
-
-      try {
-        const res = await this.catcastService.resetKeyBinding(idOrKey);
-        await this.sendMessage(
-          chatId,
-          `🔄 <b>Прив'язку пристрою скинуто!</b>\n\n` +
-            `🔑 Ключ: <code>${res.key}</code>\n` +
-            `👤 Назва: <b>${escapeHtml(res.label || '-')}</b>\n` +
-            `⏳ На активацію нового пристрою: <b>24 години</b>\n\n` +
-            `Тепер цей ключ можна активувати на новому пристрої.`,
-          { parse_mode: 'HTML' }
-        );
-      } catch (err: any) {
-        await this.sendMessage(
-          chatId,
-          `❌ Не вдалося скинути прив'язку: ${escapeHtml(err.message)}`,
-          {
-            parse_mode: 'HTML',
-          }
-        );
-      }
-      return { processed: 1, createdTasks: [] };
-    }
-
-    if (textTrimmed.startsWith('/catcast_toggle')) {
-      if (!this.catcastService) {
-        await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-        return { processed: 1, createdTasks: [] };
-      }
-
-      const idOrKey = textTrimmed
-        .replace(/^\/catcast_toggle_(@\w+)?/i, '')
-        .replace(/^\/catcast_toggle(@\w+)?/i, '')
-        .replace(/^_/, '')
-        .trim();
-
-      if (!idOrKey) {
-        await this.sendMessage(
-          chatId,
-          'ℹ️ Вкажіть ID або ключ: <code>/catcast_toggle_[ID]</code> або <code>/catcast_toggle [ключ]</code>',
-          { parse_mode: 'HTML' }
-        );
-        return { processed: 1, createdTasks: [] };
-      }
-
-      try {
-        const updated = await this.catcastService.toggleKey(idOrKey);
-        const icon = updated.isActive ? '🟢' : '🔴';
-        const action = updated.isActive ? 'активовано' : 'заблоковано';
-        await this.sendMessage(
-          chatId,
-          `${icon} Ключ <code>${updated.key}</code> (<b>${escapeHtml(updated.label || '-')}</b>) успішно <b>${action}</b>!`,
-          { parse_mode: 'HTML' }
-        );
-      } catch (err: any) {
-        await this.sendMessage(chatId, `❌ Не вдалося змінити статус: ${escapeHtml(err.message)}`, {
-          parse_mode: 'HTML',
-        });
-      }
       return { processed: 1, createdTasks: [] };
     }
 
@@ -733,72 +580,6 @@ export class TelegramService implements OnModuleInit {
         });
         break;
 
-      case 'catcast_new_menu':
-        await this.editMessageText(chatId, messageId, this.getCatcastNewMenuText(), {
-          parse_mode: 'HTML',
-          reply_markup: KEYBOARDS.catcastNewMenu,
-        });
-        break;
-
-      case 'catcast_quick_create':
-        if (!this.catcastService) {
-          await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-          break;
-        }
-        try {
-          const created = await this.catcastService.createKey('Швидкий ключ');
-          const reply =
-            `✅ <b>Ключ CatCast успішно створено!</b>\n\n` +
-            `👤 Назва: <b>${escapeHtml(created.label || 'Швидкий ключ')}</b>\n` +
-            `🔑 Ключ: <code>${created.key}</code>\n` +
-            `⏳ Дійсний для першої активації: <b>24 години</b>\n\n` +
-            `<i>(Натисніть на ключ, щоб скопіювати)</i>`;
-          await this.sendMessage(chatId, reply, {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '📋 Список ключів', callback_data: 'catcast_list' },
-                  { text: '➕ Ще ключ', callback_data: 'catcast_quick_create' },
-                ],
-                [{ text: '⬅️ До CatCast', callback_data: 'menu_catcast' }],
-              ],
-            },
-          });
-        } catch (err: any) {
-          await this.sendMessage(
-            chatId,
-            `❌ Не вдалося створити ключ: ${escapeHtml(err.message)}`,
-            {
-              parse_mode: 'HTML',
-            }
-          );
-        }
-        break;
-
-      case 'catcast_list':
-        if (!this.catcastService) {
-          await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
-          break;
-        }
-        try {
-          const keys = await this.catcastService.listKeys();
-          const rendered = this.renderCatcastList(keys);
-          await this.editMessageText(chatId, messageId, rendered.text, {
-            parse_mode: 'HTML',
-            reply_markup: rendered.markup,
-          });
-        } catch (err: any) {
-          await this.sendMessage(
-            chatId,
-            `❌ Помилка завантаження ключів: ${escapeHtml(err.message)}`,
-            {
-              parse_mode: 'HTML',
-            }
-          );
-        }
-        break;
-
       case 'catcast_devices_list':
         if (!this.catcastService) {
           await this.sendMessage(chatId, '⚠️ Сервіс CatCast наразі недоступний.');
@@ -867,34 +648,19 @@ export class TelegramService implements OnModuleInit {
 
   getCatcastMenuText(): string {
     return (
-      `🐱 <b>Керування ключами CatCast</b>\n\n` +
-      `Генерація та адміністрування ключів доступу для додатків CatCast (Android TV, Tizen, Web).\n\n` +
-      `• Ключі генеруються без префіксів, рандомні (букви та цифри в нижньому регістрі).\n` +
-      `• Перша активація має відбутися протягом <b>24 годин</b> після створення.\n\n` +
+      `🐱 <b>Управління доступом CatCast</b>\n\n` +
+      `Адміністрування доступу пристроїв (Android TV, Tizen, Web) за Device ID.\n\n` +
+      `• Нові пристрої надсилають запит на підтвердження при спробі входу.\n` +
+      `• Підтвердження або відхилення здійснюється кнопками в цьому чаті.\n\n` +
       `Оберіть дію нижче:`
-    );
-  }
-
-  getCatcastNewMenuText(): string {
-    return (
-      `➕ <b>Створення нового ключа CatCast</b>\n\n` +
-      `Ключ генерується без префікса, у нижньому регістрі (тільки цифри та літери).\n` +
-      `⏳ <i>Термін на першу активацію: рівно 24 години з моменту створення.</i>\n\n` +
-      `<b>Варіанти створення:</b>\n` +
-      `• Натисніть <b>⚡ Швидкий ключ</b> нижче\n` +
-      `• Або надішліть команду з назвою пристрою:\n` +
-      `  <code>/catcast_new [назва]</code>\n` +
-      `  <i>(приклад: <code>/catcast_new MiBox Вітальня</code>)</i>`
     );
   }
 
   getCatcastHelpText(): string {
     return (
-      `🐱 <b>Команди CatCast:</b>\n\n` +
-      `• <code>/catcast_new [назва]</code> — створити новий ключ\n` +
-      `• <code>/catcast_list</code> — список усіх ключів та пристроїв\n` +
-      `• <code>/catcast_reset_[ID]</code> — скинути прив'язку пристрою\n` +
-      `• <code>/catcast_toggle_[ID]</code> — активувати / заблокувати ключ`
+      `🐱 <b>Команди доступу CatCast:</b>\n\n` +
+      `• <code>/catcast_devices</code> — список дозволених пристроїв\n` +
+      `• <code>/catcast_revoke_[ID]</code> — відкликати доступ пристрою`
     );
   }
 
@@ -905,71 +671,10 @@ export class TelegramService implements OnModuleInit {
       `• /menu — Головне меню з інтерактивними кнопками\n` +
       `• /task — Створити задачу на дошці\n` +
       `• /cancel — Скасувати дію\n` +
-      `• /catcast — Меню ключів CatCast\n` +
-      `• /catcast_new [назва] — Створити ключ\n` +
-      `• /catcast_list — Список ключів`
+      `• /catcast — Меню доступу CatCast\n` +
+      `• /catcast_devices — Список дозволених пристроїв\n` +
+      `• /catcast_revoke_[ID] — Відкликати доступ`
     );
-  }
-
-  renderCatcastList(keys: any[]): { text: string; markup: TelegramInlineKeyboardMarkup } {
-    if (keys.length === 0) {
-      return {
-        text: 'ℹ️ <b>Список ключів CatCast порожній.</b>\n\nСтворіть перший ключ через кнопку нижче або командою <code>/catcast_new [назва]</code>.',
-        markup: {
-          inline_keyboard: [
-            [{ text: '➕ Створити ключ', callback_data: 'catcast_new_menu' }],
-            [{ text: '⬅️ До CatCast', callback_data: 'menu_catcast' }],
-          ],
-        },
-      };
-    }
-
-    const now = Date.now();
-    const items = keys.map((k, idx) => {
-      const statusIcon = k.isActive ? '🟢' : '🔴';
-      const safeLabel = escapeHtml(k.label || 'Без назви');
-
-      let deviceText: string;
-      if (k.boundDeviceId) {
-        deviceText = `📱 <code>${escapeHtml(k.boundDeviceId.slice(0, 18))}...</code> (${escapeHtml(k.platform || 'web')})`;
-      } else {
-        const elapsed = now - new Date(k.createdAt).getTime();
-        const remainingMs = 24 * 60 * 60 * 1000 - elapsed;
-        if (remainingMs > 0 && k.isActive) {
-          const hours = Math.floor(remainingMs / (1000 * 60 * 60));
-          const mins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-          deviceText = `⏳ <i>Очікує прив'язки (ще ${hours}г ${mins}хв)</i>`;
-        } else if (!k.isActive) {
-          deviceText = `🔴 <i>Ключ вимкнено</i>`;
-        } else {
-          deviceText = `⚠️ <i>Термін активації минув (>24г)</i>`;
-        }
-      }
-
-      const lastUsed = k.lastUsedAt
-        ? `🕒 ${new Date(k.lastUsedAt).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
-        : '';
-
-      return (
-        `${idx + 1}. ${statusIcon} <b>${safeLabel}</b> (ID: ${k.id})\n` +
-        `   🔑 <code>${k.key}</code>\n` +
-        `   ${deviceText} ${lastUsed}\n` +
-        `   Дії: /catcast_reset_${k.id} | /catcast_toggle_${k.id}`
-      );
-    });
-
-    return {
-      text: `📋 <b>Ключі доступу CatCast (${keys.length}):</b>\n\n` + items.join('\n\n'),
-      markup: {
-        inline_keyboard: [
-          [
-            { text: '🔄 Оновити список', callback_data: 'catcast_list' },
-            { text: '➕ Новий ключ', callback_data: 'catcast_new_menu' },
-          ],
-          [{ text: '⬅️ Назад до CatCast', callback_data: 'menu_catcast' }],
-        ],
-      },
-    };
   }
 
   /**
