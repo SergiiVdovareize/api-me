@@ -1,10 +1,8 @@
-import { Injectable, BadRequestException, Logger, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
-import { PosthogService } from '../posthog/posthog.service';
-import { AnalyticsEvent } from '../analytics/analytics.events';
 import {
   DEFAULT_OUTBOUND_HEADERS,
   FORWARDED_RESPONSE_HEADERS,
@@ -20,11 +18,7 @@ import {
 export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
 
-  constructor(@Optional() private readonly posthogService?: PosthogService) {}
-
   async handleProxy(req: Request, res: Response): Promise<void> {
-    this.recordProxyEntryPoint(req);
-
     const rawTarget = req.query[PROXY_CONFIG.QUERY_PARAM_URL];
     if (!rawTarget || typeof rawTarget !== 'string' || rawTarget.trim() === '') {
       throw new BadRequestException(PROXY_ERROR_MESSAGES.URL_REQUIRED);
@@ -42,45 +36,6 @@ export class ProxyService {
     }
 
     return this.forwardStream(rawTarget.trim(), req, res);
-  }
-
-  private recordProxyEntryPoint(req: Request): void {
-    try {
-      const rawTarget = req.query?.[PROXY_CONFIG.QUERY_PARAM_URL];
-      let targetDomain: string | undefined;
-      let targetUrl: string | undefined;
-
-      if (typeof rawTarget === 'string' && rawTarget.trim() !== '') {
-        targetUrl = rawTarget.trim();
-        try {
-          targetDomain = new URL(targetUrl).hostname;
-        } catch {
-          // ignore malformed target url
-        }
-      }
-
-      const xForwardedFor = req.headers?.['x-forwarded-for'];
-      const rawIp = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
-      const clientIp =
-        (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : undefined) ||
-        req.ip ||
-        req.socket?.remoteAddress;
-
-      this.posthogService?.trackEvent(AnalyticsEvent.ProxyRequest, {
-        distinctId: clientIp || 'anonymous',
-        targetUrl,
-        targetDomain,
-        clientIp,
-        method: req.method,
-        path: req.originalUrl || req.url,
-        userAgent: req.headers?.['user-agent'],
-        referer: req.headers?.['referer'],
-        origin: req.headers?.['origin'],
-        range: req.headers?.['range'],
-      });
-    } catch (err: any) {
-      this.logger.warn(`Failed to record proxy entry point event in PostHog: ${err.message}`);
-    }
   }
 
   private forwardStream(
