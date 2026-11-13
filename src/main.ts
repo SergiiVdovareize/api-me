@@ -57,6 +57,8 @@ async function bootstrap() {
       'Range',
       'Accept',
       'X-Requested-With',
+      'sentry-trace',
+      'baggage',
     ],
     exposedHeaders: ['Content-Disposition', 'Content-Length'],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
