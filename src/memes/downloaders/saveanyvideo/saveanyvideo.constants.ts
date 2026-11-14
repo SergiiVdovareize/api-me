@@ -1,0 +1,22 @@
+export const SAVEANYVIDEO_CONSTANTS = {
+  DEFAULT_API_BASE: 'https://saveanyvideo.top/api.php',
+  MAX_URL_LENGTH: 2048,
+  TOKEN_TIMEOUT_MS: 15_000,
+  SUBMIT_TIMEOUT_MS: 20_000,
+  STATUS_TIMEOUT_MS: 10_000,
+  POLL_INTERVAL_MS: 2_000,
+  MAX_POLL_DURATION_MS: 25_000,
+  GLOBAL_HOURLY_LIMIT: 5,
+  RATE_LIMIT_WINDOW_SECONDS: 3600,
+  RATE_LIMIT_REDIS_KEY: 'saveanyvideo:hourly_jobs',
+  ALLOWED_DOMAINS: [
+    'instagram.com',
+    'tiktok.com',
+    'threads.net',
+    'threads.com',
+    'facebook.com',
+    'fb.watch',
+    'youtube.com',
+    'youtu.be',
+  ],
+} as const;

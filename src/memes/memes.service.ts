@@ -1,13 +1,17 @@
-import { HttpException, HttpStatus, Injectable, StreamableFile } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Optional, StreamableFile } from '@nestjs/common';
 import { Readable } from 'stream';
 import * as Sentry from '@sentry/nestjs';
 import { DownloadResult } from 'mediasnap';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
+import { AnalyticsService } from 'src/analytics/analytics.service';
+import { getMemeTypeFromUrl } from './meme-type.enum';
 import {
   SnapsaveDownloader,
   MediasnapDownloader,
   NextDownloader,
   HighreachDownloader,
   VidssaveDownloader,
+  SaveanyvideoDownloader,
 } from './downloaders';
 import { sortMediaByQuality } from './utils/quality-sort';
 import { MEMES_CONSTANTS } from './memes.constants';
@@ -19,7 +23,9 @@ export class MemesService {
     private readonly mediasnapDownloader: MediasnapDownloader,
     private readonly nextDownloader: NextDownloader,
     private readonly highreachDownloader: HighreachDownloader,
-    private readonly vidssaveDownloader: VidssaveDownloader
+    private readonly vidssaveDownloader: VidssaveDownloader,
+    private readonly saveanyvideoDownloader: SaveanyvideoDownloader,
+    @Optional() private readonly analyticsService?: AnalyticsService
   ) {}
 
   async downloadFromNextdownloader(params: {
@@ -34,12 +40,11 @@ export class MemesService {
   }
 
   async stealMeme(url: string): Promise<DownloadResult> {
+    const startedAt = Date.now();
+    const isSyntheticTest = this.isSyntheticTest(url);
     const downloaders = [
       { name: 'mediasnap', fn: () => this.mediasnapDownloader.steal(url) },
       { name: 'snapsave', fn: () => this.snapsaveDownloader.steal(url) },
-      // { name: 'nextdownloader', fn: () => this.nextDownloader.steal(url) },
-      { name: 'highreach', fn: () => this.highreachDownloader.steal(url) },
-      { name: 'vidssave', fn: () => this.vidssaveDownloader.steal(url) },
     ];
 
     const errors: { attempt: number; downloader: string; error: any }[] = [];
@@ -50,7 +55,7 @@ export class MemesService {
           try {
             const res = await downloader.fn();
             if (res && res.success) {
-              return res;
+              return { downloader: downloader.name, result: res };
             }
             throw new Error(res?.error || `returned unsuccessful result`);
           } catch (err) {
@@ -59,31 +64,21 @@ export class MemesService {
           }
         };
 
-        const successfulResult = await Promise.any(downloaders.map(run));
-        if (successfulResult && Array.isArray(successfulResult.media)) {
-          successfulResult.media = successfulResult.media.filter(item => {
-            if (!item || typeof item.url !== 'string') {
-              return false;
-            }
-            const urlStr = item.url.trim();
-            return (
-              urlStr.startsWith('http://') ||
-              urlStr.startsWith('https://') ||
-              urlStr.startsWith('//')
-            );
-          });
-
-          // Sort media list by quality descending (best quality first)
-          sortMediaByQuality(successfulResult.media);
-        }
-
-        if (
-          successfulResult &&
-          successfulResult.success &&
-          successfulResult.media &&
-          successfulResult.media.length > 0
-        ) {
-          return successfulResult;
+        const winner = await Promise.any(downloaders.map(run));
+        const sanitized = this.sanitizeAndSortResult(winner.result);
+        if (sanitized) {
+          if (!isSyntheticTest) {
+            this.trackStealResult({
+              url,
+              success: true,
+              downloader: winner.downloader,
+              isFallback: false,
+              attempt,
+              startedAt,
+              errors,
+            });
+          }
+          return sanitized;
         }
 
         throw new Error('Success is false or media is empty');
@@ -94,9 +89,47 @@ export class MemesService {
       }
     }
 
-    const isSyntheticTest = this.isSyntheticTest(url);
+    // Last-resort fallback: run SaveAnyVideo only once after primary downloaders fail
+    try {
+      const fallbackResult = await this.saveanyvideoDownloader.steal(url);
+      const sanitizedFallback = this.sanitizeAndSortResult(fallbackResult);
+      if (sanitizedFallback) {
+        if (!isSyntheticTest) {
+          this.trackStealResult({
+            url,
+            success: true,
+            downloader: 'saveanyvideo',
+            isFallback: true,
+            attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+            startedAt,
+            errors,
+          });
+        }
+        return sanitizedFallback;
+      }
+      errors.push({
+        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        downloader: 'saveanyvideo',
+        error: new Error('Success is false or media is empty'),
+      });
+    } catch (fallbackErr) {
+      errors.push({
+        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        downloader: 'saveanyvideo',
+        error: fallbackErr,
+      });
+    }
 
     if (!isSyntheticTest) {
+      this.trackStealResult({
+        url,
+        success: false,
+        downloader: null,
+        isFallback: true,
+        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        startedAt,
+        errors,
+      });
       Sentry.captureMessage(`stealMeme failed, url - ${url}`, {
         level: 'error',
         extra: {
@@ -128,6 +161,48 @@ export class MemesService {
       media: [],
       error: 'could not download the media',
     };
+  }
+
+  private trackStealResult(params: {
+    url: string;
+    success: boolean;
+    downloader: string | null;
+    isFallback: boolean;
+    attempt: number;
+    startedAt: number;
+    errors: { attempt: number; downloader: string; error: any }[];
+  }): void {
+    this.analyticsService?.trackEvent(AnalyticsEvent.StealMemeResult, {
+      success: params.success,
+      downloader: params.downloader,
+      isFallback: params.isFallback,
+      attempt: params.attempt,
+      durationMs: Date.now() - params.startedAt,
+      memeType: getMemeTypeFromUrl(params.url),
+      failedDownloaders: [
+        ...new Set(params.errors.map(e => e.downloader).filter(d => d !== 'all')),
+      ],
+    });
+  }
+
+  private sanitizeAndSortResult(result: DownloadResult | null | undefined): DownloadResult | null {
+    if (!result || !result.success || !Array.isArray(result.media)) {
+      return null;
+    }
+
+    result.media = result.media.filter(item => {
+      if (!item || typeof item.url !== 'string') {
+        return false;
+      }
+      const urlStr = item.url.trim();
+      return (
+        urlStr.startsWith('http://') || urlStr.startsWith('https://') || urlStr.startsWith('//')
+      );
+    });
+
+    sortMediaByQuality(result.media);
+
+    return result.media.length > 0 ? result : null;
   }
 
   isValidHttpUrl(url: string): boolean {

@@ -8,6 +8,7 @@ export enum AnalyticsEvent {
   BalanceTrack = 'BalanceTrack',
   TrackWatch = 'TrackWatch',
   StealMeme = 'StealMeme',
+  StealMemeResult = 'StealMemeResult',
   StartGame = 'StartGame',
   EndGame = 'EndGame',
   PostGameResult = 'PostGameResult',

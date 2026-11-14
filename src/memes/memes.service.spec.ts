@@ -6,8 +6,11 @@ import {
   NextDownloader,
   HighreachDownloader,
   VidssaveDownloader,
+  SaveanyvideoDownloader,
 } from './downloaders';
 import { sortMediaByQuality } from './utils/quality-sort';
+import { AnalyticsService } from 'src/analytics/analytics.service';
+import { AnalyticsEvent } from 'src/analytics/analytics.events';
 import * as Sentry from '@sentry/nestjs';
 
 jest.mock('@sentry/nestjs', () => ({
@@ -22,6 +25,8 @@ describe('MemesService', () => {
   let next: any;
   let highreach: any;
   let vidssave: any;
+  let saveanyvideo: any;
+  let analyticsService: { trackEvent: jest.Mock };
 
   beforeEach(async () => {
     snapsave = { steal: jest.fn() };
@@ -29,6 +34,8 @@ describe('MemesService', () => {
     next = { download: jest.fn(), steal: jest.fn() };
     highreach = { steal: jest.fn() };
     vidssave = { steal: jest.fn() };
+    saveanyvideo = { steal: jest.fn() };
+    analyticsService = { trackEvent: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +45,8 @@ describe('MemesService', () => {
         { provide: NextDownloader, useValue: next },
         { provide: HighreachDownloader, useValue: highreach },
         { provide: VidssaveDownloader, useValue: vidssave },
+        { provide: SaveanyvideoDownloader, useValue: saveanyvideo },
+        { provide: AnalyticsService, useValue: analyticsService },
       ],
     }).compile();
 
@@ -85,6 +94,16 @@ describe('MemesService', () => {
         { url: 'https://ok-url.com', quality: '720p' },
         { url: '//relative-url.com', quality: '360p' },
       ]);
+      expect(saveanyvideo.steal).not.toHaveBeenCalled();
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.StealMemeResult,
+        expect.objectContaining({
+          success: true,
+          downloader: 'mediasnap',
+          isFallback: false,
+          attempt: 1,
+        })
+      );
     });
 
     it('should retry on subsequent attempts and succeed eventually', async () => {
@@ -112,13 +131,49 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('https://tiktok.com/@user/video/123');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('could not download the media');
+      expect(saveanyvideo.steal).toHaveBeenCalledTimes(1);
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.StealMemeResult,
+        expect.objectContaining({
+          success: false,
+          downloader: null,
+          isFallback: true,
+          failedDownloaders: expect.arrayContaining(['mediasnap', 'snapsave', 'saveanyvideo']),
+        })
+      );
       expect(Sentry.captureMessage).toHaveBeenCalled();
       expect(Sentry.flush).toHaveBeenCalled();
+    });
+
+    it('should fall back to saveanyvideo once when primary downloaders fail', async () => {
+      mediasnap.steal.mockRejectedValue(new Error('mediasnap failed'));
+      snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
+      saveanyvideo.steal.mockResolvedValue({
+        success: true,
+        platform: 'instagram',
+        media: [{ type: 'video', url: 'https://saveanyvideo.top/api.php?action=download&id=abc' }],
+      });
+
+      const result = await service.stealMeme('https://www.instagram.com/reels/Dfs6A1mhZzU/');
+
+      expect(result.success).toBe(true);
+      expect(saveanyvideo.steal).toHaveBeenCalledTimes(1);
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.StealMemeResult,
+        expect.objectContaining({
+          success: true,
+          downloader: 'saveanyvideo',
+          isFallback: true,
+          failedDownloaders: ['mediasnap', 'snapsave'],
+        })
+      );
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
 
     it('should NOT capture message in Sentry for synthetic test URLs like example.com', async () => {
@@ -127,6 +182,7 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('https://example.com/invalid-meme-url-12345');
 
@@ -141,6 +197,7 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('test');
 
@@ -301,6 +358,7 @@ describe('MemesService', () => {
       snapsave.steal.mockResolvedValue({ success: false, media: [] });
       highreach.steal.mockResolvedValue({ success: false, media: [] });
       vidssave.steal.mockResolvedValue({ success: false, media: [] });
+      saveanyvideo.steal.mockResolvedValue({ success: false, media: [] });
 
       await expect(service.streamVideo('https://example.com/invalid-meme-url-999')).rejects.toThrow(
         'could not download the media'

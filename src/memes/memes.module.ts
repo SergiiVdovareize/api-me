@@ -9,6 +9,7 @@ import {
   HighreachDownloader,
   VidssaveDownloader,
   VidssaveTokenParser,
+  SaveanyvideoDownloader,
 } from './downloaders';
 
 @Module({
@@ -22,6 +23,7 @@ import {
     HighreachDownloader,
     VidssaveDownloader,
     VidssaveTokenParser,
+    SaveanyvideoDownloader,
   ],
   exports: [MemesService],
 })
