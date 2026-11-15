@@ -13,12 +13,6 @@ export interface ProviderItem {
   instance: LLMProvider;
 }
 
-export interface RouterState {
-  lastUpdated: string;
-  providerOrder: string[];
-  cooldowns: Record<string, number>;
-}
-
 export interface ProviderConfig {
   baseURL: string;
   defaultHeaders?: Record<string, string>;

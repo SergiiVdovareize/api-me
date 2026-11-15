@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/main.ts",
+    "scripts/*.ts",
+    "test/**/*.e2e-spec.ts",
+    "test/**/*.sanity-spec.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    "express",
+    "dotenv",
+    "globals",
+    "@eslint/js",
+    "@eslint/eslintrc"
+  ]
+}

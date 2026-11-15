@@ -1,19 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-export interface SendTelegramOptions {
-  chatId?: string;
-  parseMode?: string;
-  disableWebPagePreview?: boolean;
-}
-
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
   private readonly defaultChatId = '1252877';
   private readonly maxChunkLength = 4000;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   getBotToken(): string {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -26,10 +20,7 @@ export class TelegramService {
   }
 
   getDefaultChatId(): string {
-    return (
-      this.configService.get<string>('TELEGRAM_DEFAULT_CHAT_ID')?.trim() ||
-      this.defaultChatId
-    );
+    return this.configService.get<string>('TELEGRAM_DEFAULT_CHAT_ID')?.trim() || this.defaultChatId;
   }
 
   /**
