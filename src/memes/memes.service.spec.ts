@@ -7,6 +7,8 @@ import {
   HighreachDownloader,
   VidssaveDownloader,
   SaveanyvideoDownloader,
+  SaverapiDownloader,
+  SaverapiError,
 } from './downloaders';
 import { sortMediaByQuality } from './utils/quality-sort';
 import { AnalyticsService } from 'src/analytics/analytics.service';
@@ -26,6 +28,7 @@ describe('MemesService', () => {
   let highreach: any;
   let vidssave: any;
   let saveanyvideo: any;
+  let saverapi: any;
   let analyticsService: { trackEvent: jest.Mock };
 
   beforeEach(async () => {
@@ -35,6 +38,7 @@ describe('MemesService', () => {
     highreach = { steal: jest.fn() };
     vidssave = { steal: jest.fn() };
     saveanyvideo = { steal: jest.fn() };
+    saverapi = { steal: jest.fn() };
     analyticsService = { trackEvent: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -46,6 +50,7 @@ describe('MemesService', () => {
         { provide: HighreachDownloader, useValue: highreach },
         { provide: VidssaveDownloader, useValue: vidssave },
         { provide: SaveanyvideoDownloader, useValue: saveanyvideo },
+        { provide: SaverapiDownloader, useValue: saverapi },
         { provide: AnalyticsService, useValue: analyticsService },
       ],
     }).compile();
@@ -95,6 +100,7 @@ describe('MemesService', () => {
         { url: '//relative-url.com', quality: '360p' },
       ]);
       expect(saveanyvideo.steal).not.toHaveBeenCalled();
+      expect(saverapi.steal).not.toHaveBeenCalled();
       expect(analyticsService.trackEvent).toHaveBeenCalledWith(
         AnalyticsEvent.StealMemeResult,
         expect.objectContaining({
@@ -131,12 +137,14 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saverapi.steal.mockRejectedValue(new Error('saverapi failed'));
       saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('https://tiktok.com/@user/video/123');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('could not download the media');
+      expect(saverapi.steal).toHaveBeenCalledTimes(1);
       expect(saveanyvideo.steal).toHaveBeenCalledTimes(1);
       expect(analyticsService.trackEvent).toHaveBeenCalledWith(
         AnalyticsEvent.StealMemeResult,
@@ -144,16 +152,49 @@ describe('MemesService', () => {
           success: false,
           downloader: null,
           isFallback: true,
-          failedDownloaders: expect.arrayContaining(['mediasnap', 'snapsave', 'saveanyvideo']),
+          isRetry: false,
+          failedDownloaders: expect.arrayContaining([
+            'mediasnap',
+            'snapsave',
+            'saverapi',
+            'saveanyvideo',
+          ]),
         })
       );
       expect(Sentry.captureMessage).toHaveBeenCalled();
       expect(Sentry.flush).toHaveBeenCalled();
     });
 
-    it('should fall back to saveanyvideo once when primary downloaders fail', async () => {
+    it('should fall back to saverapi first when primary downloaders fail', async () => {
       mediasnap.steal.mockRejectedValue(new Error('mediasnap failed'));
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
+      saverapi.steal.mockResolvedValue({
+        success: true,
+        platform: 'instagram',
+        media: [{ type: 'video', url: 'https://cdn.example.com/saverapi.mp4' }],
+      });
+
+      const result = await service.stealMeme('https://www.instagram.com/reels/Dfs6A1mhZzU/');
+
+      expect(result.success).toBe(true);
+      expect(saverapi.steal).toHaveBeenCalledTimes(1);
+      expect(saveanyvideo.steal).not.toHaveBeenCalled();
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.StealMemeResult,
+        expect.objectContaining({
+          success: true,
+          downloader: 'saverapi',
+          isFallback: true,
+          isRetry: false,
+          failedDownloaders: ['mediasnap', 'snapsave'],
+        })
+      );
+    });
+
+    it('should fall back to saveanyvideo when primary and saverapi fail', async () => {
+      mediasnap.steal.mockRejectedValue(new Error('mediasnap failed'));
+      snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
+      saverapi.steal.mockRejectedValue(new Error('saverapi failed'));
       saveanyvideo.steal.mockResolvedValue({
         success: true,
         platform: 'instagram',
@@ -163,6 +204,7 @@ describe('MemesService', () => {
       const result = await service.stealMeme('https://www.instagram.com/reels/Dfs6A1mhZzU/');
 
       expect(result.success).toBe(true);
+      expect(saverapi.steal).toHaveBeenCalledTimes(1);
       expect(saveanyvideo.steal).toHaveBeenCalledTimes(1);
       expect(analyticsService.trackEvent).toHaveBeenCalledWith(
         AnalyticsEvent.StealMemeResult,
@@ -170,9 +212,48 @@ describe('MemesService', () => {
           success: true,
           downloader: 'saveanyvideo',
           isFallback: true,
-          failedDownloaders: ['mediasnap', 'snapsave'],
+          isRetry: false,
+          failedDownloaders: ['mediasnap', 'snapsave', 'saverapi'],
         })
       );
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    });
+
+    it('should skip primary downloaders and go straight to fallbacks when retry > 0', async () => {
+      saverapi.steal.mockResolvedValue({
+        success: true,
+        platform: 'instagram',
+        media: [{ type: 'video', url: 'https://cdn.example.com/retry-saverapi.mp4' }],
+      });
+
+      const result = await service.stealMeme('https://www.instagram.com/reels/Dfs6A1mhZzU/', 1);
+
+      expect(result.success).toBe(true);
+      expect(mediasnap.steal).not.toHaveBeenCalled();
+      expect(snapsave.steal).not.toHaveBeenCalled();
+      expect(saverapi.steal).toHaveBeenCalledTimes(1);
+      expect(saveanyvideo.steal).not.toHaveBeenCalled();
+      expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+        AnalyticsEvent.StealMemeResult,
+        expect.objectContaining({
+          success: true,
+          downloader: 'saverapi',
+          isFallback: true,
+          isRetry: true,
+        })
+      );
+    });
+
+    it('should stop fallback chain before saveanyvideo when SaverapiError has shouldFallbackToNext=false', async () => {
+      saverapi.steal.mockRejectedValue(
+        new SaverapiError('PRIVATE_CONTENT', 'Content is private', false)
+      );
+
+      const result = await service.stealMeme('https://www.instagram.com/reels/Dfs6A1mhZzU/', 1);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Content is private');
+      expect(saveanyvideo.steal).not.toHaveBeenCalled();
       expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
 
@@ -182,6 +263,7 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saverapi.steal.mockRejectedValue(new Error('saverapi failed'));
       saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('https://example.com/invalid-meme-url-12345');
@@ -197,6 +279,7 @@ describe('MemesService', () => {
       snapsave.steal.mockRejectedValue(new Error('snapsave failed'));
       highreach.steal.mockRejectedValue(new Error('highreach failed'));
       vidssave.steal.mockRejectedValue(new Error('vidssave failed'));
+      saverapi.steal.mockRejectedValue(new Error('saverapi failed'));
       saveanyvideo.steal.mockRejectedValue(new Error('saveanyvideo failed'));
 
       const result = await service.stealMeme('test');

@@ -49,12 +49,13 @@ describe('MemesController', () => {
 
       expect(memesService.streamVideo).toHaveBeenCalledWith(
         'https://instagram.com/reel/123',
-        'my_video.mp4'
+        'my_video.mp4',
+        0
       );
       expect(result).toBe(mockStreamable);
     });
 
-    it('should pass undefined filename when filename query is omitted', async () => {
+    it('should pass undefined filename and 0 retry when queries are omitted', async () => {
       const mockStreamable = {} as StreamableFile;
       memesService.streamVideo.mockResolvedValue(mockStreamable);
 
@@ -62,9 +63,36 @@ describe('MemesController', () => {
 
       expect(memesService.streamVideo).toHaveBeenCalledWith(
         'https://tiktok.com/@user/video/1',
-        undefined
+        undefined,
+        0
       );
       expect(result).toBe(mockStreamable);
+    });
+
+    it('should forward positive integer retry count and ignore invalid/non-positive values', async () => {
+      const mockStreamable = {} as StreamableFile;
+      memesService.streamVideo.mockResolvedValue(mockStreamable);
+
+      await controller.steal('https://tiktok.com/@user/video/1', undefined, '2');
+      expect(memesService.streamVideo).toHaveBeenLastCalledWith(
+        'https://tiktok.com/@user/video/1',
+        undefined,
+        2
+      );
+
+      await controller.steal('https://tiktok.com/@user/video/1', undefined, 'invalid');
+      expect(memesService.streamVideo).toHaveBeenLastCalledWith(
+        'https://tiktok.com/@user/video/1',
+        undefined,
+        0
+      );
+
+      await controller.steal('https://tiktok.com/@user/video/1', undefined, '-1');
+      expect(memesService.streamVideo).toHaveBeenLastCalledWith(
+        'https://tiktok.com/@user/video/1',
+        undefined,
+        0
+      );
     });
   });
 });

@@ -10,8 +10,12 @@ export class MemesController {
   @Get(':url')
   async steal(
     @Param('url') url: string,
-    @Query('filename') filename?: string
+    @Query('filename') filename?: string,
+    @Query('retry') retry?: string
   ): Promise<StreamableFile> {
-    return this.memesService.streamVideo(url, filename);
+    const parsedRetry = retry !== undefined ? Number(retry) : 0;
+    const retryCount =
+      Number.isFinite(parsedRetry) && parsedRetry > 0 ? Math.floor(parsedRetry) : 0;
+    return this.memesService.streamVideo(url, filename, retryCount);
   }
 }

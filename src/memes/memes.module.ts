@@ -10,6 +10,7 @@ import {
   VidssaveDownloader,
   VidssaveTokenParser,
   SaveanyvideoDownloader,
+  SaverapiDownloader,
 } from './downloaders';
 
 @Module({
@@ -24,6 +25,7 @@ import {
     VidssaveDownloader,
     VidssaveTokenParser,
     SaveanyvideoDownloader,
+    SaverapiDownloader,
   ],
   exports: [MemesService],
 })

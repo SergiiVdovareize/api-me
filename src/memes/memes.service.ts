@@ -12,6 +12,8 @@ import {
   HighreachDownloader,
   VidssaveDownloader,
   SaveanyvideoDownloader,
+  SaverapiDownloader,
+  SaverapiError,
 } from './downloaders';
 import { sortMediaByQuality } from './utils/quality-sort';
 import { MEMES_CONSTANTS } from './memes.constants';
@@ -25,6 +27,7 @@ export class MemesService {
     private readonly highreachDownloader: HighreachDownloader,
     private readonly vidssaveDownloader: VidssaveDownloader,
     private readonly saveanyvideoDownloader: SaveanyvideoDownloader,
+    private readonly saverapiDownloader: SaverapiDownloader,
     @Optional() private readonly analyticsService?: AnalyticsService
   ) {}
 
@@ -39,9 +42,10 @@ export class MemesService {
     return this.nextDownloader.download(params);
   }
 
-  async stealMeme(url: string): Promise<DownloadResult> {
+  async stealMeme(url: string, retry = 0): Promise<DownloadResult> {
     const startedAt = Date.now();
     const isSyntheticTest = this.isSyntheticTest(url);
+    const isRetry = retry > 0;
     const downloaders = [
       { name: 'mediasnap', fn: () => this.mediasnapDownloader.steal(url) },
       { name: 'snapsave', fn: () => this.snapsaveDownloader.steal(url) },
@@ -49,47 +53,110 @@ export class MemesService {
 
     const errors: { attempt: number; downloader: string; error: any }[] = [];
 
-    for (let attempt = 1; attempt <= MEMES_CONSTANTS.MAX_ATTEMPTS; attempt++) {
-      try {
-        const run = async (downloader: (typeof downloaders)[0]) => {
-          try {
-            const res = await downloader.fn();
-            if (res && res.success) {
-              return { downloader: downloader.name, result: res };
+    if (!isRetry) {
+      for (let attempt = 1; attempt <= MEMES_CONSTANTS.MAX_ATTEMPTS; attempt++) {
+        try {
+          const run = async (downloader: (typeof downloaders)[0]) => {
+            try {
+              const res = await downloader.fn();
+              if (res && res.success) {
+                return { downloader: downloader.name, result: res };
+              }
+              throw new Error(res?.error || `returned unsuccessful result`);
+            } catch (err) {
+              errors.push({ attempt, downloader: downloader.name, error: err });
+              throw err;
             }
-            throw new Error(res?.error || `returned unsuccessful result`);
-          } catch (err) {
-            errors.push({ attempt, downloader: downloader.name, error: err });
-            throw err;
-          }
-        };
+          };
 
-        const winner = await Promise.any(downloaders.map(run));
-        const sanitized = this.sanitizeAndSortResult(winner.result);
-        if (sanitized) {
-          if (!isSyntheticTest) {
-            this.trackStealResult({
-              url,
-              success: true,
-              downloader: winner.downloader,
-              isFallback: false,
-              attempt,
-              startedAt,
-              errors,
-            });
+          const winner = await Promise.any(downloaders.map(run));
+          const sanitized = this.sanitizeAndSortResult(winner.result);
+          if (sanitized) {
+            if (!isSyntheticTest) {
+              this.trackStealResult({
+                url,
+                success: true,
+                downloader: winner.downloader,
+                isFallback: false,
+                isRetry,
+                attempt,
+                startedAt,
+                errors,
+              });
+            }
+            return sanitized;
           }
-          return sanitized;
-        }
 
-        throw new Error('Success is false or media is empty');
-      } catch (err) {
-        if (err.message === 'Success is false or media is empty') {
-          errors.push({ attempt, downloader: 'all', error: err });
+          throw new Error('Success is false or media is empty');
+        } catch (err) {
+          if (err.message === 'Success is false or media is empty') {
+            errors.push({ attempt, downloader: 'all', error: err });
+          }
         }
       }
     }
 
-    // Last-resort fallback: run SaveAnyVideo only once after primary downloaders fail
+    const fallbackAttemptBase = isRetry ? 1 : MEMES_CONSTANTS.MAX_ATTEMPTS + 1;
+
+    // Fallback 1: SaverAPI
+    try {
+      const saverapiResult = await this.saverapiDownloader.steal(url);
+      const sanitizedSaverapi = this.sanitizeAndSortResult(saverapiResult);
+      if (sanitizedSaverapi) {
+        if (!isSyntheticTest) {
+          this.trackStealResult({
+            url,
+            success: true,
+            downloader: 'saverapi',
+            isFallback: true,
+            isRetry,
+            attempt: fallbackAttemptBase,
+            startedAt,
+            errors,
+          });
+        }
+        return sanitizedSaverapi;
+      }
+      errors.push({
+        attempt: fallbackAttemptBase,
+        downloader: 'saverapi',
+        error: new Error('Success is false or media is empty'),
+      });
+    } catch (saverapiErr) {
+      errors.push({
+        attempt: fallbackAttemptBase,
+        downloader: 'saverapi',
+        error: saverapiErr,
+      });
+
+      if (saverapiErr instanceof SaverapiError && !saverapiErr.shouldFallbackToNext) {
+        if (!isSyntheticTest) {
+          this.trackStealResult({
+            url,
+            success: false,
+            downloader: null,
+            isFallback: true,
+            isRetry,
+            attempt: fallbackAttemptBase,
+            startedAt,
+            errors,
+          });
+        }
+        return {
+          success: false,
+          platform: 'unknown',
+          title: null,
+          description: null,
+          thumbnail: null,
+          duration: null,
+          media: [],
+          error: saverapiErr.message,
+        };
+      }
+    }
+
+    // Fallback 2 (last-resort): SaveAnyVideo
+    const saveanyvideoAttempt = fallbackAttemptBase + 1;
     try {
       const fallbackResult = await this.saveanyvideoDownloader.steal(url);
       const sanitizedFallback = this.sanitizeAndSortResult(fallbackResult);
@@ -100,7 +167,8 @@ export class MemesService {
             success: true,
             downloader: 'saveanyvideo',
             isFallback: true,
-            attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+            isRetry,
+            attempt: saveanyvideoAttempt,
             startedAt,
             errors,
           });
@@ -108,13 +176,13 @@ export class MemesService {
         return sanitizedFallback;
       }
       errors.push({
-        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        attempt: saveanyvideoAttempt,
         downloader: 'saveanyvideo',
         error: new Error('Success is false or media is empty'),
       });
     } catch (fallbackErr) {
       errors.push({
-        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        attempt: saveanyvideoAttempt,
         downloader: 'saveanyvideo',
         error: fallbackErr,
       });
@@ -126,7 +194,8 @@ export class MemesService {
         success: false,
         downloader: null,
         isFallback: true,
-        attempt: MEMES_CONSTANTS.MAX_ATTEMPTS + 1,
+        isRetry,
+        attempt: saveanyvideoAttempt,
         startedAt,
         errors,
       });
@@ -168,6 +237,7 @@ export class MemesService {
     success: boolean;
     downloader: string | null;
     isFallback: boolean;
+    isRetry?: boolean;
     attempt: number;
     startedAt: number;
     errors: { attempt: number; downloader: string; error: any }[];
@@ -176,6 +246,7 @@ export class MemesService {
       success: params.success,
       downloader: params.downloader,
       isFallback: params.isFallback,
+      isRetry: Boolean(params.isRetry),
       attempt: params.attempt,
       durationMs: Date.now() - params.startedAt,
       memeType: getMemeTypeFromUrl(params.url),
@@ -248,7 +319,7 @@ export class MemesService {
     }
   }
 
-  async streamVideo(url: string, filename?: string): Promise<StreamableFile> {
+  async streamVideo(url: string, filename?: string, retry = 0): Promise<StreamableFile> {
     if (!this.isValidHttpUrl(url)) {
       throw new HttpException(
         'Invalid URL. Please provide a valid HTTP or HTTPS video URL.',
@@ -260,7 +331,7 @@ export class MemesService {
     let title: string | undefined = undefined;
 
     if (!this.isDirectVideoUrl(url)) {
-      const stealResult = await this.stealMeme(url);
+      const stealResult = await this.stealMeme(url, retry);
       if (!stealResult.success || !stealResult.media || stealResult.media.length === 0) {
         throw new HttpException(
           stealResult.error || 'Failed to extract video from the provided URL',

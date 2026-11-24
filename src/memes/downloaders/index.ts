@@ -5,3 +5,4 @@ export * from './next';
 export * from './highreach';
 export * from './vidssave';
 export * from './saveanyvideo';
+export * from './saverapi';
