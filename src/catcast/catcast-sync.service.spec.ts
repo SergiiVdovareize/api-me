@@ -789,6 +789,72 @@ describe('CatcastSyncService', () => {
         })
       );
     });
+
+    it('deduplicates repeated mediaKeys in same push and updates existing favorites', async () => {
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue({
+        id: 'prof-a',
+        historyClearedTs: BigInt(0),
+        searchQueries: [],
+        searchUpdatedAt: BigInt(0),
+      });
+      mockPrisma.catcastSyncHistory.findMany.mockResolvedValue([]);
+      mockPrisma.catcastSyncFavorite.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 10,
+            mediaKey: '/films/old-fav',
+            url: '/films/old-fav',
+            canonicalId: '10',
+            title: 'Old Fav',
+            orig: '',
+            poster: '',
+            ts: BigInt(1000),
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]); // overflow
+      mockPrisma.catcastSyncFavorite.update.mockResolvedValue({});
+
+      await service.push(ctxA, {
+        history: [
+          {
+            mediaKey: '/films/dup',
+            title: 'Older',
+            watchedEpisodes: { '1:1': 1000 },
+            ts: 1000,
+          },
+          {
+            mediaKey: '/films/dup',
+            title: 'Newer',
+            watchedEpisodes: { '1:2': 2000 },
+            ts: 2000,
+          },
+        ],
+        favorites: [
+          { mediaKey: '/films/dup-fav', title: 'First', ts: 1000 },
+          { mediaKey: '/films/dup-fav', title: 'Second', ts: 2000, deletedAt: 2500 },
+          { mediaKey: '/films/old-fav', title: 'Old Fav', ts: 1000, deletedAt: 3000 },
+        ],
+      });
+
+      expect(mockPrisma.catcastSyncHistory.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [
+            expect.objectContaining({
+              mediaKey: '/films/dup',
+              title: 'Newer',
+              watchedEpisodes: { '1:1': 1000, '1:2': 2000 },
+            }),
+          ],
+        })
+      );
+      expect(mockPrisma.catcastSyncFavorite.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10 },
+          data: expect.objectContaining({ deletedAt: BigInt(3000) }),
+        })
+      );
+    });
   });
 
   describe('cleanupExpiredData', () => {

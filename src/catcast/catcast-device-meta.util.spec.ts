@@ -75,5 +75,40 @@ describe('catcast-device-meta.util', () => {
         browser: 'Chrome 85',
       });
     });
+
+    it('parses iOS, Android, macOS, Windows, Linux and Edge/Opera/Firefox/Safari UAs + array headers', () => {
+      expect(
+        extractRequestDeviceMetadata({
+          'x-vercel-ip-city': ['Odessa'],
+          'x-vercel-ip-country': ['ua'],
+          'sec-ch-ua-platform': '"Unknown"',
+          'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Version/17.0 Safari/605.1',
+        })
+      ).toMatchObject({ city: 'Odessa', country: 'UA', os: 'iOS', browser: 'Safari 17.0' });
+
+      expect(
+        extractRequestDeviceMetadata({
+          'user-agent': 'Mozilla/5.0 (Linux; Android 14) Chrome/130.0 EdgA/130.0',
+        })
+      ).toMatchObject({ os: 'Android', browser: 'Edge 130' });
+
+      expect(
+        extractRequestDeviceMetadata({
+          'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X) Chrome/120.0 OPR/106.0',
+        })
+      ).toMatchObject({ os: 'macOS', browser: 'Opera 106' });
+
+      expect(
+        extractRequestDeviceMetadata({
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/132.0',
+        })
+      ).toMatchObject({ os: 'Windows', browser: 'Firefox 132' });
+
+      expect(
+        extractRequestDeviceMetadata({
+          'user-agent': 'Mozilla/5.0 (X11; Linux x86_64)',
+        })
+      ).toMatchObject({ os: 'Linux', browser: undefined });
+    });
   });
 });
