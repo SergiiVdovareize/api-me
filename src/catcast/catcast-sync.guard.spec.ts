@@ -60,6 +60,8 @@ describe('CatcastSyncGuard', () => {
       os: 'macOS',
       browser: 'Chrome',
       deviceName: 'My Mac',
+      city: 'Kyiv',
+      country: 'UA',
       isAllowed: true,
       syncLastSeenAt: null,
     });
@@ -79,6 +81,8 @@ describe('CatcastSyncGuard', () => {
       os: 'macOS',
       browser: 'Chrome',
       deviceName: 'My Mac',
+      city: 'Kyiv',
+      country: 'UA',
     });
     expect(mockPrisma.catcastDevice.update).toHaveBeenCalled();
   });

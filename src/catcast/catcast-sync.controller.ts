@@ -25,6 +25,7 @@ import {
   UnlinkDeviceQueryDto,
 } from './dto/catcast-sync.dto';
 import { validateCronSecret } from '../prices/prices.auth';
+import { extractRequestDeviceMetadata } from './catcast-device-meta.util';
 
 function extractClientIp(req: Request): string {
   const cfConnectingIp = req.headers['cf-connecting-ip'];
@@ -48,20 +49,32 @@ export class CatcastSyncController {
   @Post('profile/init')
   @HttpCode(HttpStatus.OK)
   async initProfile(@Body() body: InitProfileDto, @Req() req: Request) {
-    return this.syncService.initProfile(body, extractClientIp(req));
+    return this.syncService.initProfile(
+      body,
+      extractClientIp(req),
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Post('pair/init')
   @HttpCode(HttpStatus.OK)
   async pairInit(@Body() body: PairInitDto, @Req() req: Request) {
-    return this.syncService.pairInit(body, extractClientIp(req));
+    return this.syncService.pairInit(
+      body,
+      extractClientIp(req),
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Post('pair/confirm')
   @UseGuards(CatcastSyncGuard)
   @HttpCode(HttpStatus.OK)
   async pairConfirm(@Req() req: CatcastSyncRequest, @Body() body: PairConfirmDto) {
-    return this.syncService.pairConfirm(req.catcastSync, body);
+    return this.syncService.pairConfirm(
+      req.catcastSync,
+      body,
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Get('pair/status')
@@ -99,13 +112,21 @@ export class CatcastSyncController {
   @UseGuards(CatcastSyncGuard)
   @HttpCode(HttpStatus.OK)
   async push(@Req() req: CatcastSyncRequest, @Body() body: SyncPushDto) {
-    return this.syncService.push(req.catcastSync, body);
+    return this.syncService.push(
+      req.catcastSync,
+      body,
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Get('pull')
   @UseGuards(CatcastSyncGuard)
   async pull(@Req() req: CatcastSyncRequest, @Query('since') since?: string) {
-    return this.syncService.pull(req.catcastSync, since);
+    return this.syncService.pull(
+      req.catcastSync,
+      since,
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Post('cleanup')

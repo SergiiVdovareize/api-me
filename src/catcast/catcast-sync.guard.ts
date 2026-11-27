@@ -18,6 +18,8 @@ export interface CatcastSyncContext {
   os: string | null;
   browser: string | null;
   deviceName: string | null;
+  city: string | null;
+  country: string | null;
 }
 
 export interface CatcastSyncRequest extends Request {
@@ -76,6 +78,8 @@ export class CatcastSyncGuard implements CanActivate {
       os: device.os,
       browser: device.browser,
       deviceName: device.deviceName,
+      city: device.city ?? null,
+      country: device.country ?? null,
     };
 
     // Throttled update of syncLastSeenAt (non-blocking for request latency)

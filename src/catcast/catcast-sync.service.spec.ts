@@ -25,6 +25,8 @@ describe('CatcastSyncService', () => {
     os: 'iOS',
     browser: 'Safari',
     deviceName: 'My iPhone',
+    city: null,
+    country: null,
   };
 
   beforeEach(async () => {
@@ -285,7 +287,14 @@ describe('CatcastSyncService', () => {
       );
       expect(mockPrisma.catcastDevice.update).toHaveBeenCalledWith({
         where: { id: 2 },
-        data: { deviceName: 'My TV', browser: 'Tizen' },
+        data: {
+          deviceName: 'My TV',
+          browser: 'Tizen',
+          os: null,
+          model: null,
+          city: undefined,
+          country: undefined,
+        },
       });
 
       const pendingStatus = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.2');
@@ -464,6 +473,43 @@ describe('CatcastSyncService', () => {
       expect(res.devices[0].isCurrent).toBe(true);
       expect(res.devices[1].isCurrent).toBe(false);
       expect(res.devices[1].syncLastSeenAt).toBeNull();
+    });
+
+    it('updates device city/country/browser on push and returns location in listDevices', async () => {
+      mockPrisma.catcastDevice.update.mockResolvedValue({});
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue({
+        id: 'prof-a',
+        historyClearedTs: BigInt(0),
+        searchQueries: [],
+        searchUpdatedAt: BigInt(0),
+      });
+
+      await service.push(ctxA, {}, { city: 'Kyiv', country: 'UA', browser: 'Chrome 131' });
+      expect(mockPrisma.catcastDevice.update).toHaveBeenCalledWith({
+        where: { deviceId: 'dev-a' },
+        data: { city: 'Kyiv', country: 'UA', browser: 'Chrome 131' },
+      });
+
+      mockPrisma.catcastDevice.findMany.mockResolvedValue([
+        {
+          deviceId: 'dev-a',
+          deviceName: 'Phone',
+          platform: 'mobile_web',
+          model: 'iPhone',
+          os: 'iOS',
+          browser: 'Chrome 131',
+          city: 'Kyiv',
+          country: 'UA',
+          syncLastSeenAt: null,
+        },
+      ]);
+
+      const devicesRes = await service.listDevices(ctxA);
+      expect(devicesRes.devices[0]).toMatchObject({
+        city: 'Kyiv',
+        country: 'UA',
+        location: 'Kyiv, UA',
+      });
     });
 
     it('throws on empty deviceId or missing device', async () => {

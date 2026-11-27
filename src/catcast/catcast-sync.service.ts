@@ -13,6 +13,7 @@ import { PrismaService } from '../models/prisma/prisma.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { CATCAST_SYNC_CONSTANTS } from './catcast-sync.constants';
 import { CatcastSyncContext, hashSyncToken } from './catcast-sync.guard';
+import { formatDeviceLocation, RequestDeviceMetadata } from './catcast-device-meta.util';
 import {
   InitProfileDto,
   PairAcceptDto,
@@ -30,6 +31,9 @@ export interface DeviceSummary {
   model: string | null;
   os: string | null;
   browser: string | null;
+  city: string | null;
+  country: string | null;
+  location: string | null;
   label: string;
 }
 
@@ -70,7 +74,11 @@ export function buildDeviceSummary(device: {
   model?: string | null;
   os?: string | null;
   browser?: string | null;
+  city?: string | null;
+  country?: string | null;
 }): DeviceSummary {
+  const city = device.city ?? null;
+  const country = device.country ?? null;
   return {
     deviceId: device.deviceId,
     deviceName: device.deviceName ?? null,
@@ -78,6 +86,9 @@ export function buildDeviceSummary(device: {
     model: device.model ?? null,
     os: device.os ?? null,
     browser: device.browser ?? null,
+    city,
+    country,
+    location: formatDeviceLocation(city, country),
     label: buildDeviceLabel(device),
   };
 }
@@ -168,7 +179,43 @@ export class CatcastSyncService {
     return device;
   }
 
-  async initProfile(dto: InitProfileDto, clientIp: string) {
+  private buildMetadataUpdate(
+    current: {
+      city?: string | null;
+      country?: string | null;
+      browser?: string | null;
+      os?: string | null;
+      model?: string | null;
+    },
+    meta?: RequestDeviceMetadata
+  ): Record<string, string> {
+    if (!meta) return {};
+    const updates: Record<string, string> = {};
+    if (meta.city && meta.city !== current.city) updates.city = meta.city;
+    if (meta.country && meta.country !== current.country) updates.country = meta.country;
+    if (meta.browser && meta.browser !== current.browser) updates.browser = meta.browser;
+    if (meta.os && meta.os !== current.os) updates.os = meta.os;
+    if (meta.model && meta.model !== current.model) updates.model = meta.model;
+    return updates;
+  }
+
+  private syncDeviceMetadataInBackground(
+    ctx: CatcastSyncContext,
+    meta?: RequestDeviceMetadata
+  ): void {
+    const updates = this.buildMetadataUpdate(ctx, meta);
+    if (Object.keys(updates).length === 0) return;
+    this.prisma.catcastDevice
+      .update({
+        where: { deviceId: ctx.deviceId },
+        data: updates,
+      })
+      .catch(err => {
+        this.logger.warn(`Failed to update metadata for ${ctx.deviceId}: ${err.message}`);
+      });
+  }
+
+  async initProfile(dto: InitProfileDto, clientIp: string, meta?: RequestDeviceMetadata) {
     await this.enforceRateLimit(
       'profile_init',
       `${clientIp}:${dto.deviceId}`,
@@ -179,7 +226,11 @@ export class CatcastSyncService {
     const syncToken = this.generateToken();
     const syncTokenHash = hashSyncToken(syncToken);
     const deviceName = dto.deviceName?.trim().slice(0, 120) || device.deviceName;
-    const browser = dto.browser?.trim().slice(0, 80) || device.browser;
+    const browser = dto.browser?.trim().slice(0, 80) || meta?.browser || device.browser;
+    const os = meta?.os || device.os;
+    const model = meta?.model || device.model;
+    const city = meta?.city || device.city;
+    const country = meta?.country || device.country;
 
     if (device.profileId) {
       await this.prisma.catcastDevice.update({
@@ -188,6 +239,10 @@ export class CatcastSyncService {
           syncTokenHash,
           deviceName,
           browser,
+          os,
+          model,
+          city,
+          country,
           syncLastSeenAt: new Date(),
         },
       });
@@ -207,6 +262,10 @@ export class CatcastSyncService {
           syncTokenHash,
           deviceName,
           browser,
+          os,
+          model,
+          city,
+          country,
           syncLastSeenAt: new Date(),
         },
       });
@@ -220,7 +279,7 @@ export class CatcastSyncService {
     };
   }
 
-  async pairInit(dto: PairInitDto, clientIp: string) {
+  async pairInit(dto: PairInitDto, clientIp: string, meta?: RequestDeviceMetadata) {
     await this.enforceRateLimit(
       'pair_init',
       clientIp,
@@ -233,12 +292,23 @@ export class CatcastSyncService {
 
     const device = await this.getAllowedDeviceOrThrow(dto.deviceId);
     const deviceName = dto.deviceName?.trim().slice(0, 120) || device.deviceName;
-    const browser = dto.browser?.trim().slice(0, 80) || device.browser;
+    const browser = dto.browser?.trim().slice(0, 80) || meta?.browser || device.browser;
+    const os = meta?.os || device.os;
+    const model = meta?.model || device.model;
+    const city = meta?.city || device.city;
+    const country = meta?.country || device.country;
 
-    if (deviceName !== device.deviceName || browser !== device.browser) {
+    if (
+      deviceName !== device.deviceName ||
+      browser !== device.browser ||
+      os !== device.os ||
+      model !== device.model ||
+      city !== device.city ||
+      country !== device.country
+    ) {
       await this.prisma.catcastDevice.update({
         where: { id: device.id },
-        data: { deviceName, browser },
+        data: { deviceName, browser, os, model, city, country },
       });
     }
 
@@ -271,6 +341,10 @@ export class CatcastSyncService {
         ...device,
         deviceName,
         browser,
+        os,
+        model,
+        city,
+        country,
       }),
       expiresAt,
     };
@@ -284,7 +358,16 @@ export class CatcastSyncService {
     return { code, pairSecret, expiresAt };
   }
 
-  async pairConfirm(ctx: CatcastSyncContext, dto: PairConfirmDto) {
+  async pairConfirm(ctx: CatcastSyncContext, dto: PairConfirmDto, meta?: RequestDeviceMetadata) {
+    this.syncDeviceMetadataInBackground(ctx, meta);
+    const enrichedCtx: CatcastSyncContext = {
+      ...ctx,
+      city: meta?.city || ctx.city,
+      country: meta?.country || ctx.country,
+      browser: meta?.browser || ctx.browser,
+      os: meta?.os || ctx.os,
+      model: meta?.model || ctx.model,
+    };
     await this.enforceRateLimit(
       'pair_confirm',
       ctx.deviceId,
@@ -353,8 +436,8 @@ export class CatcastSyncService {
     const updatedSession: PairSession = {
       ...session,
       status: 'awaiting_acceptance',
-      initiatorProfileId: ctx.profileId,
-      initiatorDeviceSummary: buildDeviceSummary(ctx),
+      initiatorProfileId: enrichedCtx.profileId,
+      initiatorDeviceSummary: buildDeviceSummary(enrichedCtx),
     };
 
     const remainingSeconds = Math.max(
@@ -778,7 +861,8 @@ export class CatcastSyncService {
     return String(value).slice(0, maxLen);
   }
 
-  async push(ctx: CatcastSyncContext, dto: SyncPushDto) {
+  async push(ctx: CatcastSyncContext, dto: SyncPushDto, meta?: RequestDeviceMetadata) {
+    this.syncDeviceMetadataInBackground(ctx, meta);
     if (dto.history && dto.history.length > CATCAST_SYNC_CONSTANTS.HISTORY_LIMIT) {
       throw new BadRequestException(
         `history exceeds maximum of ${CATCAST_SYNC_CONSTANTS.HISTORY_LIMIT} items`
@@ -1097,7 +1181,8 @@ export class CatcastSyncService {
     }
   }
 
-  async pull(ctx: CatcastSyncContext, sinceRaw?: string) {
+  async pull(ctx: CatcastSyncContext, sinceRaw?: string, meta?: RequestDeviceMetadata) {
+    this.syncDeviceMetadataInBackground(ctx, meta);
     const sinceNum = sinceRaw ? Number(sinceRaw) : 0;
     const since = Number.isFinite(sinceNum) && sinceNum > 0 ? Math.trunc(sinceNum) : 0;
 

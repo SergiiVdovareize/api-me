@@ -169,6 +169,8 @@ model CatcastDevice {
   os             String?         @db.VarChar(128)
   browser        String?         @db.VarChar(80)
   deviceName     String?         @db.VarChar(120)
+  city           String?         @db.VarChar(120)
+  country        String?         @db.VarChar(16)
   isAllowed      Boolean         @default(true)
   profileId      String?         @db.VarChar(64)
   profile        CatcastProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)

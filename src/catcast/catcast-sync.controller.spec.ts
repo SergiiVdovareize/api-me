@@ -60,15 +60,25 @@ describe('CatcastSyncController', () => {
 
   it('delegates profile init, pairing, devices, push, pull and cleanup', async () => {
     await controller.initProfile({ deviceId: 'dev-1' }, mockReq);
-    expect(mockSyncService.initProfile).toHaveBeenCalledWith({ deviceId: 'dev-1' }, '1.2.3.4');
+    expect(mockSyncService.initProfile).toHaveBeenCalledWith(
+      { deviceId: 'dev-1' },
+      '1.2.3.4',
+      expect.any(Object)
+    );
 
     await controller.pairInit({ deviceId: 'dev-2' }, mockReq);
-    expect(mockSyncService.pairInit).toHaveBeenCalledWith({ deviceId: 'dev-2' }, '1.2.3.4');
+    expect(mockSyncService.pairInit).toHaveBeenCalledWith(
+      { deviceId: 'dev-2' },
+      '1.2.3.4',
+      expect.any(Object)
+    );
 
     await controller.pairConfirm(mockReq, { code: 'ABC234' });
-    expect(mockSyncService.pairConfirm).toHaveBeenCalledWith(mockReq.catcastSync, {
-      code: 'ABC234',
-    });
+    expect(mockSyncService.pairConfirm).toHaveBeenCalledWith(
+      mockReq.catcastSync,
+      { code: 'ABC234' },
+      expect.any(Object)
+    );
 
     await controller.pairStatus('ABC234', 'sec', mockReq);
     expect(mockSyncService.pairStatus).toHaveBeenCalledWith('ABC234', 'sec', '1.2.3.4');
@@ -94,10 +104,18 @@ describe('CatcastSyncController', () => {
     );
 
     await controller.push(mockReq, { history: [] });
-    expect(mockSyncService.push).toHaveBeenCalledWith(mockReq.catcastSync, { history: [] });
+    expect(mockSyncService.push).toHaveBeenCalledWith(
+      mockReq.catcastSync,
+      { history: [] },
+      expect.any(Object)
+    );
 
     await controller.pull(mockReq, '100');
-    expect(mockSyncService.pull).toHaveBeenCalledWith(mockReq.catcastSync, '100');
+    expect(mockSyncService.pull).toHaveBeenCalledWith(
+      mockReq.catcastSync,
+      '100',
+      expect.any(Object)
+    );
 
     await controller.cleanup('secret-cron');
     expect(mockSyncService.cleanupExpiredData).toHaveBeenCalled();
@@ -107,18 +125,34 @@ describe('CatcastSyncController', () => {
     await controller.initProfile({ deviceId: 'd1' }, {
       headers: { 'cf-connecting-ip': '9.9.9.9' },
     } as any);
-    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '9.9.9.9');
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith(
+      { deviceId: 'd1' },
+      '9.9.9.9',
+      expect.any(Object)
+    );
 
     await controller.initProfile({ deviceId: 'd1' }, {
       headers: {},
       socket: { remoteAddress: '8.8.8.8' },
     } as any);
-    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '8.8.8.8');
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith(
+      { deviceId: 'd1' },
+      '8.8.8.8',
+      expect.any(Object)
+    );
 
     await controller.initProfile({ deviceId: 'd1' }, { headers: {}, ip: '7.7.7.7' } as any);
-    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '7.7.7.7');
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith(
+      { deviceId: 'd1' },
+      '7.7.7.7',
+      expect.any(Object)
+    );
 
     await controller.initProfile({ deviceId: 'd1' }, { headers: {} } as any);
-    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '127.0.0.1');
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith(
+      { deviceId: 'd1' },
+      '127.0.0.1',
+      expect.any(Object)
+    );
   });
 });
