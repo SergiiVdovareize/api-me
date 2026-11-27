@@ -72,12 +72,14 @@ describe('CatcastSyncService', () => {
       catcastSyncHistory: {
         findMany: jest.fn(),
         create: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
         update: jest.fn(),
         deleteMany: jest.fn(),
       },
       catcastSyncFavorite: {
         findMany: jest.fn(),
         create: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
         update: jest.fn(),
         deleteMany: jest.fn(),
       },
@@ -436,8 +438,8 @@ describe('CatcastSyncService', () => {
         where: { profileId: 'prof-b' },
         data: { profileId: 'prof-a' },
       });
-      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalled();
-      expect(mockPrisma.catcastSyncFavorite.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncHistory.createMany).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncFavorite.createMany).toHaveBeenCalled();
       expect(mockPrisma.catcastProfile.delete).toHaveBeenCalledWith({
         where: { id: 'prof-b' },
       });
@@ -678,11 +680,11 @@ describe('CatcastSyncService', () => {
         where: { id: 'prof-a' },
         data: { historyClearedTs: BigInt(1000) },
       });
-      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncHistory.createMany).toHaveBeenCalled();
       expect(mockPrisma.catcastSyncHistory.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: [999] } },
       });
-      expect(mockPrisma.catcastSyncFavorite.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncFavorite.createMany).toHaveBeenCalled();
       expect(mockPrisma.catcastSyncFavorite.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: [888] } },
       });
@@ -773,14 +775,17 @@ describe('CatcastSyncService', () => {
       });
 
       expect(res.serverTs).toBeGreaterThan(0);
-      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalledWith(
+      expect(mockPrisma.catcastSyncHistory.createMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            season: 1,
-            episode: 3,
-            currentTime: 12,
-            duration: 1346,
-          }),
+          data: [
+            expect.objectContaining({
+              season: 1,
+              episode: 3,
+              currentTime: 12,
+              duration: 1346,
+            }),
+          ],
+          skipDuplicates: true,
         })
       );
     });

@@ -567,20 +567,23 @@ export class CatcastSyncService {
     const targetProfileId = session.initiatorProfileId;
     const sourceProfileId = targetDevice.profileId;
 
-    await this.prisma.$transaction(async tx => {
-      if (sourceProfileId && sourceProfileId !== targetProfileId) {
-        await this.mergeProfilesInTx(tx, targetProfileId, sourceProfileId);
-      }
+    await this.prisma.$transaction(
+      async tx => {
+        if (sourceProfileId && sourceProfileId !== targetProfileId) {
+          await this.mergeProfilesInTx(tx, targetProfileId, sourceProfileId);
+        }
 
-      await tx.catcastDevice.update({
-        where: { id: targetDevice.id },
-        data: {
-          profileId: targetProfileId,
-          syncTokenHash,
-          syncLastSeenAt: new Date(),
-        },
-      });
-    });
+        await tx.catcastDevice.update({
+          where: { id: targetDevice.id },
+          data: {
+            profileId: targetProfileId,
+            syncTokenHash,
+            syncLastSeenAt: new Date(),
+          },
+        });
+      },
+      { maxWait: 5000, timeout: 15000 }
+    );
 
     const confirmedSession: PairSession = {
       ...session,
@@ -876,77 +879,80 @@ export class CatcastSyncService {
 
     await this.enforceRateLimit('push', ctx.profileId, CATCAST_SYNC_CONSTANTS.RATE_LIMITS.PUSH);
 
-    return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM "CatcastProfile" WHERE id = ${ctx.profileId} FOR UPDATE`;
+    return this.prisma.$transaction(
+      async tx => {
+        await tx.$queryRaw`SELECT id FROM "CatcastProfile" WHERE id = ${ctx.profileId} FOR UPDATE`;
 
-      const profile = await tx.catcastProfile.findUnique({
-        where: { id: ctx.profileId },
-      });
+        const profile = await tx.catcastProfile.findUnique({
+          where: { id: ctx.profileId },
+        });
 
-      if (!profile) {
-        throw new NotFoundException('Sync profile not found');
-      }
-
-      const serverNow = Date.now();
-      const clampTs = (ts: number) =>
-        Math.min(
-          Math.max(0, Math.trunc(ts)),
-          serverNow + CATCAST_SYNC_CONSTANTS.CLOCK_SKEW_MAX_FUTURE_MS
-        );
-
-      let effectiveClearedTs = Number(profile.historyClearedTs);
-      if (dto.historyClearedTs !== undefined) {
-        const clampedCleared = clampTs(dto.historyClearedTs);
-        if (clampedCleared > effectiveClearedTs) {
-          effectiveClearedTs = clampedCleared;
-          await tx.catcastProfile.update({
-            where: { id: ctx.profileId },
-            data: { historyClearedTs: BigInt(effectiveClearedTs) },
-          });
-          await tx.catcastSyncHistory.deleteMany({
-            where: {
-              profileId: ctx.profileId,
-              ts: { lte: BigInt(effectiveClearedTs) },
-            },
-          });
+        if (!profile) {
+          throw new NotFoundException('Sync profile not found');
         }
-      }
 
-      if (dto.history && dto.history.length > 0) {
-        await this.mergeHistoryBatch(
-          tx,
-          ctx.profileId,
-          dto.history,
-          effectiveClearedTs,
-          serverNow,
-          clampTs
-        );
-      }
+        const serverNow = Date.now();
+        const clampTs = (ts: number) =>
+          Math.min(
+            Math.max(0, Math.trunc(ts)),
+            serverNow + CATCAST_SYNC_CONSTANTS.CLOCK_SKEW_MAX_FUTURE_MS
+          );
 
-      if (dto.favorites && dto.favorites.length > 0) {
-        await this.mergeFavoritesBatch(tx, ctx.profileId, dto.favorites, serverNow, clampTs);
-      }
-
-      if (dto.searchHistory) {
-        const incomingUpdatedAt = clampTs(dto.searchHistory.updatedAt);
-        if (incomingUpdatedAt > Number(profile.searchUpdatedAt)) {
-          const cleanQueries = dto.searchHistory.queries
-            .map(q => q.trim())
-            .filter(q => q.length >= CATCAST_SYNC_CONSTANTS.SEARCH_QUERY_MIN_LENGTH)
-            .slice(0, CATCAST_SYNC_CONSTANTS.SEARCH_QUERIES_LIMIT);
-
-          await tx.catcastProfile.update({
-            where: { id: ctx.profileId },
-            data: {
-              searchQueries: cleanQueries,
-              searchUpdatedAt: BigInt(incomingUpdatedAt),
-            },
-          });
+        let effectiveClearedTs = Number(profile.historyClearedTs);
+        if (dto.historyClearedTs !== undefined) {
+          const clampedCleared = clampTs(dto.historyClearedTs);
+          if (clampedCleared > effectiveClearedTs) {
+            effectiveClearedTs = clampedCleared;
+            await tx.catcastProfile.update({
+              where: { id: ctx.profileId },
+              data: { historyClearedTs: BigInt(effectiveClearedTs) },
+            });
+            await tx.catcastSyncHistory.deleteMany({
+              where: {
+                profileId: ctx.profileId,
+                ts: { lte: BigInt(effectiveClearedTs) },
+              },
+            });
+          }
         }
-      }
 
-      return { serverTs: serverNow };
-    });
+        if (dto.history && dto.history.length > 0) {
+          await this.mergeHistoryBatch(
+            tx,
+            ctx.profileId,
+            dto.history,
+            effectiveClearedTs,
+            serverNow,
+            clampTs
+          );
+        }
+
+        if (dto.favorites && dto.favorites.length > 0) {
+          await this.mergeFavoritesBatch(tx, ctx.profileId, dto.favorites, serverNow, clampTs);
+        }
+
+        if (dto.searchHistory) {
+          const incomingUpdatedAt = clampTs(dto.searchHistory.updatedAt);
+          if (incomingUpdatedAt > Number(profile.searchUpdatedAt)) {
+            const cleanQueries = dto.searchHistory.queries
+              .map(q => q.trim())
+              .filter(q => q.length >= CATCAST_SYNC_CONSTANTS.SEARCH_QUERY_MIN_LENGTH)
+              .slice(0, CATCAST_SYNC_CONSTANTS.SEARCH_QUERIES_LIMIT);
+
+            await tx.catcastProfile.update({
+              where: { id: ctx.profileId },
+              data: {
+                searchQueries: cleanQueries,
+                searchUpdatedAt: BigInt(incomingUpdatedAt),
+              },
+            });
+          }
+        }
+
+        return { serverTs: serverNow };
+      },
+      { maxWait: 5000, timeout: 15000 }
+    );
   }
 
   private async mergeHistoryBatch(
@@ -990,12 +996,15 @@ export class CatcastSyncService {
       where: { profileId, mediaKey: { in: mediaKeys } },
     });
     const existingMap = new Map<string, any>(existingRows.map((r: any) => [r.mediaKey, r]));
+    const toCreate = new Map<string, any>();
+    const toUpdate = new Map<number, any>();
 
     for (const item of validItems) {
       const existing = existingMap.get(item.mediaKey);
       if (!existing) {
-        const created = await tx.catcastSyncHistory.create({
-          data: {
+        const pendingCreate = toCreate.get(item.mediaKey);
+        if (!pendingCreate) {
+          toCreate.set(item.mediaKey, {
             profileId,
             mediaKey: item.mediaKey,
             url: item.url ?? '',
@@ -1013,9 +1022,34 @@ export class CatcastSyncService {
             voice: item.voice ?? '',
             ts: BigInt(item.clampedTs),
             updatedOnServerAt: BigInt(serverNow),
-          },
-        });
-        existingMap.set(item.mediaKey, created);
+          });
+        } else {
+          const { merged } = this.mergeWatchedEpisodes(
+            pendingCreate.watchedEpisodes,
+            item.sanitizedWatched
+          );
+          if (item.clampedTs > Number(pendingCreate.ts)) {
+            toCreate.set(item.mediaKey, {
+              ...pendingCreate,
+              url: item.url ?? pendingCreate.url,
+              canonicalId: item.canonicalId ?? pendingCreate.canonicalId,
+              title: item.title ?? pendingCreate.title,
+              orig: item.orig ?? pendingCreate.orig,
+              poster: item.poster ?? pendingCreate.poster,
+              season: item.season !== undefined ? item.season : pendingCreate.season,
+              episode: item.episode !== undefined ? item.episode : pendingCreate.episode,
+              episodeName: item.episodeName ?? pendingCreate.episodeName,
+              currentTime: item.currentTime ?? pendingCreate.currentTime,
+              duration: item.duration ?? pendingCreate.duration,
+              completed: item.completed ?? pendingCreate.completed,
+              voice: item.voice ?? pendingCreate.voice,
+              ts: BigInt(item.clampedTs),
+              watchedEpisodes: merged,
+            });
+          } else {
+            pendingCreate.watchedEpisodes = merged;
+          }
+        }
         continue;
       }
 
@@ -1077,14 +1111,27 @@ export class CatcastSyncService {
         continue;
       }
 
-      const updated = await tx.catcastSyncHistory.update({
-        where: { id: existing.id },
-        data: {
-          ...nextData,
-          updatedOnServerAt: BigInt(serverNow),
-        },
+      const updatePayload = {
+        ...nextData,
+        updatedOnServerAt: BigInt(serverNow),
+      };
+      existingMap.set(item.mediaKey, { ...existing, ...updatePayload });
+      toUpdate.set(existing.id, updatePayload);
+    }
+
+    if (toCreate.size > 0) {
+      await tx.catcastSyncHistory.createMany({
+        data: Array.from(toCreate.values()),
+        skipDuplicates: true,
       });
-      existingMap.set(item.mediaKey, updated);
+    }
+
+    if (toUpdate.size > 0) {
+      await Promise.all(
+        Array.from(toUpdate.entries()).map(([id, data]) =>
+          tx.catcastSyncHistory.update({ where: { id }, data })
+        )
+      );
     }
 
     // Trim history to max 200 newest items
@@ -1114,6 +1161,8 @@ export class CatcastSyncService {
       where: { profileId, mediaKey: { in: mediaKeys } },
     });
     const existingMap = new Map<string, any>(existingRows.map((r: any) => [r.mediaKey, r]));
+    const toCreate = new Map<string, any>();
+    const toUpdate = new Map<number, any>();
 
     for (const item of items) {
       const clampedTs = clampTs(item.ts);
@@ -1123,8 +1172,15 @@ export class CatcastSyncService {
 
       const existing = existingMap.get(item.mediaKey);
       if (!existing) {
-        const created = await tx.catcastSyncFavorite.create({
-          data: {
+        const pendingCreate = toCreate.get(item.mediaKey);
+        const pendingActionTs = pendingCreate
+          ? Math.max(
+              Number(pendingCreate.ts),
+              pendingCreate.deletedAt ? Number(pendingCreate.deletedAt) : 0
+            )
+          : -1;
+        if (incomingActionTs > pendingActionTs) {
+          toCreate.set(item.mediaKey, {
             profileId,
             mediaKey: item.mediaKey,
             url: item.url ?? '',
@@ -1135,9 +1191,8 @@ export class CatcastSyncService {
             ts: BigInt(clampedTs),
             deletedAt: clampedDeletedAt !== null ? BigInt(clampedDeletedAt) : null,
             updatedOnServerAt: BigInt(serverNow),
-          },
-        });
-        existingMap.set(item.mediaKey, created);
+          });
+        }
         continue;
       }
 
@@ -1150,20 +1205,33 @@ export class CatcastSyncService {
         continue;
       }
 
-      const updated = await tx.catcastSyncFavorite.update({
-        where: { id: existing.id },
-        data: {
-          url: item.url ?? existing.url,
-          canonicalId: item.canonicalId ?? existing.canonicalId,
-          title: item.title ?? existing.title,
-          orig: item.orig ?? existing.orig,
-          poster: item.poster ?? existing.poster,
-          ts: BigInt(clampedTs),
-          deletedAt: clampedDeletedAt !== null ? BigInt(clampedDeletedAt) : null,
-          updatedOnServerAt: BigInt(serverNow),
-        },
+      const updatePayload = {
+        url: item.url ?? existing.url,
+        canonicalId: item.canonicalId ?? existing.canonicalId,
+        title: item.title ?? existing.title,
+        orig: item.orig ?? existing.orig,
+        poster: item.poster ?? existing.poster,
+        ts: BigInt(clampedTs),
+        deletedAt: clampedDeletedAt !== null ? BigInt(clampedDeletedAt) : null,
+        updatedOnServerAt: BigInt(serverNow),
+      };
+      existingMap.set(item.mediaKey, { ...existing, ...updatePayload });
+      toUpdate.set(existing.id, updatePayload);
+    }
+
+    if (toCreate.size > 0) {
+      await tx.catcastSyncFavorite.createMany({
+        data: Array.from(toCreate.values()),
+        skipDuplicates: true,
       });
-      existingMap.set(item.mediaKey, updated);
+    }
+
+    if (toUpdate.size > 0) {
+      await Promise.all(
+        Array.from(toUpdate.entries()).map(([id, data]) =>
+          tx.catcastSyncFavorite.update({ where: { id }, data })
+        )
+      );
     }
 
     // Trim active favorites to max 500 newest
@@ -1186,84 +1254,82 @@ export class CatcastSyncService {
     const sinceNum = sinceRaw ? Number(sinceRaw) : 0;
     const since = Number.isFinite(sinceNum) && sinceNum > 0 ? Math.trunc(sinceNum) : 0;
 
-    return this.prisma.$transaction(async tx => {
-      const profile = await tx.catcastProfile.findUnique({
+    const [profile, historyRows, favoriteRows] = await Promise.all([
+      this.prisma.catcastProfile.findUnique({
         where: { id: ctx.profileId },
-      });
-
-      if (!profile) {
-        throw new NotFoundException('Sync profile not found');
-      }
-
-      const historyRows = await tx.catcastSyncHistory.findMany({
+      }),
+      this.prisma.catcastSyncHistory.findMany({
         where: {
           profileId: ctx.profileId,
           ...(since > 0 ? { updatedOnServerAt: { gt: BigInt(since) } } : {}),
         },
         orderBy: { ts: 'desc' },
-      });
-
-      const favoriteRows = await tx.catcastSyncFavorite.findMany({
+      }),
+      this.prisma.catcastSyncFavorite.findMany({
         where: {
           profileId: ctx.profileId,
           ...(since > 0 ? { updatedOnServerAt: { gt: BigInt(since) } } : { deletedAt: null }),
         },
         orderBy: { ts: 'desc' },
-      });
+      }),
+    ]);
 
-      let maxUpdated = since;
-      for (const h of historyRows) {
-        const u = Number(h.updatedOnServerAt);
-        if (u > maxUpdated) maxUpdated = u;
-      }
-      for (const f of favoriteRows) {
-        const u = Number(f.updatedOnServerAt);
-        if (u > maxUpdated) maxUpdated = u;
-      }
+    if (!profile) {
+      throw new NotFoundException('Sync profile not found');
+    }
 
-      const searchUpdatedAt = Number(profile.searchUpdatedAt);
-      const includeSearch = since === 0 || searchUpdatedAt > since;
+    let maxUpdated = since;
+    for (const h of historyRows) {
+      const u = Number(h.updatedOnServerAt);
+      if (u > maxUpdated) maxUpdated = u;
+    }
+    for (const f of favoriteRows) {
+      const u = Number(f.updatedOnServerAt);
+      if (u > maxUpdated) maxUpdated = u;
+    }
 
-      return {
-        serverTs: maxUpdated,
-        historyClearedTs: Number(profile.historyClearedTs),
-        history: historyRows.map(h => ({
-          mediaKey: h.mediaKey,
-          url: h.url,
-          canonicalId: h.canonicalId,
-          title: h.title,
-          orig: h.orig,
-          poster: h.poster,
-          season: h.season,
-          episode: h.episode,
-          episodeName: h.episodeName,
-          currentTime: h.currentTime,
-          duration: h.duration,
-          completed: h.completed,
-          watchedEpisodes: h.watchedEpisodes,
-          voice: h.voice,
-          ts: Number(h.ts),
-        })),
-        favorites: favoriteRows.map(f => ({
-          mediaKey: f.mediaKey,
-          url: f.url,
-          canonicalId: f.canonicalId,
-          title: f.title,
-          orig: f.orig,
-          poster: f.poster,
-          ts: Number(f.ts),
-          deletedAt: f.deletedAt !== null ? Number(f.deletedAt) : null,
-        })),
-        ...(includeSearch
-          ? {
-              searchHistory: {
-                queries: Array.isArray(profile.searchQueries) ? profile.searchQueries : [],
-                updatedAt: searchUpdatedAt,
-              },
-            }
-          : {}),
-      };
-    });
+    const searchUpdatedAt = Number(profile.searchUpdatedAt);
+    const includeSearch = since === 0 || searchUpdatedAt > since;
+
+    return {
+      serverTs: maxUpdated,
+      historyClearedTs: Number(profile.historyClearedTs),
+      history: historyRows.map(h => ({
+        mediaKey: h.mediaKey,
+        url: h.url,
+        canonicalId: h.canonicalId,
+        title: h.title,
+        orig: h.orig,
+        poster: h.poster,
+        season: h.season,
+        episode: h.episode,
+        episodeName: h.episodeName,
+        currentTime: h.currentTime,
+        duration: h.duration,
+        completed: h.completed,
+        watchedEpisodes: h.watchedEpisodes,
+        voice: h.voice,
+        ts: Number(h.ts),
+      })),
+      favorites: favoriteRows.map(f => ({
+        mediaKey: f.mediaKey,
+        url: f.url,
+        canonicalId: f.canonicalId,
+        title: f.title,
+        orig: f.orig,
+        poster: f.poster,
+        ts: Number(f.ts),
+        deletedAt: f.deletedAt !== null ? Number(f.deletedAt) : null,
+      })),
+      ...(includeSearch
+        ? {
+            searchHistory: {
+              queries: Array.isArray(profile.searchQueries) ? profile.searchQueries : [],
+              updatedAt: searchUpdatedAt,
+            },
+          }
+        : {}),
+    };
   }
 
   async cleanupExpiredData() {
