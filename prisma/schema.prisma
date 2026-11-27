@@ -149,17 +149,80 @@ model PriceProduct {
   @@index([domain])
 }
 
+model CatcastProfile {
+  id               String                @id @default(cuid()) @db.VarChar(64)
+  historyClearedTs BigInt                @default(0)
+  searchQueries    Json                  @default("[]")
+  searchUpdatedAt  BigInt                @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  devices          CatcastDevice[]
+  history          CatcastSyncHistory[]
+  favorites        CatcastSyncFavorite[]
+}
+
 model CatcastDevice {
-  id        Int      @id @default(autoincrement())
-  deviceId  String   @unique @db.VarChar(128)
-  platform  String   @db.VarChar(32)
-  model     String?  @db.VarChar(128)
-  os        String?  @db.VarChar(128)
-  isAllowed Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int             @id @default(autoincrement())
+  deviceId       String          @unique @db.VarChar(128)
+  platform       String          @db.VarChar(32)
+  model          String?         @db.VarChar(128)
+  os             String?         @db.VarChar(128)
+  browser        String?         @db.VarChar(80)
+  deviceName     String?         @db.VarChar(120)
+  isAllowed      Boolean         @default(true)
+  profileId      String?         @db.VarChar(64)
+  profile        CatcastProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  syncTokenHash  String?         @unique @db.VarChar(64)
+  syncLastSeenAt DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@index([deviceId, isAllowed])
+  @@index([profileId])
+}
+
+model CatcastSyncHistory {
+  id                Int            @id @default(autoincrement())
+  profileId         String         @db.VarChar(64)
+  profile           CatcastProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaKey          String         @db.VarChar(256)
+  url               String         @default("") @db.VarChar(512)
+  canonicalId       String         @default("") @db.VarChar(128)
+  title             String         @default("") @db.VarChar(512)
+  orig              String         @default("") @db.VarChar(512)
+  poster            String         @default("") @db.VarChar(1024)
+  season            Int?
+  episode           Int?
+  episodeName       String         @default("") @db.VarChar(256)
+  currentTime       Int            @default(0)
+  duration          Int            @default(0)
+  completed         Boolean        @default(false)
+  watchedEpisodes   Json           @default("{}")
+  voice             String         @default("") @db.VarChar(256)
+  ts                BigInt
+  updatedOnServerAt BigInt
+
+  @@unique([profileId, mediaKey])
+  @@index([profileId, updatedOnServerAt])
+  @@index([profileId, ts(sort: Desc)])
+}
+
+model CatcastSyncFavorite {
+  id                Int            @id @default(autoincrement())
+  profileId         String         @db.VarChar(64)
+  profile           CatcastProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaKey          String         @db.VarChar(256)
+  url               String         @default("") @db.VarChar(512)
+  canonicalId       String         @default("") @db.VarChar(128)
+  title             String         @default("") @db.VarChar(512)
+  orig              String         @default("") @db.VarChar(512)
+  poster            String         @default("") @db.VarChar(1024)
+  ts                BigInt
+  deletedAt         BigInt?
+  updatedOnServerAt BigInt
+
+  @@unique([profileId, mediaKey])
+  @@index([profileId, updatedOnServerAt])
 }
 
 model CatcastDeviceRequest {

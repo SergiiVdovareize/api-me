@@ -6,6 +6,7 @@ import { TelegramProjectBoardService } from './services/telegram-project-board.s
 import { RedisReader } from '../common/helpers/redisReader';
 import { BlobService } from '../blob/blob.service';
 import { CatcastService } from '../catcast/catcast.service';
+import { CatcastSyncService, DevicePairedNotification } from '../catcast/catcast-sync.service';
 import {
   StructuredTaskResult,
   TelegramCallbackQuery,
@@ -61,7 +62,8 @@ export class TelegramService implements OnModuleInit {
     private readonly projectBoardService: TelegramProjectBoardService,
     @Optional() private readonly redisReader?: RedisReader,
     @Optional() private readonly blobService?: BlobService,
-    @Optional() private readonly catcastService?: CatcastService
+    @Optional() private readonly catcastService?: CatcastService,
+    @Optional() private readonly catcastSyncService?: CatcastSyncService
   ) {}
 
   async onModuleInit() {
@@ -69,6 +71,11 @@ export class TelegramService implements OnModuleInit {
     if (this.catcastService) {
       this.catcastService.setDeviceRequestNotifier(async request => {
         return this.notifyNewDeviceRequest(request);
+      });
+    }
+    if (this.catcastSyncService) {
+      this.catcastSyncService.setDevicePairedNotifier(async notification => {
+        await this.notifyDevicesPaired(notification);
       });
     }
   }
@@ -747,9 +754,7 @@ export class TelegramService implements OnModuleInit {
       minute: '2-digit',
     });
 
-    const codeHeader = request.code
-      ? `🔑 <b>Код: ${escapeHtml(request.code)}</b>\n\n`
-      : '';
+    const codeHeader = request.code ? `🔑 <b>Код: ${escapeHtml(request.code)}</b>\n\n` : '';
 
     const text =
       `${codeHeader}` +
@@ -780,6 +785,28 @@ export class TelegramService implements OnModuleInit {
         chatId: sent.chatId ? String(sent.chatId) : adminChatId,
       };
     }
+  }
+
+  /**
+   * Sends an informational notification to the admin chat when two CatCast devices are paired for sync.
+   */
+  async notifyDevicesPaired(notification: DevicePairedNotification): Promise<void> {
+    const adminChatId =
+      this.configService.get<string>('CATCAST_ADMIN_CHAT_ID')?.trim() ||
+      this.configService.get<string>('TELEGRAM_DEFAULT_CHAT_ID')?.trim() ||
+      '1252877';
+
+    const text =
+      `🔗 <b>Синхронізація CatCast: пристрої об’єднано</b>\n\n` +
+      `👤 <b>Профіль:</b> <code>${escapeHtml(notification.profileId)}</code>\n` +
+      `📱 <b>Ініціатор (A):</b> ${escapeHtml(notification.initiatorDevice.label)}\n` +
+      `   <code>${escapeHtml(notification.initiatorDevice.deviceId)}</code>\n` +
+      `📺 <b>Підключено (B):</b> ${escapeHtml(notification.targetDevice.label)}\n` +
+      `   <code>${escapeHtml(notification.targetDevice.deviceId)}</code>`;
+
+    await this.sendMessage(adminChatId, text, {
+      parse_mode: 'HTML',
+    });
   }
 
   /**
