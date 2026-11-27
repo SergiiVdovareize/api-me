@@ -202,33 +202,55 @@ describe('CatcastSyncService', () => {
       });
       mockPrisma.catcastDevice.update.mockResolvedValue({});
 
-      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.1');
+      const initRes = await service.pairInit(ctxA, {});
       expect(initRes.code).toHaveLength(6);
       expect(initRes.pairSecret).toHaveLength(64);
 
-      const confirmRes = await service.pairConfirm(ctxA, { code: initRes.code });
-      expect(confirmRes.status).toBe('awaiting_acceptance');
-      expect(confirmRes.targetDevice.label).toContain('Samsung TV');
-
-      const statusAwaiting = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.1');
-      expect(statusAwaiting.status).toBe('awaiting_acceptance');
-      expect((statusAwaiting as any).peerDevice.label).toBe('My iPhone (iOS, Safari)');
-
-      const acceptRes = await service.pairAccept(
-        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
+      const confirmRes = await service.pairConfirm(
+        { code: initRes.code, deviceId: 'dev-b' },
         '10.0.0.1'
       );
+      expect(confirmRes.status).toBe('pending_accept');
+      expect(confirmRes.pairSecret).toBe(initRes.pairSecret);
+      expect(confirmRes.targetDevice.label).toBe('My iPhone (iOS, Safari)');
+
+      const statusPendingAccept = await service.pairStatus(
+        initRes.code,
+        initRes.pairSecret,
+        '10.0.0.1',
+        'host'
+      );
+      expect(statusPendingAccept.status).toBe('pending_accept');
+      expect((statusPendingAccept as any).peerDevice.label).toContain('Samsung TV');
+
+      const acceptRes = await service.pairAccept(ctxA, {
+        code: initRes.code,
+        pairSecret: initRes.pairSecret,
+        accept: true,
+      });
       expect(acceptRes.status).toBe('confirmed');
-      expect(acceptRes.profileId).toBe('prof-a');
-      expect(acceptRes.syncToken).toHaveLength(64);
       expect(notifier).toHaveBeenCalledTimes(1);
 
+      // Host polling with role=host does not consume joiner's syncToken
+      const hostConfirmed = await service.pairStatus(
+        initRes.code,
+        initRes.pairSecret,
+        '10.0.0.1',
+        'host'
+      );
+      expect(hostConfirmed.status).toBe('confirmed');
+      expect((hostConfirmed as any).syncToken).toBeUndefined();
+
+      // Joiner picks up syncToken once
       const statusConfirmed = await service.pairStatus(
         initRes.code,
         initRes.pairSecret,
-        '10.0.0.1'
+        '10.0.0.1',
+        'joiner'
       );
       expect(statusConfirmed.status).toBe('confirmed');
+      expect((statusConfirmed as any).profileId).toBe('prof-a');
+      expect((statusConfirmed as any).syncToken).toHaveLength(64);
 
       // Subsequent poll after one-time pickup should be expired
       const statusAfterPickup = await service.pairStatus(
@@ -239,7 +261,7 @@ describe('CatcastSyncService', () => {
       expect(statusAfterPickup.status).toBe('expired');
     });
 
-    it('rejects pairing when target device declines', async () => {
+    it('rejects pairing when host device declines', async () => {
       mockPrisma.catcastDevice.findUnique.mockResolvedValue({
         id: 2,
         deviceId: 'dev-b',
@@ -247,13 +269,14 @@ describe('CatcastSyncService', () => {
         isAllowed: true,
       });
 
-      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.1');
-      await service.pairConfirm(ctxA, { code: initRes.code });
+      const initRes = await service.pairInit(ctxA, {});
+      await service.pairConfirm({ code: initRes.code, deviceId: 'dev-b' }, '10.0.0.1');
 
-      const rejectRes = await service.pairAccept(
-        { code: initRes.code, pairSecret: initRes.pairSecret, accept: false },
-        '10.0.0.1'
-      );
+      const rejectRes = await service.pairAccept(ctxA, {
+        code: initRes.code,
+        pairSecret: initRes.pairSecret,
+        accept: false,
+      });
       expect(rejectRes.status).toBe('rejected');
 
       const status = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.1');
@@ -262,12 +285,14 @@ describe('CatcastSyncService', () => {
 
     it('blocks brute-force attempts on pairConfirm', async () => {
       for (let i = 0; i < 5; i++) {
-        await expect(service.pairConfirm(ctxA, { code: 'BADCOD' })).rejects.toThrow(
-          NotFoundException
-        );
+        await expect(
+          service.pairConfirm({ code: 'BADCOD', deviceId: 'dev-b' }, '10.0.0.1')
+        ).rejects.toThrow(NotFoundException);
       }
 
-      await expect(service.pairConfirm(ctxA, { code: 'BADCOD' })).rejects.toThrow(HttpException);
+      await expect(
+        service.pairConfirm({ code: 'BADCOD', deviceId: 'dev-b' }, '10.0.0.1')
+      ).rejects.toThrow(HttpException);
     });
 
     it('handles pairInit metadata update, pairStatus pending/invalid secret, and pairConfirm edge cases', async () => {
@@ -283,21 +308,8 @@ describe('CatcastSyncService', () => {
       });
       mockPrisma.catcastDevice.update.mockResolvedValue({});
 
-      const initRes = await service.pairInit(
-        { deviceId: 'dev-b', deviceName: 'My TV', browser: 'Tizen' },
-        '10.0.0.2'
-      );
-      expect(mockPrisma.catcastDevice.update).toHaveBeenCalledWith({
-        where: { id: 2 },
-        data: {
-          deviceName: 'My TV',
-          browser: 'Tizen',
-          os: null,
-          model: null,
-          city: undefined,
-          country: undefined,
-        },
-      });
+      const initRes = await service.pairInit(ctxA, { deviceName: 'Updated Host' });
+      expect(mockPrisma.catcastDevice.update).toHaveBeenCalled();
 
       const pendingStatus = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.2');
       expect(pendingStatus.status).toBe('pending');
@@ -307,24 +319,48 @@ describe('CatcastSyncService', () => {
       );
       await expect(service.pairStatus('', '', '10.0.0.2')).rejects.toThrow(BadRequestException);
 
-      // Self-pairing rejected
+      // Self-pairing rejected (joiner deviceId == host deviceId)
+      mockPrisma.catcastDevice.findUnique.mockResolvedValueOnce({
+        id: 1,
+        deviceId: 'dev-a',
+        platform: 'mobile_web',
+        isAllowed: true,
+      });
       await expect(
-        service.pairConfirm({ ...ctxA, deviceId: 'dev-b' }, { code: initRes.code })
+        service.pairConfirm({ code: initRes.code, deviceId: 'dev-a' }, '10.0.0.2')
       ).rejects.toThrow(BadRequestException);
 
-      // Confirm once, then idempotent confirm from same initiator, then reject different initiator
-      await service.pairConfirm(ctxA, { code: initRes.code });
-      const idempotentConfirm = await service.pairConfirm(ctxA, { code: initRes.code });
-      expect(idempotentConfirm.status).toBe('awaiting_acceptance');
+      // Confirm once, then idempotent confirm from same joiner, then reject different joiner
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 2,
+        deviceId: 'dev-b',
+        platform: 'web',
+        isAllowed: true,
+      });
+      await service.pairConfirm(
+        { code: initRes.code, deviceId: 'dev-b', deviceName: 'My TV', browser: 'Tizen' },
+        '10.0.0.2'
+      );
+      const idempotentConfirm = await service.pairConfirm(
+        { code: initRes.code, deviceId: 'dev-b' },
+        '10.0.0.2'
+      );
+      expect(idempotentConfirm.status).toBe('pending_accept');
 
+      mockPrisma.catcastDevice.findUnique.mockResolvedValueOnce({
+        id: 3,
+        deviceId: 'dev-other',
+        platform: 'web',
+        isAllowed: true,
+      });
       await expect(
-        service.pairConfirm({ ...ctxA, deviceId: 'dev-other' }, { code: initRes.code })
+        service.pairConfirm({ code: initRes.code, deviceId: 'dev-other' }, '10.0.0.2')
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('handles pairAccept edge cases (expired, invalid secret, wrong state, idempotent confirmed)', async () => {
+    it('handles pairAccept edge cases (expired, wrong host, invalid secret, wrong state, idempotent confirmed)', async () => {
       await expect(
-        service.pairAccept({ code: 'NONE12', pairSecret: 'sec', accept: true }, '10.0.0.3')
+        service.pairAccept(ctxA, { code: 'NONE12', pairSecret: 'sec', accept: true })
       ).rejects.toThrow(NotFoundException);
 
       mockPrisma.catcastDevice.findUnique.mockResolvedValue({
@@ -333,37 +369,48 @@ describe('CatcastSyncService', () => {
         platform: 'web',
         isAllowed: true,
       });
-      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.3');
+      const initRes = await service.pairInit(ctxA, {});
+
+      // Non-host device cannot accept
+      await expect(
+        service.pairAccept(
+          { ...ctxA, deviceId: 'dev-other' },
+          { code: initRes.code, pairSecret: initRes.pairSecret, accept: true }
+        )
+      ).rejects.toThrow(UnauthorizedException);
 
       await expect(
-        service.pairAccept({ code: initRes.code, pairSecret: 'bad', accept: true }, '10.0.0.3')
+        service.pairAccept(ctxA, { code: initRes.code, pairSecret: 'bad', accept: true })
       ).rejects.toThrow(UnauthorizedException);
 
       // Still pending -> cannot accept yet
       await expect(
-        service.pairAccept(
-          { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
-          '10.0.0.3'
-        )
+        service.pairAccept(ctxA, {
+          code: initRes.code,
+          pairSecret: initRes.pairSecret,
+          accept: true,
+        })
       ).rejects.toThrow(BadRequestException);
 
-      await service.pairConfirm(ctxA, { code: initRes.code });
+      await service.pairConfirm({ code: initRes.code, deviceId: 'dev-b' }, '10.0.0.3');
       service.setDevicePairedNotifier(jest.fn().mockRejectedValue(new Error('tg down')));
 
-      const first = await service.pairAccept(
-        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
-        '10.0.0.3'
-      );
+      const first = await service.pairAccept(ctxA, {
+        code: initRes.code,
+        pairSecret: initRes.pairSecret,
+        accept: true,
+      });
       expect(first.status).toBe('confirmed');
 
-      const second = await service.pairAccept(
-        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
-        '10.0.0.3'
-      );
+      const second = await service.pairAccept(ctxA, {
+        code: initRes.code,
+        pairSecret: initRes.pairSecret,
+        accept: true,
+      });
       expect(second.status).toBe('confirmed');
     });
 
-    it('merges entire source profile (all devices + history + favorites + search) into target profile on pairAccept', async () => {
+    it('merges entire source profile (all devices + history + favorites + search) into host profile on pairAccept', async () => {
       mockPrisma.catcastDevice.findUnique.mockResolvedValue({
         id: 2,
         deviceId: 'dev-b',
@@ -425,15 +472,17 @@ describe('CatcastSyncService', () => {
       mockPrisma.catcastDevice.update.mockResolvedValue({});
       mockPrisma.catcastProfile.delete.mockResolvedValue({});
 
-      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.4');
-      await service.pairConfirm(ctxA, { code: initRes.code });
-      const res = await service.pairAccept(
-        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
-        '10.0.0.4'
-      );
+      const initRes = await service.pairInit(ctxA, {});
+      await service.pairConfirm({ code: initRes.code, deviceId: 'dev-b' }, '10.0.0.4');
+      const res = await service.pairAccept(ctxA, {
+        code: initRes.code,
+        pairSecret: initRes.pairSecret,
+        accept: true,
+      });
 
       expect(res.status).toBe('confirmed');
-      expect(res.profileId).toBe('prof-a');
+      const statusRes = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.4');
+      expect((statusRes as any).profileId).toBe('prof-a');
       expect(mockPrisma.catcastDevice.updateMany).toHaveBeenCalledWith({
         where: { profileId: 'prof-b' },
         data: { profileId: 'prof-a' },

@@ -57,22 +57,22 @@ export class CatcastSyncController {
   }
 
   @Post('pair/init')
+  @UseGuards(CatcastSyncGuard)
   @HttpCode(HttpStatus.OK)
-  async pairInit(@Body() body: PairInitDto, @Req() req: Request) {
+  async pairInit(@Req() req: CatcastSyncRequest, @Body() body: PairInitDto) {
     return this.syncService.pairInit(
+      req.catcastSync,
       body,
-      extractClientIp(req),
       extractRequestDeviceMetadata(req.headers || {})
     );
   }
 
   @Post('pair/confirm')
-  @UseGuards(CatcastSyncGuard)
   @HttpCode(HttpStatus.OK)
-  async pairConfirm(@Req() req: CatcastSyncRequest, @Body() body: PairConfirmDto) {
+  async pairConfirm(@Body() body: PairConfirmDto, @Req() req: Request) {
     return this.syncService.pairConfirm(
-      req.catcastSync,
       body,
+      extractClientIp(req),
       extractRequestDeviceMetadata(req.headers || {})
     );
   }
@@ -81,15 +81,21 @@ export class CatcastSyncController {
   async pairStatus(
     @Query('code') code: string,
     @Query('pairSecret') pairSecret: string,
-    @Req() req: Request
+    @Req() req: Request,
+    @Query('role') role?: string
   ) {
-    return this.syncService.pairStatus(code, pairSecret, extractClientIp(req));
+    return this.syncService.pairStatus(code, pairSecret, extractClientIp(req), role);
   }
 
   @Post('pair/accept')
+  @UseGuards(CatcastSyncGuard)
   @HttpCode(HttpStatus.OK)
-  async pairAccept(@Body() body: PairAcceptDto, @Req() req: Request) {
-    return this.syncService.pairAccept(body, extractClientIp(req));
+  async pairAccept(@Req() req: CatcastSyncRequest, @Body() body: PairAcceptDto) {
+    return this.syncService.pairAccept(
+      req.catcastSync,
+      body,
+      extractRequestDeviceMetadata(req.headers || {})
+    );
   }
 
   @Get('devices')

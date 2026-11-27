@@ -32,15 +32,25 @@ export class InitProfileDto {
 }
 
 export class PairInitDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(128)
-  deviceId: string;
+  deviceId?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(120)
   deviceName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  os?: string;
 
   @IsOptional()
   @IsString()
@@ -53,6 +63,31 @@ export class PairConfirmDto {
   @IsNotEmpty()
   @MaxLength(16)
   code: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  deviceId: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  deviceName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  os?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  browser?: string;
 }
 
 export class PairAcceptDto {
@@ -61,10 +96,10 @@ export class PairAcceptDto {
   @MaxLength(16)
   code: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(128)
-  pairSecret: string;
+  pairSecret?: string;
 
   @IsBoolean()
   accept: boolean;

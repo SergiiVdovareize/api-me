@@ -38,13 +38,14 @@ export interface DeviceSummary {
 }
 
 export interface PairSession {
-  status: 'pending' | 'awaiting_acceptance' | 'confirmed' | 'rejected';
+  status: 'pending' | 'pending_accept' | 'confirmed' | 'rejected';
   code: string;
   pairSecret: string;
-  targetDeviceId: string;
-  targetDeviceSummary: DeviceSummary;
-  initiatorProfileId?: string;
-  initiatorDeviceSummary?: DeviceSummary;
+  hostProfileId: string;
+  hostDeviceId: string;
+  hostDeviceSummary: DeviceSummary;
+  joinerDeviceId?: string;
+  joinerDeviceSummary?: DeviceSummary;
   syncToken?: string;
   expiresAt: string;
 }
@@ -279,10 +280,10 @@ export class CatcastSyncService {
     };
   }
 
-  async pairInit(dto: PairInitDto, clientIp: string, meta?: RequestDeviceMetadata) {
+  async pairInit(ctx: CatcastSyncContext, dto: PairInitDto, meta?: RequestDeviceMetadata) {
     await this.enforceRateLimit(
       'pair_init',
-      clientIp,
+      ctx.deviceId,
       CATCAST_SYNC_CONSTANTS.RATE_LIMITS.PAIR_INIT
     );
 
@@ -290,26 +291,30 @@ export class CatcastSyncService {
       throw new Error('Redis service unavailable');
     }
 
-    const device = await this.getAllowedDeviceOrThrow(dto.deviceId);
-    const deviceName = dto.deviceName?.trim().slice(0, 120) || device.deviceName;
-    const browser = dto.browser?.trim().slice(0, 80) || meta?.browser || device.browser;
-    const os = meta?.os || device.os;
-    const model = meta?.model || device.model;
-    const city = meta?.city || device.city;
-    const country = meta?.country || device.country;
+    const deviceName = dto.deviceName?.trim().slice(0, 120) || ctx.deviceName;
+    const browser = dto.browser?.trim().slice(0, 80) || meta?.browser || ctx.browser;
+    const os = dto.os?.trim().slice(0, 128) || meta?.os || ctx.os;
+    const platform = dto.platform?.trim().slice(0, 32) || ctx.platform;
+    const model = meta?.model || ctx.model;
+    const city = meta?.city || ctx.city;
+    const country = meta?.country || ctx.country;
 
     if (
-      deviceName !== device.deviceName ||
-      browser !== device.browser ||
-      os !== device.os ||
-      model !== device.model ||
-      city !== device.city ||
-      country !== device.country
+      deviceName !== ctx.deviceName ||
+      browser !== ctx.browser ||
+      os !== ctx.os ||
+      model !== ctx.model ||
+      city !== ctx.city ||
+      country !== ctx.country
     ) {
-      await this.prisma.catcastDevice.update({
-        where: { id: device.id },
-        data: { deviceName, browser, os, model, city, country },
-      });
+      this.prisma.catcastDevice
+        .update({
+          where: { deviceId: ctx.deviceId },
+          data: { deviceName, browser, os, model, city, country },
+        })
+        .catch(err => {
+          this.logger.warn(`Failed to update host metadata for ${ctx.deviceId}: ${err.message}`);
+        });
     }
 
     let code = '';
@@ -336,13 +341,15 @@ export class CatcastSyncService {
       status: 'pending',
       code,
       pairSecret,
-      targetDeviceId: device.deviceId,
-      targetDeviceSummary: buildDeviceSummary({
-        ...device,
+      hostProfileId: ctx.profileId,
+      hostDeviceId: ctx.deviceId,
+      hostDeviceSummary: buildDeviceSummary({
+        deviceId: ctx.deviceId,
         deviceName,
-        browser,
-        os,
+        platform,
         model,
+        os,
+        browser,
         city,
         country,
       }),
@@ -358,19 +365,10 @@ export class CatcastSyncService {
     return { code, pairSecret, expiresAt };
   }
 
-  async pairConfirm(ctx: CatcastSyncContext, dto: PairConfirmDto, meta?: RequestDeviceMetadata) {
-    this.syncDeviceMetadataInBackground(ctx, meta);
-    const enrichedCtx: CatcastSyncContext = {
-      ...ctx,
-      city: meta?.city || ctx.city,
-      country: meta?.country || ctx.country,
-      browser: meta?.browser || ctx.browser,
-      os: meta?.os || ctx.os,
-      model: meta?.model || ctx.model,
-    };
+  async pairConfirm(dto: PairConfirmDto, clientIp: string, meta?: RequestDeviceMetadata) {
     await this.enforceRateLimit(
       'pair_confirm',
-      ctx.deviceId,
+      `${clientIp}:${dto.deviceId}`,
       CATCAST_SYNC_CONSTANTS.RATE_LIMITS.PAIR_CONFIRM
     );
 
@@ -411,7 +409,8 @@ export class CatcastSyncService {
       });
     }
 
-    if (session.targetDeviceId === ctx.deviceId) {
+    const joinerDevice = await this.getAllowedDeviceOrThrow(dto.deviceId);
+    if (session.hostDeviceId === joinerDevice.deviceId) {
       throw new BadRequestException({
         error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_CODE_INVALID,
         message: 'Cannot pair a device with itself',
@@ -419,10 +418,11 @@ export class CatcastSyncService {
     }
 
     if (session.status !== 'pending') {
-      if (session.initiatorDeviceSummary?.deviceId === ctx.deviceId) {
+      if (session.status === 'pending_accept' && session.joinerDeviceId === joinerDevice.deviceId) {
         return {
-          status: session.status,
-          targetDevice: session.targetDeviceSummary,
+          status: 'pending_accept' as const,
+          pairSecret: session.pairSecret,
+          targetDevice: session.hostDeviceSummary,
         };
       }
       throw new BadRequestException({
@@ -431,13 +431,44 @@ export class CatcastSyncService {
       });
     }
 
-    await this.getAllowedDeviceOrThrow(session.targetDeviceId);
+    const deviceName = dto.deviceName?.trim().slice(0, 120) || joinerDevice.deviceName;
+    const browser = dto.browser?.trim().slice(0, 80) || meta?.browser || joinerDevice.browser;
+    const os = dto.os?.trim().slice(0, 128) || meta?.os || joinerDevice.os;
+    const platform = dto.platform?.trim().slice(0, 32) || joinerDevice.platform;
+    const model = meta?.model || joinerDevice.model;
+    const city = meta?.city || joinerDevice.city;
+    const country = meta?.country || joinerDevice.country;
+
+    if (
+      deviceName !== joinerDevice.deviceName ||
+      browser !== joinerDevice.browser ||
+      os !== joinerDevice.os ||
+      model !== joinerDevice.model ||
+      city !== joinerDevice.city ||
+      country !== joinerDevice.country
+    ) {
+      await this.prisma.catcastDevice.update({
+        where: { id: joinerDevice.id },
+        data: { deviceName, browser, os, model, city, country },
+      });
+    }
+
+    const joinerDeviceSummary = buildDeviceSummary({
+      ...joinerDevice,
+      deviceName,
+      platform,
+      model,
+      os,
+      browser,
+      city,
+      country,
+    });
 
     const updatedSession: PairSession = {
       ...session,
-      status: 'awaiting_acceptance',
-      initiatorProfileId: enrichedCtx.profileId,
-      initiatorDeviceSummary: buildDeviceSummary(enrichedCtx),
+      status: 'pending_accept',
+      joinerDeviceId: joinerDevice.deviceId,
+      joinerDeviceSummary,
     };
 
     const remainingSeconds = Math.max(
@@ -447,12 +478,13 @@ export class CatcastSyncService {
     await this.redisReader.write(sessionKey, updatedSession, remainingSeconds);
 
     return {
-      status: 'awaiting_acceptance' as const,
-      targetDevice: session.targetDeviceSummary,
+      status: 'pending_accept' as const,
+      pairSecret: session.pairSecret,
+      targetDevice: session.hostDeviceSummary,
     };
   }
 
-  async pairStatus(codeRaw: string, pairSecretRaw: string, clientIp: string) {
+  async pairStatus(codeRaw: string, pairSecretRaw: string, clientIp: string, role?: string) {
     await this.enforceRateLimit(
       'pair_status',
       clientIp,
@@ -489,32 +521,44 @@ export class CatcastSyncService {
       };
     }
 
-    if (session.status === 'awaiting_acceptance') {
+    if (session.status === 'pending_accept') {
       return {
-        status: 'awaiting_acceptance' as const,
-        peerDevice: session.initiatorDeviceSummary,
+        status: 'pending_accept' as const,
+        peerDevice: session.joinerDeviceSummary,
+        targetDevice: session.hostDeviceSummary,
         expiresAt: session.expiresAt,
       };
     }
 
     if (session.status === 'rejected') {
-      await this.redisReader.delete(sessionKey);
+      if (role !== 'host') {
+        await this.redisReader.delete(sessionKey);
+      }
       return { status: 'rejected' as const };
     }
 
-    // Confirmed: deliver syncToken once and delete the session
+    // Confirmed: Host A gets status without consuming Joiner B's one-time syncToken
+    if (role === 'host') {
+      return {
+        status: 'confirmed' as const,
+        profileId: session.hostProfileId,
+      };
+    }
+
+    // Joiner B: deliver syncToken once and delete the session
     await this.redisReader.delete(sessionKey);
     return {
       status: 'confirmed' as const,
       syncToken: session.syncToken,
-      profileId: session.initiatorProfileId,
+      profileId: session.hostProfileId,
     };
   }
 
-  async pairAccept(dto: PairAcceptDto, clientIp: string) {
+  async pairAccept(ctx: CatcastSyncContext, dto: PairAcceptDto, meta?: RequestDeviceMetadata) {
+    this.syncDeviceMetadataInBackground(ctx, meta);
     await this.enforceRateLimit(
       'pair_accept',
-      clientIp,
+      ctx.deviceId,
       CATCAST_SYNC_CONSTANTS.RATE_LIMITS.PAIR_ACCEPT
     );
 
@@ -533,7 +577,14 @@ export class CatcastSyncService {
       });
     }
 
-    if (!safeEqual(dto.pairSecret, session.pairSecret)) {
+    if (session.hostDeviceId !== ctx.deviceId || session.hostProfileId !== ctx.profileId) {
+      throw new UnauthorizedException({
+        error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_CODE_INVALID,
+        message: 'Only the host device can accept or reject this pairing session',
+      });
+    }
+
+    if (dto.pairSecret && !safeEqual(dto.pairSecret, session.pairSecret)) {
       throw new UnauthorizedException({
         error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_CODE_INVALID,
         message: 'Invalid pairSecret',
@@ -541,17 +592,13 @@ export class CatcastSyncService {
     }
 
     if (session.status === 'confirmed') {
-      return {
-        status: 'confirmed' as const,
-        syncToken: session.syncToken,
-        profileId: session.initiatorProfileId,
-      };
+      return { status: 'confirmed' as const };
     }
 
-    if (session.status !== 'awaiting_acceptance' || !session.initiatorProfileId) {
+    if (session.status !== 'pending_accept' || !session.joinerDeviceId) {
       throw new BadRequestException({
         error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_CODE_INVALID,
-        message: 'Pairing session is not awaiting acceptance',
+        message: 'Pairing session is not pending acceptance',
       });
     }
 
@@ -561,11 +608,11 @@ export class CatcastSyncService {
       return { status: 'rejected' as const };
     }
 
-    const targetDevice = await this.getAllowedDeviceOrThrow(session.targetDeviceId);
+    const joinerDevice = await this.getAllowedDeviceOrThrow(session.joinerDeviceId);
     const syncToken = this.generateToken();
     const syncTokenHash = hashSyncToken(syncToken);
-    const targetProfileId = session.initiatorProfileId;
-    const sourceProfileId = targetDevice.profileId;
+    const targetProfileId = session.hostProfileId;
+    const sourceProfileId = joinerDevice.profileId;
 
     await this.prisma.$transaction(
       async tx => {
@@ -574,7 +621,7 @@ export class CatcastSyncService {
         }
 
         await tx.catcastDevice.update({
-          where: { id: targetDevice.id },
+          where: { id: joinerDevice.id },
           data: {
             profileId: targetProfileId,
             syncTokenHash,
@@ -596,21 +643,17 @@ export class CatcastSyncService {
       CATCAST_SYNC_CONSTANTS.PAIR_CONFIRMED_TTL_SECONDS
     );
 
-    if (this.devicePairedNotifier && session.initiatorDeviceSummary) {
+    if (this.devicePairedNotifier && session.joinerDeviceSummary) {
       this.devicePairedNotifier({
-        profileId: session.initiatorProfileId,
-        initiatorDevice: session.initiatorDeviceSummary,
-        targetDevice: session.targetDeviceSummary,
+        profileId: targetProfileId,
+        initiatorDevice: session.hostDeviceSummary,
+        targetDevice: session.joinerDeviceSummary,
       }).catch(err => {
         this.logger.warn(`Failed to send Telegram pairing notification: ${err.message}`);
       });
     }
 
-    return {
-      status: 'confirmed' as const,
-      syncToken,
-      profileId: session.initiatorProfileId,
-    };
+    return { status: 'confirmed' as const };
   }
 
   /**

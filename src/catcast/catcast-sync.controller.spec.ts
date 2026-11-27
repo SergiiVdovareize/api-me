@@ -66,25 +66,29 @@ describe('CatcastSyncController', () => {
       expect.any(Object)
     );
 
-    await controller.pairInit({ deviceId: 'dev-2' }, mockReq);
+    await controller.pairInit(mockReq, { deviceId: 'dev-1' });
     expect(mockSyncService.pairInit).toHaveBeenCalledWith(
-      { deviceId: 'dev-2' },
+      mockReq.catcastSync,
+      { deviceId: 'dev-1' },
+      expect.any(Object)
+    );
+
+    await controller.pairConfirm({ code: 'ABC234', deviceId: 'dev-2' }, mockReq);
+    expect(mockSyncService.pairConfirm).toHaveBeenCalledWith(
+      { code: 'ABC234', deviceId: 'dev-2' },
       '1.2.3.4',
       expect.any(Object)
     );
 
-    await controller.pairConfirm(mockReq, { code: 'ABC234' });
-    expect(mockSyncService.pairConfirm).toHaveBeenCalledWith(
+    await controller.pairStatus('ABC234', 'sec', mockReq, 'joiner');
+    expect(mockSyncService.pairStatus).toHaveBeenCalledWith('ABC234', 'sec', '1.2.3.4', 'joiner');
+
+    await controller.pairAccept(mockReq, { code: 'ABC234', pairSecret: 'sec', accept: true });
+    expect(mockSyncService.pairAccept).toHaveBeenCalledWith(
       mockReq.catcastSync,
-      { code: 'ABC234' },
+      { code: 'ABC234', pairSecret: 'sec', accept: true },
       expect.any(Object)
     );
-
-    await controller.pairStatus('ABC234', 'sec', mockReq);
-    expect(mockSyncService.pairStatus).toHaveBeenCalledWith('ABC234', 'sec', '1.2.3.4');
-
-    await controller.pairAccept({ code: 'ABC234', pairSecret: 'sec', accept: true }, mockReq);
-    expect(mockSyncService.pairAccept).toHaveBeenCalled();
 
     await controller.listDevices(mockReq);
     expect(mockSyncService.listDevices).toHaveBeenCalledWith(mockReq.catcastSync);
