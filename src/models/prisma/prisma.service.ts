@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 
-export const TRANSIENT_ERROR_CODES = ['P1001', 'P1002', 'P1008', 'P1017'];
+export const TRANSIENT_ERROR_CODES = ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'];
 export const MAX_CONNECTION_RETRIES = 2;
 export const RETRY_BASE_DELAY_MS = 250;
 
@@ -60,7 +60,9 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
               if (attempt <= MAX_CONNECTION_RETRIES && isTransientConnectionError(err)) {
                 const errorCode =
                   (err as { code?: string })?.code ||
-                  (err instanceof Prisma.PrismaClientKnownRequestError ? err.code : 'TRANSIENT_ERR');
+                  (err instanceof Prisma.PrismaClientKnownRequestError
+                    ? err.code
+                    : 'TRANSIENT_ERR');
                 const errorMessage = (err as Error)?.message || String(err);
 
                 logger.warn(
@@ -73,9 +75,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
                   // ignore disconnect failure during cleanup
                 }
 
-                await new Promise((resolve) =>
-                  setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt)
-                );
+                await new Promise(resolve => setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt));
                 continue;
               }
 

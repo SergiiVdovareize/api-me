@@ -414,6 +414,19 @@ describe('MemesService', () => {
       expect(result).toBeDefined();
     });
 
+    it('should reject malformed upstream hostname like snapsave.app&dl=1 and wrap fetch network errors as 502', async () => {
+      expect(service.isValidHttpUrl('https://snapsave.app&dl=1')).toBe(false);
+
+      await expect(
+        service.streamFromDirectVideoUrl('https://snapsave.app&dl=1')
+      ).rejects.toMatchObject({ status: 502 });
+
+      jest.spyOn(global, 'fetch').mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(
+        service.streamFromDirectVideoUrl('https://cdn.example.com/video.mp4')
+      ).rejects.toMatchObject({ status: 502 });
+    });
+
     it('should reject when stealMeme returns only image items', async () => {
       mediasnap.steal.mockResolvedValue({
         success: true,

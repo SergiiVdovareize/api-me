@@ -266,9 +266,8 @@ export class MemesService {
         return false;
       }
       const urlStr = item.url.trim();
-      return (
-        urlStr.startsWith('http://') || urlStr.startsWith('https://') || urlStr.startsWith('//')
-      );
+      const normalized = urlStr.startsWith('//') ? `https:${urlStr}` : urlStr;
+      return this.isValidHttpUrl(normalized);
     });
 
     sortMediaByQuality(result.media);
@@ -282,7 +281,14 @@ export class MemesService {
     }
     try {
       const parsed = new URL(url);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return false;
+      }
+      const host = parsed.hostname;
+      if (!host || /[&\s=]/.test(host)) {
+        return false;
+      }
+      return true;
     } catch {
       return false;
     }
@@ -368,12 +374,25 @@ export class MemesService {
     filename?: string,
     title?: string
   ): Promise<StreamableFile> {
-    const response = await fetch(directUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+    const normalizedUrl = directUrl.startsWith('//') ? `https:${directUrl}` : directUrl;
+    if (!this.isValidHttpUrl(normalizedUrl)) {
+      throw new HttpException('Invalid upstream video URL', HttpStatus.BAD_GATEWAY);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(normalizedUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      });
+    } catch (err: any) {
+      throw new HttpException(
+        `Failed to reach media source: ${err?.message || 'network error'}`,
+        HttpStatus.BAD_GATEWAY
+      );
+    }
 
     if (!response.ok) {
       throw new HttpException(
