@@ -481,14 +481,22 @@ export class CatcastSyncService {
     const targetDevice = await this.getAllowedDeviceOrThrow(session.targetDeviceId);
     const syncToken = this.generateToken();
     const syncTokenHash = hashSyncToken(syncToken);
+    const targetProfileId = session.initiatorProfileId;
+    const sourceProfileId = targetDevice.profileId;
 
-    await this.prisma.catcastDevice.update({
-      where: { id: targetDevice.id },
-      data: {
-        profileId: session.initiatorProfileId,
-        syncTokenHash,
-        syncLastSeenAt: new Date(),
-      },
+    await this.prisma.$transaction(async tx => {
+      if (sourceProfileId && sourceProfileId !== targetProfileId) {
+        await this.mergeProfilesInTx(tx, targetProfileId, sourceProfileId);
+      }
+
+      await tx.catcastDevice.update({
+        where: { id: targetDevice.id },
+        data: {
+          profileId: targetProfileId,
+          syncTokenHash,
+          syncLastSeenAt: new Date(),
+        },
+      });
     });
 
     const confirmedSession: PairSession = {
@@ -517,6 +525,121 @@ export class CatcastSyncService {
       syncToken,
       profileId: session.initiatorProfileId,
     };
+  }
+
+  /**
+   * Merges all devices and sync data from sourceProfileId into targetProfileId,
+   * so pairing is symmetric regardless of which device generated or entered the code.
+   */
+  private async mergeProfilesInTx(
+    tx: any,
+    targetProfileId: string,
+    sourceProfileId: string
+  ): Promise<void> {
+    const [firstId, secondId] = [targetProfileId, sourceProfileId].sort();
+    await tx.$queryRaw`SELECT id FROM "CatcastProfile" WHERE id IN (${firstId}, ${secondId}) ORDER BY id FOR UPDATE`;
+
+    const [targetProfile, sourceProfile] = await Promise.all([
+      tx.catcastProfile.findUnique({ where: { id: targetProfileId } }),
+      tx.catcastProfile.findUnique({ where: { id: sourceProfileId } }),
+    ]);
+
+    if (!targetProfile || !sourceProfile) return;
+
+    const serverNow = Date.now();
+    const clampTs = (ts: number) =>
+      Math.min(
+        Math.max(0, Math.trunc(ts)),
+        serverNow + CATCAST_SYNC_CONSTANTS.CLOCK_SKEW_MAX_FUTURE_MS
+      );
+
+    // 1. Merge historyClearedTs
+    const targetCleared = Number(targetProfile.historyClearedTs);
+    const sourceCleared = Number(sourceProfile.historyClearedTs);
+    const effectiveClearedTs = Math.max(targetCleared, sourceCleared);
+
+    if (effectiveClearedTs > targetCleared) {
+      await tx.catcastProfile.update({
+        where: { id: targetProfileId },
+        data: { historyClearedTs: BigInt(effectiveClearedTs) },
+      });
+      await tx.catcastSyncHistory.deleteMany({
+        where: { profileId: targetProfileId, ts: { lte: BigInt(effectiveClearedTs) } },
+      });
+    }
+
+    // 2. Merge history items from source profile
+    const sourceHistory = await tx.catcastSyncHistory.findMany({
+      where: { profileId: sourceProfileId },
+    });
+    if (sourceHistory.length > 0) {
+      const historyDtos: SyncHistoryItemDto[] = sourceHistory.map((h: any) => ({
+        mediaKey: h.mediaKey,
+        url: h.url,
+        canonicalId: h.canonicalId,
+        title: h.title,
+        orig: h.orig,
+        poster: h.poster,
+        season: h.season,
+        episode: h.episode,
+        episodeName: h.episodeName,
+        currentTime: h.currentTime,
+        duration: h.duration,
+        completed: h.completed,
+        watchedEpisodes:
+          h.watchedEpisodes && typeof h.watchedEpisodes === 'object'
+            ? (h.watchedEpisodes as Record<string, number>)
+            : {},
+        voice: h.voice,
+        ts: Number(h.ts),
+      }));
+      await this.mergeHistoryBatch(
+        tx,
+        targetProfileId,
+        historyDtos,
+        effectiveClearedTs,
+        serverNow,
+        clampTs
+      );
+    }
+
+    // 3. Merge favorites from source profile
+    const sourceFavorites = await tx.catcastSyncFavorite.findMany({
+      where: { profileId: sourceProfileId },
+    });
+    if (sourceFavorites.length > 0) {
+      const favoriteDtos: SyncFavoriteItemDto[] = sourceFavorites.map((f: any) => ({
+        mediaKey: f.mediaKey,
+        url: f.url,
+        canonicalId: f.canonicalId,
+        title: f.title,
+        orig: f.orig,
+        poster: f.poster,
+        ts: Number(f.ts),
+        deletedAt: f.deletedAt !== null ? Number(f.deletedAt) : null,
+      }));
+      await this.mergeFavoritesBatch(tx, targetProfileId, favoriteDtos, serverNow, clampTs);
+    }
+
+    // 4. Merge searchHistory
+    if (Number(sourceProfile.searchUpdatedAt) > Number(targetProfile.searchUpdatedAt)) {
+      await tx.catcastProfile.update({
+        where: { id: targetProfileId },
+        data: {
+          searchQueries: sourceProfile.searchQueries,
+          searchUpdatedAt: sourceProfile.searchUpdatedAt,
+        },
+      });
+    }
+
+    // 5. Move all other devices from sourceProfileId to targetProfileId (preserving their syncTokens)
+    await tx.catcastDevice.updateMany({
+      where: { profileId: sourceProfileId },
+      data: { profileId: targetProfileId },
+    });
+
+    // 6. Remove now-empty source profile
+    await tx.catcastProfile.delete({ where: { id: sourceProfileId } });
   }
 
   async listDevices(ctx: CatcastSyncContext) {

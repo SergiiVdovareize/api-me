@@ -58,11 +58,13 @@ describe('CatcastSyncService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       catcastProfile: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         deleteMany: jest.fn(),
       },
       catcastSyncHistory: {
@@ -348,6 +350,88 @@ describe('CatcastSyncService', () => {
         '10.0.0.3'
       );
       expect(second.status).toBe('confirmed');
+    });
+
+    it('merges entire source profile (all devices + history + favorites + search) into target profile on pairAccept', async () => {
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 2,
+        deviceId: 'dev-b',
+        platform: 'desktop_web',
+        profileId: 'prof-b',
+        isAllowed: true,
+      });
+      mockPrisma.catcastProfile.findUnique
+        .mockResolvedValueOnce({
+          id: 'prof-a',
+          historyClearedTs: BigInt(100),
+          searchQueries: ['old'],
+          searchUpdatedAt: BigInt(100),
+        })
+        .mockResolvedValueOnce({
+          id: 'prof-b',
+          historyClearedTs: BigInt(200),
+          searchQueries: ['newer'],
+          searchUpdatedAt: BigInt(500),
+        });
+      mockPrisma.catcastSyncHistory.findMany
+        .mockResolvedValueOnce([
+          {
+            mediaKey: '/films/b',
+            url: '/films/b',
+            canonicalId: 'b',
+            title: 'From B',
+            orig: '',
+            poster: '',
+            season: null,
+            episode: null,
+            episodeName: '',
+            currentTime: 50,
+            duration: 100,
+            completed: false,
+            watchedEpisodes: {},
+            voice: '',
+            ts: BigInt(1000),
+          },
+        ])
+        .mockResolvedValueOnce([]) // existing in prof-a
+        .mockResolvedValueOnce([]); // overflow check
+      mockPrisma.catcastSyncFavorite.findMany
+        .mockResolvedValueOnce([
+          {
+            mediaKey: '/films/fav-b',
+            url: '/films/fav-b',
+            canonicalId: 'fb',
+            title: 'Fav B',
+            orig: '',
+            poster: '',
+            ts: BigInt(1000),
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]) // existing in prof-a
+        .mockResolvedValueOnce([]); // overflow check
+      mockPrisma.catcastDevice.updateMany.mockResolvedValue({ count: 2 });
+      mockPrisma.catcastDevice.update.mockResolvedValue({});
+      mockPrisma.catcastProfile.delete.mockResolvedValue({});
+
+      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.4');
+      await service.pairConfirm(ctxA, { code: initRes.code });
+      const res = await service.pairAccept(
+        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
+        '10.0.0.4'
+      );
+
+      expect(res.status).toBe('confirmed');
+      expect(res.profileId).toBe('prof-a');
+      expect(mockPrisma.catcastDevice.updateMany).toHaveBeenCalledWith({
+        where: { profileId: 'prof-b' },
+        data: { profileId: 'prof-a' },
+      });
+      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncFavorite.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastProfile.delete).toHaveBeenCalledWith({
+        where: { id: 'prof-b' },
+      });
     });
   });
 
