@@ -617,6 +617,43 @@ describe('CatcastSyncService', () => {
       expect(res.serverTs).toBe(600);
       expect(res.history).toHaveLength(1);
     });
+
+    it('normalizes string season ("Сезон 1") and float currentTime without 500 error', async () => {
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue({
+        id: 'prof-a',
+        historyClearedTs: BigInt(0),
+        searchQueries: [],
+        searchUpdatedAt: BigInt(0),
+      });
+      mockPrisma.catcastSyncHistory.findMany.mockResolvedValue([]);
+      mockPrisma.catcastSyncHistory.create.mockResolvedValue({});
+
+      const res = await service.push(ctxA, {
+        history: [
+          {
+            mediaKey: '/7928',
+            title: 'Офіс',
+            season: 'Сезон 1' as any,
+            episode: 3,
+            currentTime: 12.75,
+            duration: 1346.2,
+            ts: 1795764718806,
+          },
+        ],
+      });
+
+      expect(res.serverTs).toBeGreaterThan(0);
+      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            season: 1,
+            episode: 3,
+            currentTime: 12,
+            duration: 1346,
+          }),
+        })
+      );
+    });
   });
 
   describe('cleanupExpiredData', () => {

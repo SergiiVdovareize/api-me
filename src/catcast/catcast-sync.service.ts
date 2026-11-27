@@ -620,6 +620,41 @@ export class CatcastSyncService {
     return createHash('sha256').update(JSON.stringify(obj)).digest('hex');
   }
 
+  private parseOptionalInt(value: unknown, min = 0, max = 100000): number | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const n = Math.trunc(value);
+      return n >= min && n <= max ? n : null;
+    }
+    if (typeof value === 'string') {
+      const match = value.match(/\d+/);
+      if (match) {
+        const n = Number(match[0]);
+        if (Number.isFinite(n) && n >= min && n <= max) return n;
+      }
+      return null;
+    }
+    throw new BadRequestException('Invalid integer field in sync payload');
+  }
+
+  private parseNonNegativeInt(value: unknown, fallback = 0): number {
+    if (value === undefined || value === null) return fallback;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.trunc(value));
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed));
+    }
+    throw new BadRequestException('Invalid numeric field in sync payload');
+  }
+
+  private clampStr(value: unknown, maxLen: number): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    return String(value).slice(0, maxLen);
+  }
+
   async push(ctx: CatcastSyncContext, dto: SyncPushDto) {
     if (dto.history && dto.history.length > CATCAST_SYNC_CONSTANTS.HISTORY_LIMIT) {
       throw new BadRequestException(
@@ -716,9 +751,27 @@ export class CatcastSyncService {
     clampTs: (ts: number) => number
   ): Promise<void> {
     const validItems = items
+      .filter(item => item && typeof item.mediaKey === 'string' && item.mediaKey.trim() !== '')
       .map(item => ({
         ...item,
-        clampedTs: clampTs(item.ts),
+        mediaKey: item.mediaKey.trim().slice(0, 256),
+        url: this.clampStr(item.url, 512),
+        canonicalId: this.clampStr(item.canonicalId, 128),
+        title: this.clampStr(item.title, 512),
+        orig: this.clampStr(item.orig, 512),
+        poster: this.clampStr(item.poster, 1024),
+        season: this.parseOptionalInt(item.season, 0, 10000),
+        episode: this.parseOptionalInt(item.episode, 0, 100000),
+        episodeName: this.clampStr(item.episodeName, 256),
+        currentTime:
+          item.currentTime !== undefined
+            ? this.parseNonNegativeInt(item.currentTime, 0)
+            : undefined,
+        duration:
+          item.duration !== undefined ? this.parseNonNegativeInt(item.duration, 0) : undefined,
+        completed: item.completed !== undefined ? Boolean(item.completed) : undefined,
+        voice: this.clampStr(item.voice, 256),
+        clampedTs: clampTs(this.parseNonNegativeInt(item.ts, 0)),
         sanitizedWatched: this.sanitizeWatchedEpisodes(item.watchedEpisodes, clampTs),
       }))
       .filter(item => item.clampedTs > effectiveClearedTs);
