@@ -138,6 +138,45 @@ describe('CatcastSyncService', () => {
       expect(res.syncToken).toHaveLength(64);
       expect(mockPrisma.catcastDevice.update).toHaveBeenCalled();
     });
+
+    it('re-issues syncToken when device already has profileId and rejects empty deviceId', async () => {
+      await expect(service.initProfile({ deviceId: '   ' }, '127.0.0.1')).rejects.toThrow(
+        BadRequestException
+      );
+
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 1,
+        deviceId: 'dev-1',
+        platform: 'web',
+        isAllowed: true,
+        profileId: 'prof-existing',
+        deviceName: 'Old',
+        browser: 'Firefox',
+      });
+      mockPrisma.catcastDevice.update.mockResolvedValue({});
+
+      const res = await service.initProfile({ deviceId: 'dev-1' }, '127.0.0.1');
+      expect(res.profileId).toBe('prof-existing');
+      expect(res.syncToken).toHaveLength(64);
+    });
+
+    it('enforces rate limit on initProfile', async () => {
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 1,
+        deviceId: 'dev-rl',
+        platform: 'web',
+        isAllowed: true,
+        profileId: 'prof-1',
+      });
+      mockPrisma.catcastDevice.update.mockResolvedValue({});
+
+      for (let i = 0; i < 10; i++) {
+        await service.initProfile({ deviceId: 'dev-rl' }, '10.10.10.10');
+      }
+      await expect(service.initProfile({ deviceId: 'dev-rl' }, '10.10.10.10')).rejects.toThrow(
+        HttpException
+      );
+    });
   });
 
   describe('pairing flow (mutual confirmation)', () => {
@@ -223,6 +262,130 @@ describe('CatcastSyncService', () => {
       }
 
       await expect(service.pairConfirm(ctxA, { code: 'BADCOD' })).rejects.toThrow(HttpException);
+    });
+
+    it('handles pairInit metadata update, pairStatus pending/invalid secret, and pairConfirm edge cases', async () => {
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 2,
+        deviceId: 'dev-b',
+        platform: 'web',
+        model: null,
+        os: null,
+        browser: null,
+        deviceName: null,
+        isAllowed: true,
+      });
+      mockPrisma.catcastDevice.update.mockResolvedValue({});
+
+      const initRes = await service.pairInit(
+        { deviceId: 'dev-b', deviceName: 'My TV', browser: 'Tizen' },
+        '10.0.0.2'
+      );
+      expect(mockPrisma.catcastDevice.update).toHaveBeenCalledWith({
+        where: { id: 2 },
+        data: { deviceName: 'My TV', browser: 'Tizen' },
+      });
+
+      const pendingStatus = await service.pairStatus(initRes.code, initRes.pairSecret, '10.0.0.2');
+      expect(pendingStatus.status).toBe('pending');
+
+      await expect(service.pairStatus(initRes.code, 'wrong-secret', '10.0.0.2')).rejects.toThrow(
+        UnauthorizedException
+      );
+      await expect(service.pairStatus('', '', '10.0.0.2')).rejects.toThrow(BadRequestException);
+
+      // Self-pairing rejected
+      await expect(
+        service.pairConfirm({ ...ctxA, deviceId: 'dev-b' }, { code: initRes.code })
+      ).rejects.toThrow(BadRequestException);
+
+      // Confirm once, then idempotent confirm from same initiator, then reject different initiator
+      await service.pairConfirm(ctxA, { code: initRes.code });
+      const idempotentConfirm = await service.pairConfirm(ctxA, { code: initRes.code });
+      expect(idempotentConfirm.status).toBe('awaiting_acceptance');
+
+      await expect(
+        service.pairConfirm({ ...ctxA, deviceId: 'dev-other' }, { code: initRes.code })
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('handles pairAccept edge cases (expired, invalid secret, wrong state, idempotent confirmed)', async () => {
+      await expect(
+        service.pairAccept({ code: 'NONE12', pairSecret: 'sec', accept: true }, '10.0.0.3')
+      ).rejects.toThrow(NotFoundException);
+
+      mockPrisma.catcastDevice.findUnique.mockResolvedValue({
+        id: 2,
+        deviceId: 'dev-b',
+        platform: 'web',
+        isAllowed: true,
+      });
+      const initRes = await service.pairInit({ deviceId: 'dev-b' }, '10.0.0.3');
+
+      await expect(
+        service.pairAccept({ code: initRes.code, pairSecret: 'bad', accept: true }, '10.0.0.3')
+      ).rejects.toThrow(UnauthorizedException);
+
+      // Still pending -> cannot accept yet
+      await expect(
+        service.pairAccept(
+          { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
+          '10.0.0.3'
+        )
+      ).rejects.toThrow(BadRequestException);
+
+      await service.pairConfirm(ctxA, { code: initRes.code });
+      service.setDevicePairedNotifier(jest.fn().mockRejectedValue(new Error('tg down')));
+
+      const first = await service.pairAccept(
+        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
+        '10.0.0.3'
+      );
+      expect(first.status).toBe('confirmed');
+
+      const second = await service.pairAccept(
+        { code: initRes.code, pairSecret: initRes.pairSecret, accept: true },
+        '10.0.0.3'
+      );
+      expect(second.status).toBe('confirmed');
+    });
+  });
+
+  describe('listDevices & removeDevice edge cases', () => {
+    it('lists devices with isCurrent flag', async () => {
+      const now = new Date();
+      mockPrisma.catcastDevice.findMany.mockResolvedValue([
+        {
+          deviceId: 'dev-a',
+          deviceName: 'Phone',
+          platform: 'mobile_web',
+          model: 'iPhone',
+          os: 'iOS',
+          browser: 'Safari',
+          syncLastSeenAt: now,
+        },
+        {
+          deviceId: 'dev-b',
+          deviceName: null,
+          platform: 'tizen_tv',
+          model: 'Samsung TV',
+          os: null,
+          browser: null,
+          syncLastSeenAt: null,
+        },
+      ]);
+
+      const res = await service.listDevices(ctxA);
+      expect(res.devices).toHaveLength(2);
+      expect(res.devices[0].isCurrent).toBe(true);
+      expect(res.devices[1].isCurrent).toBe(false);
+      expect(res.devices[1].syncLastSeenAt).toBeNull();
+    });
+
+    it('throws on empty deviceId or missing device', async () => {
+      await expect(service.removeDevice(ctxA, '')).rejects.toThrow(BadRequestException);
+      mockPrisma.catcastDevice.findFirst.mockResolvedValue(null);
+      await expect(service.removeDevice(ctxA, 'missing')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -358,6 +521,101 @@ describe('CatcastSyncService', () => {
       expect(res.favorites).toHaveLength(1);
       expect(res.favorites[0].deletedAt).toBe(4500);
       expect(res.searchHistory).toEqual({ queries: ['офіс'], updatedAt: 5000 });
+    });
+
+    it('creates new history, favorites, clears history, updates searchHistory, and trims overflow', async () => {
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue({
+        id: 'prof-a',
+        historyClearedTs: BigInt(500),
+        searchQueries: [],
+        searchUpdatedAt: BigInt(100),
+      });
+      mockPrisma.catcastSyncHistory.findMany
+        .mockResolvedValueOnce([]) // existing
+        .mockResolvedValueOnce([{ id: 999 }]); // overflow > 200
+      mockPrisma.catcastSyncFavorite.findMany
+        .mockResolvedValueOnce([]) // existing
+        .mockResolvedValueOnce([{ id: 888 }]); // overflow > 500
+
+      await service.push(ctxA, {
+        historyClearedTs: 1000,
+        history: [{ mediaKey: '/films/new', title: 'New Film', ts: 2000 }],
+        favorites: [{ mediaKey: '/films/fav', title: 'Fav', ts: 2000 }],
+        searchHistory: { queries: ['ok', 'valid query'], updatedAt: 3000 },
+      });
+
+      expect(mockPrisma.catcastProfile.update).toHaveBeenCalledWith({
+        where: { id: 'prof-a' },
+        data: { historyClearedTs: BigInt(1000) },
+      });
+      expect(mockPrisma.catcastSyncHistory.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncHistory.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: [999] } },
+      });
+      expect(mockPrisma.catcastSyncFavorite.create).toHaveBeenCalled();
+      expect(mockPrisma.catcastSyncFavorite.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: [888] } },
+      });
+      expect(mockPrisma.catcastProfile.update).toHaveBeenCalledWith({
+        where: { id: 'prof-a' },
+        data: { searchQueries: ['valid query'], searchUpdatedAt: BigInt(3000) },
+      });
+    });
+
+    it('rejects oversized push payloads and missing profile', async () => {
+      const tooManyHistory = Array.from({ length: 201 }, (_, i) => ({
+        mediaKey: `/f/${i}`,
+        ts: 1000,
+      }));
+      await expect(service.push(ctxA, { history: tooManyHistory })).rejects.toThrow(
+        BadRequestException
+      );
+
+      const tooManyFavs = Array.from({ length: 501 }, (_, i) => ({
+        mediaKey: `/f/${i}`,
+        ts: 1000,
+      }));
+      await expect(service.push(ctxA, { favorites: tooManyFavs })).rejects.toThrow(
+        BadRequestException
+      );
+
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue(null);
+      await expect(service.push(ctxA, {})).rejects.toThrow(NotFoundException);
+      await expect(service.pull(ctxA)).rejects.toThrow(NotFoundException);
+    });
+
+    it('pulls full state when since is 0', async () => {
+      mockPrisma.catcastProfile.findUnique.mockResolvedValue({
+        id: 'prof-a',
+        historyClearedTs: BigInt(0),
+        searchQueries: ['test'],
+        searchUpdatedAt: BigInt(100),
+      });
+      mockPrisma.catcastSyncHistory.findMany.mockResolvedValue([
+        {
+          mediaKey: '/films/1',
+          url: '/films/1',
+          canonicalId: '1',
+          title: 'One',
+          orig: '',
+          poster: '',
+          season: null,
+          episode: null,
+          episodeName: '',
+          currentTime: 10,
+          duration: 100,
+          completed: false,
+          watchedEpisodes: {},
+          voice: '',
+          ts: BigInt(500),
+          updatedOnServerAt: BigInt(600),
+        },
+      ]);
+      mockPrisma.catcastSyncFavorite.findMany.mockResolvedValue([]);
+
+      const res = await service.pull(ctxA);
+      expect(res.serverTs).toBe(600);
+      expect(res.history).toHaveLength(1);
     });
   });
 

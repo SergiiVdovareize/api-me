@@ -10,7 +10,7 @@ describe('CatcastSyncController', () => {
   let mockConfigService: jest.Mocked<Partial<ConfigService>>;
 
   const mockReq: any = {
-    headers: { 'x-forwarded-for': '1.2.3.4' },
+    headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' },
     catcastSync: {
       profileId: 'prof-1',
       deviceId: 'dev-1',
@@ -86,6 +86,13 @@ describe('CatcastSyncController', () => {
       'revoke'
     );
 
+    await controller.removeDevice(mockReq, 'dev-2', {});
+    expect(mockSyncService.removeDevice).toHaveBeenCalledWith(
+      mockReq.catcastSync,
+      'dev-2',
+      'unlink'
+    );
+
     await controller.push(mockReq, { history: [] });
     expect(mockSyncService.push).toHaveBeenCalledWith(mockReq.catcastSync, { history: [] });
 
@@ -94,5 +101,24 @@ describe('CatcastSyncController', () => {
 
     await controller.cleanup('secret-cron');
     expect(mockSyncService.cleanupExpiredData).toHaveBeenCalled();
+  });
+
+  it('extracts client IP from cf-connecting-ip, socket.remoteAddress, req.ip, or fallback', async () => {
+    await controller.initProfile({ deviceId: 'd1' }, {
+      headers: { 'cf-connecting-ip': '9.9.9.9' },
+    } as any);
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '9.9.9.9');
+
+    await controller.initProfile({ deviceId: 'd1' }, {
+      headers: {},
+      socket: { remoteAddress: '8.8.8.8' },
+    } as any);
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '8.8.8.8');
+
+    await controller.initProfile({ deviceId: 'd1' }, { headers: {}, ip: '7.7.7.7' } as any);
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '7.7.7.7');
+
+    await controller.initProfile({ deviceId: 'd1' }, { headers: {} } as any);
+    expect(mockSyncService.initProfile).toHaveBeenLastCalledWith({ deviceId: 'd1' }, '127.0.0.1');
   });
 });
