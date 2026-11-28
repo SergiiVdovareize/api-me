@@ -8,7 +8,7 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../models/prisma/prisma.service';
 import { RedisReader } from '../common/helpers/redisReader';
 import { CATCAST_SYNC_CONSTANTS } from './catcast-sync.constants';
@@ -147,13 +147,21 @@ export class CatcastSyncService {
   }
 
   private generatePairCode(): string {
-    const bytes = randomBytes(CATCAST_SYNC_CONSTANTS.PAIR_CODE_LENGTH);
-    const alphabet = CATCAST_SYNC_CONSTANTS.PAIR_CODE_ALPHABET;
-    let code = '';
-    for (let i = 0; i < CATCAST_SYNC_CONSTANTS.PAIR_CODE_LENGTH; i++) {
-      code += alphabet[bytes[i] % alphabet.length];
+    const pool = CATCAST_SYNC_CONSTANTS.PAIR_CODE_ALPHABET.split('');
+    const len = CATCAST_SYNC_CONSTANTS.PAIR_CODE_LENGTH;
+    for (let i = 0; i < len; i++) {
+      const swapIdx = randomInt(i, pool.length);
+      [pool[i], pool[swapIdx]] = [pool[swapIdx], pool[i]];
     }
-    return code;
+    return pool.slice(0, len).join('');
+  }
+
+  private isValidPairCode(code: string): boolean {
+    return (
+      code.length === CATCAST_SYNC_CONSTANTS.PAIR_CODE_LENGTH &&
+      /^[A-P]+$/.test(code) &&
+      new Set(code).size === CATCAST_SYNC_CONSTANTS.PAIR_CODE_LENGTH
+    );
   }
 
   private generateToken(): string {
@@ -376,8 +384,10 @@ export class CatcastSyncService {
       throw new Error('Redis service unavailable');
     }
 
-    const code = dto.code.trim().toUpperCase();
-    const attemptsKey = CATCAST_SYNC_CONSTANTS.REDIS_KEYS.pairAttempts(code);
+    const code = dto.code?.trim().toUpperCase() || '';
+    const attemptsKey = CATCAST_SYNC_CONSTANTS.REDIS_KEYS.pairAttempts(
+      `${clientIp}:${dto.deviceId}`
+    );
     const redis = this.redisReader.redis;
 
     if (redis) {
@@ -386,11 +396,18 @@ export class CatcastSyncService {
         throw new HttpException(
           {
             error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_TOO_MANY_ATTEMPTS,
-            message: 'Too many failed pairing attempts for this code',
+            message: 'Забагато невдалих спроб. Спробуйте за кілька хвилин.',
           },
           HttpStatus.TOO_MANY_REQUESTS
         );
       }
+    }
+
+    if (!this.isValidPairCode(code)) {
+      throw new BadRequestException({
+        error: CATCAST_SYNC_CONSTANTS.ERROR_CODES.PAIR_CODE_INVALID,
+        message: 'Pairing code must consist of 4 unique characters from A-P',
+      });
     }
 
     const sessionKey = CATCAST_SYNC_CONSTANTS.REDIS_KEYS.pairSession(code);

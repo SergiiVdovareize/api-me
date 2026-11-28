@@ -203,7 +203,9 @@ describe('CatcastSyncService', () => {
       mockPrisma.catcastDevice.update.mockResolvedValue({});
 
       const initRes = await service.pairInit(ctxA, {});
-      expect(initRes.code).toHaveLength(6);
+      expect(initRes.code).toHaveLength(4);
+      expect(initRes.code).toMatch(/^[A-P]{4}$/);
+      expect(new Set(initRes.code).size).toBe(4);
       expect(initRes.pairSecret).toHaveLength(64);
 
       const confirmRes = await service.pairConfirm(
@@ -283,15 +285,23 @@ describe('CatcastSyncService', () => {
       expect(status.status).toBe('rejected');
     });
 
-    it('blocks brute-force attempts on pairConfirm', async () => {
-      for (let i = 0; i < 5; i++) {
-        await expect(
-          service.pairConfirm({ code: 'BADCOD', deviceId: 'dev-b' }, '10.0.0.1')
-        ).rejects.toThrow(NotFoundException);
+    it('blocks brute-force attempts on pairConfirm across different codes and validates 4-char A-P format', async () => {
+      await expect(
+        service.pairConfirm({ code: 'AABC', deviceId: 'dev-b' }, '10.0.0.1')
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.pairConfirm({ code: 'XYZ1', deviceId: 'dev-b' }, '10.0.0.1')
+      ).rejects.toThrow(BadRequestException);
+
+      const missCodes = ['ABCD', 'EFGH', 'IJKL', 'MNOP', 'ABCE'];
+      for (const code of missCodes) {
+        await expect(service.pairConfirm({ code, deviceId: 'dev-b' }, '10.0.0.1')).rejects.toThrow(
+          NotFoundException
+        );
       }
 
       await expect(
-        service.pairConfirm({ code: 'BADCOD', deviceId: 'dev-b' }, '10.0.0.1')
+        service.pairConfirm({ code: 'ABCF', deviceId: 'dev-b' }, '10.0.0.1')
       ).rejects.toThrow(HttpException);
     });
 
